@@ -1,0 +1,417 @@
+/* Component primitives for CMP Connect */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--cmp-bg);
+  color: var(--cmp-text);
+  font-family: var(--cmp-font-sans);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  transition: background-color var(--cmp-duration-fast) var(--cmp-ease), color var(--cmp-duration-fast) var(--cmp-ease);
+}
+
+[dir='rtl'] body {
+  font-family: var(--cmp-font-arabic);
+}
+
+:focus-visible {
+  outline: 2px solid var(--cmp-focus-ring);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.container {
+  width: 100%;
+  max-width: var(--cmp-max-content);
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+/* ------------------------------------------------------------- Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 18px;
+  border-radius: var(--cmp-radius-md);
+  border: 1px solid transparent;
+  font: inherit;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background var(--cmp-duration-fast) var(--cmp-ease),
+              border-color var(--cmp-duration-fast) var(--cmp-ease),
+              color var(--cmp-duration-fast) var(--cmp-ease);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.btn-primary {
+  background: var(--cmp-brand);
+  color: var(--cmp-text-on-brand);
+}
+.btn-primary:hover {
+  background: var(--cmp-brand-hover);
+}
+.btn-primary:active {
+  background: var(--cmp-brand-pressed);
+}
+
+.btn-accent {
+  background: var(--cmp-accent);
+  color: var(--cmp-text-on-accent);
+}
+.btn-accent:hover {
+  background: var(--cmp-accent-hover);
+}
+
+.btn-outline {
+  background: transparent;
+  color: var(--cmp-text);
+  border-color: var(--cmp-border-strong);
+}
+.btn-outline:hover {
+  border-color: var(--cmp-brand);
+  color: var(--cmp-brand);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--cmp-text-muted);
+}
+.btn-ghost:hover {
+  background: var(--cmp-surface-sunken);
+  color: var(--cmp-text);
+}
+
+.btn-sm {
+  height: 36px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+.btn-lg {
+  height: 48px;
+  padding: 0 22px;
+  font-size: 15px;
+}
+
+/* ------------------------------------------------------------- Cards */
+.card {
+  background: var(--cmp-surface);
+  border: 1px solid var(--cmp-border);
+  border-radius: var(--cmp-radius-lg);
+}
+
+/* ------------------------------------------------------------- Chips & Badges */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: var(--cmp-radius-pill);
+  border: 1px solid var(--cmp-border);
+  background: var(--cmp-surface);
+  color: var(--cmp-text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--cmp-duration-fast) var(--cmp-ease);
+}
+
+.chip:hover {
+  border-color: var(--cmp-brand);
+}
+
+.chip[aria-pressed='true'], .chip.active {
+  background: var(--cmp-brand-subtle);
+  border-color: var(--cmp-brand-border);
+  color: var(--cmp-brand);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: var(--cmp-radius-sm);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.badge-brand {
+  background: var(--cmp-brand);
+  color: var(--cmp-text-on-brand);
+}
+
+.badge-accent {
+  background: var(--cmp-accent);
+  color: var(--cmp-text-on-accent);
+}
+
+.badge-neutral {
+  background: var(--cmp-surface-sunken);
+  color: var(--cmp-text-muted);
+  border: 1px solid var(--cmp-border);
+}
+
+.badge-success {
+  background: var(--cmp-brand-subtle);
+  color: var(--cmp-brand);
+  border: 1px solid var(--cmp-brand-border);
+}
+
+.badge-warning {
+  background: rgba(180, 116, 12, 0.12);
+  color: var(--cmp-warning);
+  border: 1px solid rgba(180, 116, 12, 0.3);
+}
+
+.badge-danger {
+  background: rgba(179, 38, 30, 0.12);
+  color: var(--cmp-danger);
+  border: 1px solid rgba(179, 38, 30, 0.3);
+}
+
+.count-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 26px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--cmp-brand-subtle);
+  color: var(--cmp-brand);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0;
+  align-self: center;
+}
+
+/* ------------------------------------------------------------- Forms */
+input, select, textarea {
+  width: 100%;
+  height: 44px;
+  padding: 0 12px;
+  border-radius: var(--cmp-radius-md);
+  border: 1px solid var(--cmp-border);
+  background: var(--cmp-surface);
+  color: var(--cmp-text);
+  font: inherit;
+  font-size: 14px;
+}
+
+textarea {
+  height: auto;
+  padding: 10px 12px;
+  resize: vertical;
+}
+
+input::placeholder, textarea::placeholder {
+  color: var(--cmp-text-faint);
+}
+
+input:focus, select:focus, textarea:focus {
+  border-color: var(--cmp-brand);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--cmp-brand-subtle);
+}
+
+label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: var(--cmp-text);
+}
+
+/* ------------------------------------------------------------- Helpers & Typography */
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.muted { color: var(--cmp-text-muted); }
+.faint { color: var(--cmp-text-faint); }
+.brand-text { color: var(--cmp-brand); }
+.accent-text { color: var(--cmp-accent); }
+
+.stack { display: flex; flex-direction: column; }
+.row { display: flex; align-items: center; }
+
+h1, h2, h3, h4 {
+  margin: 0;
+  line-height: 1.25;
+  letter-spacing: -0.018em;
+}
+
+h1 { font-size: 26px; font-weight: 800; }
+h2 { font-size: 20px; font-weight: 700; }
+h3 { font-size: 16px; font-weight: 700; }
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------- Grids & Tables */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+table.data {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+
+table.data th {
+  text-align: start;
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--cmp-text-faint);
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--cmp-border);
+  white-space: nowrap;
+}
+
+table.data td {
+  padding: 13px 14px;
+  border-bottom: 1px solid var(--cmp-border);
+  vertical-align: middle;
+}
+
+table.data tr:hover td {
+  background: var(--cmp-surface-sunken);
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+/* ------------------------------------------------------------- Segmented Controls */
+.segmented {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 12px;
+  background: var(--cmp-surface-sunken);
+  border: 1px solid var(--cmp-border);
+  max-width: 100%;
+}
+
+.segmented button, .segmented .seg-item {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cmp-text-muted);
+  white-space: nowrap;
+  transition: all var(--cmp-duration-fast) var(--cmp-ease);
+}
+
+.segmented button:hover, .segmented .seg-item:hover {
+  color: var(--cmp-text);
+}
+
+.segmented button[aria-selected='true'], .segmented .seg-item.active {
+  background: var(--cmp-surface);
+  color: var(--cmp-brand);
+  box-shadow: var(--cmp-shadow-sm);
+}
+
+/* ------------------------------------------------------------- Health Hero */
+.health-hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 24px;
+  border-radius: var(--cmp-radius-xl);
+  padding: 24px;
+  margin-bottom: 24px;
+  color: #EDF3EF;
+  background: radial-gradient(90% 140% at 100% 100%, rgba(184,115,51,0.45), transparent 60%), linear-gradient(120deg, #04150E, #093A28 60%, #0C6140);
+}
+
+.health-bars {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+  flex: 1 1 280px;
+}
+
+.health-bars li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 10px;
+  font-size: 13px;
+}
+
+.health-track {
+  grid-column: 1 / -1;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.15);
+  overflow: hidden;
+}
+
+.health-track span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: #E0A36C;
+}
+
+/* ------------------------------------------------------------- Workflow & Timeline */
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+}
+.timeline li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+}
+.timeline li + li {
+  border-top: 1px solid var(--cmp-border);
+}

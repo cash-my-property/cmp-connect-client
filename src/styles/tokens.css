@@ -1,0 +1,155 @@
+/* Cash My Property design tokens as CSS custom properties.
+   Light = green + white. Dark = dark royal green + copper. */
+
+:root {
+  --cmp-bg: #FFFFFF;
+  --cmp-surface: #FFFFFF;
+  --cmp-surface-raised: #FFFFFF;
+  --cmp-surface-sunken: #F6FAF7;
+  --cmp-border: #DCE6DF;
+  --cmp-border-strong: #BFCEC5;
+
+  --cmp-text: #18231C;
+  --cmp-text-muted: #4E6458;
+  --cmp-text-faint: #6B8377;
+  --cmp-text-on-brand: #FFFFFF;
+  --cmp-text-on-accent: #FFFFFF;
+
+  --cmp-brand: #0F7A4B;
+  --cmp-brand-hover: #0C6140;
+  --cmp-brand-pressed: #0B4C33;
+  --cmp-brand-subtle: #ECFBF2;
+  --cmp-brand-border: #A4E8C4;
+
+  --cmp-accent: #94551F;
+  --cmp-accent-hover: #73421A;
+  --cmp-accent-subtle: #FDF5EE;
+  --cmp-accent-border: #F0C9A5;
+
+  --cmp-success: #0F7A4B;
+  --cmp-warning: #B4740C;
+  --cmp-danger: #B3261E;
+  --cmp-info: #1B5FA8;
+  --cmp-offer: #94551F;
+
+  --cmp-scrim: linear-gradient(to top, rgba(11, 18, 14, 0.72), rgba(11, 18, 14, 0));
+  --cmp-overlay: rgba(11, 18, 14, 0.45);
+  --cmp-focus-ring: #189A60;
+
+  --cmp-shadow-sm: 0 1px 2px rgba(11, 18, 14, 0.06), 0 1px 3px rgba(11, 18, 14, 0.05);
+  --cmp-shadow-md: 0 4px 10px rgba(11, 18, 14, 0.07), 0 2px 4px rgba(11, 18, 14, 0.05);
+  --cmp-shadow-lg: 0 12px 28px rgba(11, 18, 14, 0.10), 0 4px 10px rgba(11, 18, 14, 0.06);
+
+  --cmp-radius-sm: 6px;
+  --cmp-radius-md: 10px;
+  --cmp-radius-lg: 14px;
+  --cmp-radius-xl: 20px;
+  --cmp-radius-2xl: 28px;
+  --cmp-radius-pill: 999px;
+
+  --cmp-font-sans: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --cmp-font-arabic: "IBM Plex Sans Arabic", "Noto Sans Arabic", sans-serif;
+
+  --cmp-header-height: 64px;
+  --cmp-filter-bar-height: 56px;
+  --cmp-max-content: 1280px;
+
+  --cmp-ease: cubic-bezier(0.2, 0, 0, 1);
+  --cmp-duration-fast: 160ms;
+  --cmp-duration-normal: 240ms;
+
+  color-scheme: light;
+}
+
+/* Explicit choice from the theme toggle */
+:root[data-theme='dark'] {
+  --cmp-bg: #04150E;
+  --cmp-surface: #0A2118;
+  --cmp-surface-raised: #0E2C20;
+  --cmp-surface-sunken: #071B12;
+  --cmp-border: #15402E;
+  --cmp-border-strong: #1D5740;
+
+  --cmp-text: #E6F2EA;
+  --cmp-text-muted: #9DB7A8;
+  --cmp-text-faint: #6E8A7B;
+  --cmp-text-on-brand: #04150E;
+  --cmp-text-on-accent: #31190A;
+
+  --cmp-brand: #38B87C;
+  --cmp-brand-hover: #6ED4A1;
+  --cmp-brand-pressed: #189A60;
+  --cmp-brand-subtle: rgba(56, 184, 124, 0.12);
+  --cmp-brand-border: rgba(56, 184, 124, 0.32);
+
+  --cmp-accent: #E3A972;
+  --cmp-accent-hover: #F0C9A5;
+  --cmp-accent-subtle: rgba(227, 169, 114, 0.12);
+  --cmp-accent-border: rgba(227, 169, 114, 0.34);
+
+  --cmp-success: #38B87C;
+  --cmp-warning: #E3A972;
+  --cmp-danger: #F2897F;
+  --cmp-info: #7FB4E8;
+  --cmp-offer: #E3A972;
+
+  --cmp-scrim: linear-gradient(to top, rgba(4, 21, 14, 0.85), rgba(4, 21, 14, 0));
+  --cmp-overlay: rgba(4, 21, 14, 0.62);
+  --cmp-focus-ring: #6ED4A1;
+
+  --cmp-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --cmp-shadow-md: 0 6px 16px rgba(0, 0, 0, 0.45);
+  --cmp-shadow-lg: 0 18px 44px rgba(0, 0, 0, 0.55);
+
+  color-scheme: dark;
+}
+
+/* Two platforms, one palette. Listings lead with royal green. Auctions lead with warm copper */
+:root[data-platform='auctions'] {
+  --cmp-brand: #94551F;
+  --cmp-brand-hover: #73421A;
+  --cmp-brand-pressed: #593518;
+  --cmp-brand-subtle: #FDF5EE;
+  --cmp-brand-border: #F0C9A5;
+  --cmp-text-on-brand: #FFFFFF;
+
+  --cmp-accent: #0F7A4B;
+  --cmp-accent-hover: #0C6140;
+  --cmp-accent-subtle: #ECFBF2;
+  --cmp-accent-border: #A4E8C4;
+  --cmp-text-on-accent: #FFFFFF;
+
+  --cmp-focus-ring: #B87333;
+}
+
+:root[data-platform='auctions'][data-theme='dark'] {
+  --cmp-brand: #E3A972;
+  --cmp-brand-hover: #F0C9A5;
+  --cmp-brand-pressed: #C0703A;
+  --cmp-brand-subtle: rgba(227, 169, 114, 0.12);
+  --cmp-brand-border: rgba(227, 169, 114, 0.34);
+  --cmp-text-on-brand: #31190A;
+
+  --cmp-accent: #38B87C;
+  --cmp-accent-hover: #6ED4A1;
+  --cmp-accent-subtle: rgba(56, 184, 124, 0.12);
+  --cmp-accent-border: rgba(56, 184, 124, 0.32);
+  --cmp-text-on-accent: #04150E;
+
+  --cmp-focus-ring: #E3A972;
+}
+
+/* Animations */
+@keyframes cmp-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.82); }
+}
+
+.cmp-live-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--cmp-danger);
+  animation: cmp-pulse 1.6s var(--cmp-ease) infinite;
+}

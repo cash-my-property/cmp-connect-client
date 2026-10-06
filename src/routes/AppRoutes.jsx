@@ -1,0 +1,85 @@
+import React from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
+
+import DashboardPage from '../pages/home/DashboardPage';
+import ActivityLogPage from '../pages/home/ActivityLogPage';
+
+import PortfolioPage from '../pages/properties/PortfolioPage';
+import AddPropertyPage from '../pages/properties/AddPropertyPage';
+import CompliancePage from '../pages/properties/CompliancePage';
+import BrandKitPage from '../pages/properties/BrandKitPage';
+
+import PipelinePage from '../pages/clients/PipelinePage';
+import EnquiriesPage from '../pages/clients/EnquiriesPage';
+
+import TransactionsPage from '../pages/transactions/TransactionsPage';
+import PerformancePage from '../pages/growth/PerformancePage';
+import WalletPage from '../pages/wallet/WalletPage';
+import TeamPage from '../pages/team/TeamPage';
+import AgencyProfilePage from '../pages/account/AgencyProfilePage';
+import HelpPage from '../pages/help/HelpPage';
+
+import LiveDeskPage from '../pages/rto/LiveDeskPage';
+
+export default function AppRoutes() {
+  return (
+    <Routes>
+      {/* Home Hub */}
+      <Route path="/" element={<DashboardPage />} />
+      <Route path="/activity" element={<ActivityLogPage />} />
+
+      {/* Properties Hub */}
+      <Route path="/properties" element={<PortfolioPage />} />
+      <Route path="/properties/new" element={<AddPropertyPage />} />
+      <Route path="/properties/compliance" element={<CompliancePage />} />
+      <Route path="/properties/brand-kit" element={<BrandKitPage />} />
+      <Route path="/properties/archive" element={<PortfolioPage />} />
+
+      {/* Clients Hub */}
+      <Route path="/clients" element={<PipelinePage />} />
+      <Route path="/clients/enquiries" element={<EnquiriesPage />} />
+      <Route path="/clients/contacts" element={<PipelinePage />} />
+      <Route path="/clients/messages" element={<EnquiriesPage />} />
+
+      {/* Transactions Hub */}
+      <Route path="/transactions" element={<TransactionsPage />} />
+
+      {/* Growth Hub */}
+      <Route path="/growth" element={<PerformancePage />} />
+      <Route path="/growth/insights" element={<PerformancePage />} />
+      <Route path="/growth/smart-boost" element={<PerformancePage />} />
+      <Route path="/growth/spotlight" element={<PerformancePage />} />
+
+      {/* Wallet Hub */}
+      <Route path="/wallet" element={<WalletPage />} />
+      <Route path="/wallet/activity" element={<WalletPage />} />
+      <Route path="/wallet/invoices" element={<WalletPage />} />
+
+      {/* Team Hub */}
+      <Route path="/team" element={<TeamPage />} />
+      <Route path="/team/members" element={<TeamPage />} />
+      <Route path="/team/roles" element={<TeamPage />} />
+
+      {/* Account Hub */}
+      <Route path="/account" element={<AgencyProfilePage />} />
+      <Route path="/account/security" element={<AgencyProfilePage />} />
+      <Route path="/account/notifications" element={<AgencyProfilePage />} />
+
+      {/* Help Hub */}
+      <Route path="/help" element={<HelpPage />} />
+      <Route path="/help/whats-new" element={<HelpPage />} />
+
+      {/* Real Time Offer Hub */}
+      <Route path="/rto" element={<LiveDeskPage />} />
+      <Route path="/rto/entries" element={<LiveDeskPage />} />
+      <Route path="/rto/results" element={<LiveDeskPage />} />
+      <Route path="/rto/bidders" element={<LiveDeskPage />} />
+      <Route path="/rto/cheques" element={<LiveDeskPage />} />
+      <Route path="/rto/new" element={<AddPropertyPage />} />
+      <Route path="/rto/team" element={<TeamPage />} />
+
+      {/* Fallback */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}
