@@ -14,7 +14,13 @@ import EnquiriesPage from '../pages/clients/EnquiriesPage';
 
 import TransactionsPage from '../pages/transactions/TransactionsPage';
 import PerformancePage from '../pages/growth/PerformancePage';
+
 import WalletPage from '../pages/wallet/WalletPage';
+import InvoicesPage from '../pages/wallet/InvoicesPage';
+import CreditActivityPage from '../pages/wallet/CreditActivityPage';
+import RefundsPage from '../pages/wallet/RefundsPage';
+import ContractPage from '../pages/wallet/ContractPage';
+
 import TeamPage from '../pages/team/TeamPage';
 import AgencyProfilePage from '../pages/account/AgencyProfilePage';
 import HelpPage from '../pages/help/HelpPage';
@@ -37,6 +43,7 @@ export default function AppRoutes() {
 
       {/* Clients Hub */}
       <Route path="/clients" element={<PipelinePage />} />
+      <Route path="/clients/pipeline" element={<PipelinePage />} />
       <Route path="/clients/enquiries" element={<EnquiriesPage />} />
       <Route path="/clients/contacts" element={<PipelinePage />} />
       <Route path="/clients/messages" element={<EnquiriesPage />} />
@@ -52,8 +59,10 @@ export default function AppRoutes() {
 
       {/* Wallet Hub */}
       <Route path="/wallet" element={<WalletPage />} />
-      <Route path="/wallet/activity" element={<WalletPage />} />
-      <Route path="/wallet/invoices" element={<WalletPage />} />
+      <Route path="/wallet/activity" element={<CreditActivityPage />} />
+      <Route path="/wallet/refunds" element={<RefundsPage />} />
+      <Route path="/wallet/contract" element={<ContractPage />} />
+      <Route path="/wallet/invoices" element={<InvoicesPage />} />
 
       {/* Team Hub */}
       <Route path="/team" element={<TeamPage />} />

@@ -415,3 +415,87 @@ table.data tr:hover td {
 .timeline li + li {
   border-top: 1px solid var(--cmp-border);
 }
+
+/* ------------------------------------------------------------- Meter */
+.meter {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--cmp-surface-sunken);
+  border: 1px solid var(--cmp-border);
+  overflow: hidden;
+}
+
+/* ------------------------------------------------------------- Kanban */
+.kanban {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(260px, 1fr);
+  grid-gap: 12px;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 12px;
+}
+
+.kanban-col {
+  background: var(--cmp-surface-sunken);
+  border-radius: 14px;
+  border: 2px dashed transparent;
+  min-height: 440px;
+  display: flex;
+  flex-direction: column;
+  transition: border-color var(--cmp-duration-fast) var(--cmp-ease), background-color var(--cmp-duration-fast) var(--cmp-ease);
+}
+
+.kanban-col[data-over="true"],
+.kanban-col.drag-over {
+  border-color: var(--cmp-brand);
+  background: var(--cmp-brand-subtle);
+}
+
+.kanban-col header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  font-weight: 700;
+  font-size: 14px;
+  border-top: 3px solid;
+  border-radius: 12px 12px 0 0;
+}
+
+.kanban-cards {
+  display: grid;
+  grid-gap: 8px;
+  gap: 8px;
+  padding: 0 10px 12px;
+  align-content: start;
+}
+
+.kanban-card {
+  background: var(--cmp-surface);
+  border: 1px solid var(--cmp-border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  cursor: -webkit-grab;
+  cursor: grab;
+  box-shadow: var(--cmp-shadow-sm);
+  transition: transform var(--cmp-duration-fast) var(--cmp-ease), box-shadow var(--cmp-duration-fast) var(--cmp-ease), opacity var(--cmp-duration-fast) var(--cmp-ease);
+}
+
+.kanban-card:hover {
+  border-color: var(--cmp-border-strong);
+}
+
+.kanban-card[data-dragging="true"],
+.kanban-card.is-dragging {
+  opacity: 0.45;
+  cursor: -webkit-grabbing;
+  cursor: grabbing;
+}
+
+.kanban-empty {
+  text-align: center;
+  font-size: 13px;
+  padding: 24px 0;
+  margin: 0;
+}

@@ -696,3 +696,514 @@ export const initialTransactions = [
     actionType: "view"
   }
 ];
+
+export const initialWalletPlan = {
+  planName: "Gold",
+  renewalDate: "31 December 2026",
+  balance: 1840,
+  monthlyAllowance: 2000,
+  accountManager: {
+    name: "Rashid Al Amiri",
+    email: "rashid@cashmyproperty.ae"
+  },
+  meters: [
+    {
+      id: "live_slots",
+      label: "Live listing slots",
+      used: 188,
+      total: 250,
+      pct: 75.2,
+      left: 62,
+      unit: "left this period"
+    },
+    {
+      id: "featured_slots",
+      label: "Featured placements",
+      used: 31,
+      total: 40,
+      pct: 77.5,
+      left: 9,
+      unit: "left this period"
+    },
+    {
+      id: "premium_slots",
+      label: "Premium placements",
+      used: 14,
+      total: 15,
+      pct: 93.33333333333333,
+      left: 1,
+      unit: "left this period",
+      badge: "⚠ Almost full",
+      badgeColor: "var(--cmp-warning)"
+    }
+  ],
+  pricingCatalog: [
+    {
+      title: "Featured placement, 7 days",
+      desc: "Above standard listings in search",
+      credits: 60
+    },
+    {
+      title: "Premium placement, 7 days",
+      desc: "Top of search and the community page",
+      credits: 150
+    },
+    {
+      title: "Manual refresh",
+      desc: "Moves a listing back to the top of Newest",
+      credits: 5
+    }
+  ],
+  topUpPackages: [
+    {
+      id: "pack_500",
+      credits: 500,
+      priceAED: 1250,
+      rateDisplay: "2.50 AED per credit",
+      priceDisplay: "AED 1,250"
+    },
+    {
+      id: "pack_1000",
+      credits: 1000,
+      priceAED: 2300,
+      rateDisplay: "2.30 AED per credit",
+      priceDisplay: "AED 2,300"
+    },
+    {
+      id: "pack_2500",
+      credits: 2500,
+      priceAED: 5250,
+      rateDisplay: "2.10 AED per credit",
+      priceDisplay: "AED 5,250"
+    }
+  ],
+  creditHistory: [
+    {
+      id: "ch-1",
+      date: "2026-09-13",
+      description: "Premium placement · CMP-S-001004",
+      credits: -150,
+      balance: "1,840",
+      status: "Posted"
+    },
+    {
+      id: "ch-2",
+      date: "2026-09-12",
+      description: "Featured placement · CMP-S-001002",
+      credits: -60,
+      balance: "1,990",
+      status: "Posted"
+    },
+    {
+      id: "ch-3",
+      date: "2026-09-11",
+      description: "Manual refresh · 6 listings",
+      credits: -30,
+      balance: "2,050",
+      status: "Posted"
+    },
+    {
+      id: "ch-4",
+      date: "2026-09-01",
+      description: "Monthly allowance · Gold plan",
+      credits: 2000,
+      balance: "2,080",
+      status: "Posted"
+    }
+  ]
+};
+
+export const initialInvoices = {
+  toPay: [
+    {
+      paymentNumber: "148955-04",
+      contractNumber: "148955",
+      frequency: "Monthly",
+      mode: "Card",
+      dueDate: "27 Sep 2026",
+      status: "Payment pending",
+      amount: "4,929.54",
+      amountNum: 4929.54,
+      downloadable: true,
+      canPay: true
+    },
+    {
+      paymentNumber: "148955-05",
+      contractNumber: "148955",
+      frequency: "Monthly",
+      mode: "Card",
+      dueDate: "27 Oct 2026",
+      status: "Payment pending",
+      amount: "4,929.54",
+      amountNum: 4929.54,
+      downloadable: false,
+      canPay: false
+    },
+    {
+      paymentNumber: "148955-06",
+      contractNumber: "148955",
+      frequency: "Monthly",
+      mode: "Card",
+      dueDate: "27 Nov 2026",
+      status: "Payment pending",
+      amount: "4,929.54",
+      amountNum: 4929.54,
+      downloadable: false,
+      canPay: false
+    },
+    {
+      paymentNumber: "148955-07",
+      contractNumber: "148955",
+      frequency: "Monthly",
+      mode: "Card",
+      dueDate: "27 Dec 2026",
+      status: "Payment pending",
+      amount: "4,929.54",
+      amountNum: 4929.54,
+      downloadable: false,
+      canPay: false
+    },
+    {
+      paymentNumber: "148955-08",
+      contractNumber: "148955",
+      frequency: "Monthly",
+      mode: "Card",
+      dueDate: "27 Jan 2027",
+      status: "Payment pending",
+      amount: "4,929.54",
+      amountNum: 4929.54,
+      downloadable: false,
+      canPay: false
+    },
+    {
+      paymentNumber: "148955-09",
+      contractNumber: "148955",
+      frequency: "Monthly",
+      mode: "Card",
+      dueDate: "27 Feb 2027",
+      status: "Payment pending",
+      amount: "4,929.54",
+      amountNum: 4929.54,
+      downloadable: false,
+      canPay: false
+    },
+    {
+      paymentNumber: "148955-10",
+      contractNumber: "148955",
+      frequency: "Monthly",
+      mode: "Card",
+      dueDate: "27 Mar 2027",
+      status: "Payment pending",
+      amount: "4,929.54",
+      amountNum: 4929.54,
+      downloadable: false,
+      canPay: false
+    },
+    {
+      paymentNumber: "148955-11",
+      contractNumber: "148955",
+      frequency: "Monthly",
+      mode: "Card",
+      dueDate: "27 Apr 2027",
+      status: "Payment pending",
+      amount: "4,929.54",
+      amountNum: 4929.54,
+      downloadable: false,
+      canPay: false
+    },
+    {
+      paymentNumber: "148955-12",
+      contractNumber: "148955",
+      frequency: "Monthly",
+      mode: "Card",
+      dueDate: "27 May 2027",
+      status: "Payment pending",
+      amount: "4,929.54",
+      amountNum: 4929.54,
+      downloadable: false,
+      canPay: false
+    },
+    {
+      paymentNumber: "148955-13",
+      contractNumber: "148955",
+      frequency: "Monthly",
+      mode: "Card",
+      dueDate: "27 Jun 2027",
+      status: "Payment pending",
+      amount: "4,929.54",
+      amountNum: 4929.54,
+      downloadable: false,
+      canPay: false
+    },
+    {
+      paymentNumber: "148955-14",
+      contractNumber: "148955",
+      frequency: "Monthly",
+      mode: "Card",
+      dueDate: "27 Jul 2027",
+      status: "Payment pending",
+      amount: "4,929.54",
+      amountNum: 4929.54,
+      downloadable: false,
+      canPay: false
+    }
+  ],
+  paid: [
+    {
+      paymentNumber: "148955-03",
+      contractNumber: "148955",
+      frequency: "Monthly",
+      mode: "Card",
+      dueDate: "27 Aug 2026",
+      status: "Paid",
+      amount: "4,929.54",
+      amountNum: 4929.54,
+      downloadable: true,
+      canPay: false
+    },
+    {
+      paymentNumber: "148955-02",
+      contractNumber: "148955",
+      frequency: "Monthly",
+      mode: "Card",
+      dueDate: "27 Jul 2026",
+      status: "Paid",
+      amount: "4,929.54",
+      amountNum: 4929.54,
+      downloadable: true,
+      canPay: false
+    },
+    {
+      paymentNumber: "148955-01",
+      contractNumber: "148955",
+      frequency: "Monthly",
+      mode: "Card",
+      dueDate: "27 Jun 2026",
+      status: "Paid",
+      amount: "4,929.54",
+      amountNum: 4929.54,
+      downloadable: true,
+      canPay: false
+    },
+    {
+      paymentNumber: "123912-12",
+      contractNumber: "123912",
+      frequency: "Monthly",
+      mode: "Bank transfer",
+      dueDate: "27 May 2026",
+      status: "Paid",
+      amount: "4,929.54",
+      amountNum: 4929.54,
+      downloadable: true,
+      canPay: false
+    },
+    {
+      paymentNumber: "123912-11",
+      contractNumber: "123912",
+      frequency: "Monthly",
+      mode: "Bank transfer",
+      dueDate: "27 Apr 2026",
+      status: "Paid",
+      amount: "4,929.54",
+      amountNum: 4929.54,
+      downloadable: true,
+      canPay: false
+    },
+    {
+      paymentNumber: "123912-10",
+      contractNumber: "123912",
+      frequency: "Monthly",
+      mode: "Bank transfer",
+      dueDate: "27 Mar 2026",
+      status: "Paid",
+      amount: "4,929.54",
+      amountNum: 4929.54,
+      downloadable: true,
+      canPay: false
+    },
+    {
+      paymentNumber: "123912-09",
+      contractNumber: "123912",
+      frequency: "Monthly",
+      mode: "Bank transfer",
+      dueDate: "27 Feb 2026",
+      status: "Paid",
+      amount: "4,929.54",
+      amountNum: 4929.54,
+      downloadable: true,
+      canPay: false
+    }
+  ]
+};
+
+export const initialWalletActivity = [
+  {
+    id: "wa-1",
+    originator: "Karim Saleh",
+    originatorInitials: "KS",
+    isSystem: false,
+    date: "17 Sep 2026, 11:55 AM",
+    credits: -13,
+    balance: "1,840",
+    description: "Standard",
+    reference: "CMP-S-001001",
+    propertyType: "Apartment",
+    category: "Residential for Sale"
+  },
+  {
+    id: "wa-2",
+    originator: "Emma Clarke",
+    originatorInitials: "EC",
+    isSystem: false,
+    date: "16 Sep 2026, 06:34 PM",
+    credits: -1,
+    balance: "1,853",
+    description: "Standard",
+    reference: "CMP-R-002003",
+    propertyType: "Apartment",
+    category: "Residential for Rent"
+  },
+  {
+    id: "wa-3",
+    originator: "Layla Haddad",
+    originatorInitials: "LH",
+    isSystem: false,
+    date: "16 Sep 2026, 04:19 PM",
+    credits: -85,
+    balance: "1,854",
+    description: "Featured, 15 days",
+    reference: "CMP-S-001002",
+    propertyType: "Apartment",
+    category: "Residential for Sale"
+  },
+  {
+    id: "wa-4",
+    originator: "Layla Haddad",
+    originatorInitials: "LH",
+    isSystem: false,
+    date: "14 Sep 2026, 04:10 PM",
+    credits: -150,
+    balance: "1,939",
+    description: "Premium, 7 days",
+    reference: "CMP-S-001004",
+    propertyType: "Penthouse",
+    category: "Residential for Sale"
+  },
+  {
+    id: "wa-5",
+    originator: "Arjun Mehta",
+    originatorInitials: "AM",
+    isSystem: false,
+    date: "14 Sep 2026, 12:55 PM",
+    credits: -2,
+    balance: "2,089",
+    description: "Standard",
+    reference: "CMP-S-001005",
+    propertyType: "Townhouse",
+    category: "Residential for Sale"
+  },
+  {
+    id: "wa-6",
+    originator: "Emma Clarke",
+    originatorInitials: "EC",
+    isSystem: false,
+    date: "14 Sep 2026, 11:50 AM",
+    credits: -1,
+    balance: "2,091",
+    description: "Standard",
+    reference: "CMP-R-002004",
+    propertyType: "Shop",
+    category: "Commercial for Rent"
+  },
+  {
+    id: "wa-7",
+    originator: "Karim Saleh",
+    originatorInitials: "KS",
+    isSystem: false,
+    date: "12 Sep 2026, 06:25 PM",
+    credits: -9,
+    balance: "2,092",
+    description: "Manual refresh",
+    reference: "CMP-S-001007",
+    propertyType: "Apartment",
+    category: "Residential for Sale"
+  },
+  {
+    id: "wa-8",
+    originator: "Arjun Mehta",
+    originatorInitials: "AM",
+    isSystem: false,
+    date: "10 Sep 2026, 05:55 PM",
+    credits: -15,
+    balance: "2,101",
+    description: "Standard",
+    reference: "CMP-S-001008",
+    propertyType: "Villa",
+    category: "Residential for Sale"
+  },
+  {
+    id: "wa-9",
+    originator: "System",
+    originatorInitials: "",
+    isSystem: true,
+    date: "10 Sep 2026, 01:00 PM",
+    credits: 5,
+    balance: "2,116",
+    description: "Unpublish refund",
+    reference: "CMP-R-001976",
+    propertyType: "Apartment",
+    category: "Residential for Rent"
+  },
+  {
+    id: "wa-10",
+    originator: "System",
+    originatorInitials: "",
+    isSystem: true,
+    date: "10 Sep 2026, 01:00 PM",
+    credits: 10,
+    balance: "2,111",
+    description: "Unpublish refund",
+    reference: "CMP-S-000958",
+    propertyType: "Apartment",
+    category: "Residential for Sale"
+  },
+  {
+    id: "wa-11",
+    originator: "System",
+    originatorInitials: "",
+    isSystem: true,
+    date: "1 Sep 2026, 03:03 AM",
+    credits: 2000,
+    balance: "2,101",
+    description: "Monthly allowance",
+    reference: "—",
+    propertyType: "—",
+    category: "—"
+  }
+];
+
+export const initialContracts = [
+  {
+    contractNumber: "148955",
+    products: ["Listing credits", "Featured upgrades", "Lead insights"],
+    duration: "27 Apr 2026 – 26 Aug 2027",
+    grossAmount: "75,116.80",
+    discountPct: "12.5",
+    totalAmount: "69,013.56",
+    paymentMode: "Credit/Debit card",
+    signedBy: "Layla Haddad",
+    status: "Active"
+  },
+  {
+    contractNumber: "123912",
+    products: ["Bonus credits", "Listing credits"],
+    duration: "27 Aug 2025 – 26 Aug 2026",
+    grossAmount: "56,337.60",
+    discountPct: "0",
+    totalAmount: "59,154.48",
+    paymentMode: "Bank transfer",
+    signedBy: "Layla Haddad",
+    status: "Replaced"
+  }
+];
+

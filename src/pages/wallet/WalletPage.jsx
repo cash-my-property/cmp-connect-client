@@ -1,99 +1,317 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
+import { initialWalletPlan } from '../../data/mockData';
 import { useApp } from '../../context/AppContext';
-import { Coins, Plus, CreditCard, ArrowUpRight, ArrowDownLeft, Clock, ShieldCheck } from 'lucide-react';
+import { Check, Mail, Send, X, AlertTriangle } from 'lucide-react';
 
 export default function WalletPage() {
   const { agency, setAgency } = useApp();
-  const [topUpModal, setTopUpModal] = useState(false);
-  const [selectedPack, setSelectedPack] = useState(1000);
+  const [planData, setPlanData] = useState(initialWalletPlan);
+  const [requestModal, setRequestModal] = useState(null); // package object when opened
+  const [requestSuccess, setRequestSuccess] = useState(false);
+  const [customCredits, setCustomCredits] = useState('');
 
-  const transactionsLedger = [
-    { id: 'TX-C1', description: 'Listing auto-renewal: Marina Gate 2 bed', type: 'debit', amount: 50, date: '17 Sep 2026' },
-    { id: 'TX-C2', description: 'Smart Boost: Palm Jumeirah duplex penthouse', type: 'debit', amount: 120, date: '16 Sep 2026' },
-    { id: 'TX-C3', description: 'Monthly agency tier credit allocation', type: 'credit', amount: 2000, date: '01 Sep 2026' },
-    { id: 'TX-C4', description: 'Featured badge: Burj Khalifa 1 bed', type: 'debit', amount: 80, date: '28 Aug 2026' }
-  ];
+  // Handle requesting extra credits
+  const handleRequestCredits = (pkg) => {
+    setRequestModal(pkg);
+    setRequestSuccess(false);
+  };
 
-  const handleTopUp = () => {
-    setAgency((prev) => ({
-      ...prev,
-      credits: prev.credits + selectedPack
-    }));
-    setTopUpModal(false);
+  const confirmRequest = () => {
+    setRequestSuccess(true);
+    setTimeout(() => {
+      setRequestModal(null);
+      setRequestSuccess(false);
+    }, 1800);
   };
 
   return (
     <div>
-      <div style={{ marginBottom: '22px' }}>
-        <h1 style={{ fontSize: '24px' }}>Wallet & Credits</h1>
-        <p className="muted" style={{ margin: '4px 0 0', fontSize: '13.5px' }}>
-          Credit consumption balance, auto-topup settings, package tiers and billing history.
-        </p>
-      </div>
+      <h1 style={{ fontSize: '26px' }}>Balance &amp; plan</h1>
+      <p className="muted" style={{ margin: '6px 0 20px', fontSize: '14px' }}>
+        What your agency’s plan includes, what is used, and where the credits went.
+      </p>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 1fr) minmax(320px, 1.4fr)', gap: '22px', alignItems: 'start' }}>
-        {/* Balance Card */}
-        <div className="card" style={{ padding: '24px', background: 'linear-gradient(135deg, var(--cmp-surface), var(--cmp-surface-sunken))' }}>
-          <div className="row" style={{ justifyContent: 'space-between' }}>
-            <span className="muted" style={{ fontSize: '13px', fontWeight: 600 }}>Available Balance</span>
-            <span className="badge badge-accent">Agency Plan</span>
-          </div>
-
-          <p style={{ margin: '14px 0 6px', fontSize: '38px', fontWeight: 800, color: 'var(--cmp-brand)' }}>
-            {agency.credits.toLocaleString()} <span style={{ fontSize: '16px', fontWeight: 600 }}>credits</span>
-          </p>
-
-          <p className="muted" style={{ margin: '0 0 20px', fontSize: '13px' }}>
-            Current allocation expires in <strong>{agency.creditsExpiryDays} days</strong> (27 Sep 2026)
-          </p>
-
-          <button
-            type="button"
-            className="btn btn-primary"
-            style={{ width: '100%' }}
-            onClick={() => setTopUpModal(true)}
+      {/* Plan summary hero card */}
+      <section
+        className="card"
+        style={{
+          padding: '20px',
+          marginBottom: '20px',
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+          gap: '20px'
+        }}
+      >
+        <div>
+          <p
+            className="faint"
+            style={{
+              margin: 0,
+              fontSize: '12px',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em'
+            }}
           >
-            <Plus size={16} />
-            <span>Top up credits</span>
-          </button>
+            Plan
+          </p>
+          <p style={{ margin: '6px 0 0', fontSize: '22px', fontWeight: 800 }}>
+            {planData.planName}
+          </p>
+          <p className="muted" style={{ margin: '4px 0 0', fontSize: '13px' }}>
+            Renews {planData.renewalDate}
+          </p>
         </div>
 
-        {/* Recent Ledger */}
-        <div className="card" style={{ padding: '20px' }}>
-          <h2 style={{ fontSize: '16.5px', marginBottom: '14px' }}>Recent Credit Activity</h2>
-          <div style={{ display: 'grid', gap: '10px' }}>
-            {transactionsLedger.map((tx) => (
+        <div>
+          <p
+            className="faint"
+            style={{
+              margin: 0,
+              fontSize: '12px',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em'
+            }}
+          >
+            Credit balance
+          </p>
+          <p
+            style={{
+              margin: '6px 0 0',
+              fontSize: '22px',
+              fontWeight: 800,
+              color: 'var(--cmp-brand)'
+            }}
+          >
+            {planData.balance.toLocaleString()}
+          </p>
+          <p className="muted" style={{ margin: '4px 0 0', fontSize: '13px' }}>
+            {planData.monthlyAllowance.toLocaleString()} added on the 1st of each month
+          </p>
+        </div>
+
+        <div>
+          <p
+            className="faint"
+            style={{
+              margin: 0,
+              fontSize: '12px',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em'
+            }}
+          >
+            Account manager
+          </p>
+          <p style={{ margin: '6px 0 0', fontSize: '16px', fontWeight: 700 }}>
+            {planData.accountManager.name}
+          </p>
+          <a
+            href={`mailto:${planData.accountManager.email}?subject=Plan%20change%20for%20CMP%20Prime%20Real%20Estate`}
+            className="btn btn-outline btn-sm"
+            style={{ marginTop: '8px' }}
+          >
+            Change plan
+          </a>
+        </div>
+      </section>
+
+      {/* 3 Meter Cards */}
+      <div className="stat-grid">
+        {planData.meters.map((meter) => (
+          <div key={meter.id} className="card" style={{ padding: '18px' }}>
+            <div className="row" style={{ justifyContent: 'space-between', gap: '8px' }}>
+              <p
+                className="faint"
+                style={{
+                  margin: 0,
+                  fontSize: '12px',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em'
+                }}
+              >
+                {meter.label}
+              </p>
+              {meter.badge && (
+                <span
+                  className="badge"
+                  style={{
+                    background: 'var(--cmp-surface-sunken)',
+                    color: meter.badgeColor || 'var(--cmp-warning)',
+                    border: '1px solid var(--cmp-border)'
+                  }}
+                >
+                  {meter.badge}
+                </span>
+              )}
+            </div>
+
+            <p style={{ margin: '8px 0 10px', fontSize: '26px', fontWeight: 800 }}>
+              {meter.used}{' '}
+              <span className="faint" style={{ fontSize: '15px', fontWeight: 600 }}>
+                of {meter.total}
+              </span>
+            </p>
+
+            <div
+              className="meter"
+              role="meter"
+              aria-label={meter.label}
+              aria-valuemin={0}
+              aria-valuemax={meter.total}
+              aria-valuenow={meter.used}
+            >
               <div
-                key={tx.id}
+                style={{
+                  width: `${meter.pct}%`,
+                  height: '100%',
+                  borderRadius: '999px',
+                  background:
+                    meter.id === 'premium_slots'
+                      ? 'var(--cmp-warning)'
+                      : 'var(--cmp-brand)'
+                }}
+              />
+            </div>
+
+            <p className="faint" style={{ margin: '8px 0 0', fontSize: '12px' }}>
+              {meter.left} {meter.unit}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      {/* What credits buy & Add credits */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+          gap: '20px',
+          marginTop: '24px'
+        }}
+      >
+        {/* Left: What credits buy */}
+        <section className="card" style={{ padding: '20px' }}>
+          <h2 style={{ fontSize: '17px' }}>What credits buy</h2>
+          <dl style={{ margin: '12px 0 0' }}>
+            {planData.pricingCatalog.map((item, idx) => (
+              <div
+                key={item.title}
                 className="row"
                 style={{
                   justifyContent: 'space-between',
-                  padding: '10px 12px',
-                  borderRadius: '10px',
-                  background: 'var(--cmp-surface-sunken)'
+                  gap: '12px',
+                  padding: '10px 0',
+                  borderBottom:
+                    idx < planData.pricingCatalog.length - 1
+                      ? '1px solid var(--cmp-border)'
+                      : 'none'
                 }}
               >
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: '13.5px' }}>{tx.description}</div>
-                  <span className="faint" style={{ fontSize: '11.5px' }}>{tx.date}</span>
-                </div>
-                <div
-                  style={{
-                    fontWeight: 800,
-                    fontSize: '14px',
-                    color: tx.type === 'credit' ? 'var(--cmp-brand)' : 'var(--cmp-accent)'
-                  }}
+                <dt>
+                  <span style={{ fontWeight: 600, fontSize: '14px' }}>
+                    {item.title}
+                  </span>
+                  <span className="faint" style={{ display: 'block', fontSize: '12px' }}>
+                    {item.desc}
+                  </span>
+                </dt>
+                <dd style={{ margin: 0, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                  {item.credits} credits
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+
+        {/* Right: Add credits */}
+        <section className="card" style={{ padding: '20px' }}>
+          <h2 style={{ fontSize: '17px' }}>Add credits</h2>
+          <p className="muted" style={{ margin: '6px 0 14px', fontSize: '13px' }}>
+            Your account manager invoices the agency, and the credits appear once it is paid.
+          </p>
+
+          <div style={{ display: 'grid', gap: '10px' }}>
+            {planData.topUpPackages.map((pkg) => (
+              <div
+                key={pkg.id}
+                className="row"
+                style={{
+                  justifyContent: 'space-between',
+                  gap: '12px',
+                  padding: '12px',
+                  border: '1px solid var(--cmp-border)',
+                  borderRadius: 'var(--cmp-radius-md)'
+                }}
+              >
+                <span>
+                  <span style={{ fontWeight: 700 }}>
+                    {pkg.credits.toLocaleString()} credits
+                  </span>
+                  <span className="faint" style={{ display: 'block', fontSize: '12px' }}>
+                    {pkg.priceDisplay} · {pkg.rateDisplay}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={() => handleRequestCredits(pkg)}
                 >
-                  {tx.type === 'credit' ? '+' : '-'}{tx.amount}
-                </div>
+                  Request
+                </button>
               </div>
             ))}
           </div>
-        </div>
+        </section>
       </div>
 
-      {/* Top up modal */}
-      {topUpModal && (
+      {/* Credit history table */}
+      <section style={{ marginTop: '24px' }}>
+        <div className="row" style={{ justifyContent: 'space-between', marginBottom: '12px' }}>
+          <h2 style={{ fontSize: '18px' }}>Credit history</h2>
+        </div>
+
+        <div className="card table-scroll">
+          <table className="data">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Description</th>
+                <th style={{ textAlign: 'end' }}>Credits</th>
+                <th style={{ textAlign: 'end' }}>Balance</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {planData.creditHistory.map((item) => (
+                <tr key={item.id}>
+                  <td className="muted" style={{ whiteSpace: 'nowrap' }}>
+                    {item.date}
+                  </td>
+                  <td>{item.description}</td>
+                  <td
+                    style={{
+                      textAlign: 'end',
+                      fontWeight: 700,
+                      color: item.credits > 0 ? 'var(--cmp-success)' : 'var(--cmp-text)',
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    {item.credits > 0 ? `+${item.credits.toLocaleString()}` : item.credits.toLocaleString()}
+                  </td>
+                  <td className="muted" style={{ textAlign: 'end' }}>
+                    {item.balance}
+                  </td>
+                  <td>
+                    <span className="badge badge-neutral">{item.status}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {/* Credit request dialog modal */}
+      {requestModal && (
         <div
           style={{
             position: 'fixed',
@@ -104,53 +322,99 @@ export default function WalletPage() {
             placeItems: 'center',
             padding: '20px'
           }}
-          onClick={() => setTopUpModal(false)}
+          onClick={() => setRequestModal(null)}
         >
           <div
             className="card"
-            style={{ width: 'min(440px, 100%)', padding: '24px' }}
+            style={{
+              width: 'min(440px, 100%)',
+              padding: '24px',
+              position: 'relative'
+            }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 style={{ fontSize: '18px', marginBottom: '12px' }}>Choose a Credit Package</h2>
-            <div style={{ display: 'grid', gap: '10px', marginBottom: '18px' }}>
-              {[
-                { amount: 500, price: 'AED 950', badge: 'Standard' },
-                { amount: 1000, price: 'AED 1,750', badge: 'Most Popular' },
-                { amount: 2500, price: 'AED 3,800', badge: 'Best Value' }
-              ].map((pack) => (
-                <button
-                  key={pack.amount}
-                  type="button"
-                  className="card"
-                  onClick={() => setSelectedPack(pack.amount)}
+            <button
+              type="button"
+              className="icon-button"
+              style={{ position: 'absolute', top: '14px', right: '14px' }}
+              onClick={() => setRequestModal(null)}
+            >
+              <X size={18} />
+            </button>
+
+            {requestSuccess ? (
+              <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                <div
                   style={{
-                    padding: '14px',
-                    textAlign: 'start',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    border: selectedPack === pack.amount ? '2px solid var(--cmp-brand)' : '1px solid var(--cmp-border)',
-                    background: selectedPack === pack.amount ? 'var(--cmp-brand-subtle)' : 'var(--cmp-surface)'
+                    width: '48px',
+                    height: '48px',
+                    borderRadius: '50%',
+                    background: 'var(--cmp-brand-subtle)',
+                    color: 'var(--cmp-brand)',
+                    display: 'grid',
+                    placeItems: 'center',
+                    margin: '0 auto 14px'
                   }}
                 >
-                  <div>
-                    <strong style={{ fontSize: '16px' }}>{pack.amount} Credits</strong>
-                    <div className="muted" style={{ fontSize: '12px' }}>{pack.badge}</div>
-                  </div>
-                  <strong style={{ color: 'var(--cmp-brand)' }}>{pack.price}</strong>
-                </button>
-              ))}
-            </div>
+                  <Check size={26} />
+                </div>
+                <h3 style={{ fontSize: '18px', marginBottom: '6px' }}>Request Dispatched</h3>
+                <p className="muted" style={{ fontSize: '13.5px', margin: 0 }}>
+                  Rashid Al Amiri has been notified. An invoice for {requestModal.priceDisplay} will be added to your Invoices tab.
+                </p>
+              </div>
+            ) : (
+              <>
+                <h2 style={{ fontSize: '18px', marginBottom: '8px' }}>
+                  Request Credit Package
+                </h2>
+                <p className="muted" style={{ fontSize: '13.5px', margin: '0 0 16px' }}>
+                  Confirm your request for <strong>{requestModal.credits.toLocaleString()} credits</strong> at <strong>{requestModal.priceDisplay}</strong> ({requestModal.rateDisplay}).
+                </p>
 
-            <div className="row" style={{ gap: '10px', justifyContent: 'flex-end' }}>
-              <button type="button" className="btn btn-ghost" onClick={() => setTopUpModal(false)}>
-                Cancel
-              </button>
-              <button type="button" className="btn btn-primary" onClick={handleTopUp}>
-                Confirm Top-up
-              </button>
-            </div>
+                <div
+                  style={{
+                    background: 'var(--cmp-surface-sunken)',
+                    border: '1px solid var(--cmp-border)',
+                    borderRadius: 'var(--cmp-radius-md)',
+                    padding: '12px 14px',
+                    marginBottom: '18px',
+                    fontSize: '13px'
+                  }}
+                >
+                  <div className="row" style={{ justifyContent: 'space-between', marginBottom: '6px' }}>
+                    <span className="muted">Agency:</span>
+                    <strong>{agency.name}</strong>
+                  </div>
+                  <div className="row" style={{ justifyContent: 'space-between', marginBottom: '6px' }}>
+                    <span className="muted">Account Manager:</span>
+                    <span>{planData.accountManager.name}</span>
+                  </div>
+                  <div className="row" style={{ justifyContent: 'space-between' }}>
+                    <span className="muted">Billing Mode:</span>
+                    <span>Monthly Consolidated Invoice</span>
+                  </div>
+                </div>
+
+                <div className="row" style={{ gap: '10px', justifyContent: 'flex-end' }}>
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-sm"
+                    onClick={() => setRequestModal(null)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    onClick={confirmRequest}
+                  >
+                    <Send size={14} />
+                    <span>Send Request</span>
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
