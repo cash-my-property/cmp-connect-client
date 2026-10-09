@@ -73,6 +73,7 @@ export default function AppRoutes() {
 
       {/* Standalone CMP Connect Document Upload Portal (Token Auth - Public) */}
       <Route path="/cmp-connect/upload/:token" element={<UploadPortalPage />} />
+      <Route path="/upload/:token" element={<UploadPortalPage />} />
 
       {/* Protected Internal Portal Hubs */}
       <Route element={<ProtectedLayout />}>

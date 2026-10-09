@@ -11,7 +11,9 @@ export default function AppShell({ children }) {
   const { isAuthenticated } = useApp();
   const location = useLocation();
 
-  const isUploadPortal = location.pathname.startsWith('/cmp-connect/upload');
+  const isUploadPortal =
+    location.pathname.startsWith('/cmp-connect/upload') ||
+    location.pathname.startsWith('/upload/');
   if (isUploadPortal) {
     return <>{children}</>;
   }
