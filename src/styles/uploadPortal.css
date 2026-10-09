@@ -1,0 +1,565 @@
+/* ------------------------------------------------------------- 
+   CMP Connect Documents Upload Portal Styles
+   Exact match with cmp-registration-html/uploadPortal.html
+   ------------------------------------------------------------- */
+
+.upload-portal-root {
+  --up-bg: #F6FAF7;
+  --up-surface: #FFFFFF;
+  --up-sunken: #F6FAF7;
+  --up-border: #DCE6DF;
+  --up-border-strong: #BFCEC5;
+  --up-text: #18231C;
+  --up-muted: #4E6458;
+  --up-faint: #6B8377;
+  --up-brand: #0F7A4B;
+  --up-brand-hover: #0C6140;
+  --up-brand-subtle: #ECFBF2;
+  --up-brand-border: #A4E8C4;
+  --up-accent: #94551F;
+  --up-accent-subtle: #FDF5EE;
+  --up-accent-border: #F0C9A5;
+  --up-warning: #B4740C;
+  --up-danger: #B3261E;
+  --up-danger-subtle: #FDF0EF;
+  --up-dark: #04150E;
+  --up-gold: #E3A972;
+  --up-focus: #189A60;
+  --up-shadow-sm: 0 1px 2px rgba(11, 18, 14, 0.06), 0 1px 3px rgba(11, 18, 14, 0.05);
+  --up-shadow-md: 0 4px 10px rgba(11, 18, 14, 0.07), 0 2px 4px rgba(11, 18, 14, 0.05);
+  --up-r-md: 10px;
+  --up-r-lg: 14px;
+  --up-r-xl: 20px;
+  --up-font: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+  background: var(--up-bg);
+  color: var(--up-text);
+  font-family: var(--up-font);
+  font-size: 15px;
+  line-height: 1.5;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+  box-sizing: border-box;
+}
+
+.upload-portal-root *,
+.upload-portal-root *::before,
+.upload-portal-root *::after {
+  box-sizing: border-box;
+}
+
+.upload-portal-root a {
+  color: var(--up-brand);
+}
+
+.upload-portal-root button,
+.upload-portal-root input,
+.upload-portal-root select {
+  font: inherit;
+  color: inherit;
+}
+
+/* Topbar */
+.upload-portal-root .topbar {
+  background: var(--up-dark);
+  border-top: 4px solid #B87333;
+}
+
+.upload-portal-root .topbar-inner {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.upload-portal-root .wordmark {
+  font-weight: 800;
+  font-size: 17px;
+  color: #fff;
+  letter-spacing: -0.3px;
+}
+
+.upload-portal-root .wordmark span {
+  color: var(--up-gold);
+}
+
+.upload-portal-root .topbar-tag {
+  font-size: 12px;
+  font-weight: 600;
+  color: #A8BDB1;
+  letter-spacing: 0.4px;
+}
+
+/* Hero Header */
+.upload-portal-root .hero {
+  background: linear-gradient(120deg, #04150E 0%, #093A28 55%, #0C6140 100%);
+  color: #fff;
+}
+
+.upload-portal-root .hero-inner {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 24px 16px 28px;
+}
+
+.upload-portal-root .badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--up-gold);
+  margin-bottom: 6px;
+}
+
+.upload-portal-root .hero h1 {
+  margin: 0 0 6px;
+  font-size: 24px;
+  line-height: 1.25;
+  font-weight: 800;
+  letter-spacing: -0.4px;
+  color: #fff;
+}
+
+.upload-portal-root .hero p {
+  margin: 0;
+  color: #CFE0D6;
+  font-size: 14px;
+}
+
+.upload-portal-root .hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.upload-portal-root .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.upload-portal-root .chip.expiry {
+  background: rgba(227, 169, 114, 0.16);
+  border-color: rgba(227, 169, 114, 0.45);
+  color: #FBE3CB;
+}
+
+.upload-portal-root .chip.expiry.urgent {
+  background: rgba(179, 38, 30, 0.35);
+  border-color: rgba(255, 160, 150, 0.5);
+  color: #fff;
+}
+
+/* Main Container */
+.upload-portal-root main {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 20px 16px 120px;
+}
+
+/* Progress Card */
+.upload-portal-root .progress-card {
+  background: var(--up-surface);
+  border: 1px solid var(--up-border);
+  border-radius: var(--up-r-lg);
+  padding: 16px 18px;
+  box-shadow: var(--up-shadow-sm);
+  margin-bottom: 16px;
+}
+
+.upload-portal-root .progress-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.upload-portal-root .progress-row strong {
+  font-size: 15px;
+}
+
+.upload-portal-root .bar {
+  height: 8px;
+  background: var(--up-sunken);
+  border: 1px solid var(--up-border);
+  border-radius: 999px;
+  margin-top: 10px;
+  overflow: hidden;
+}
+
+.upload-portal-root .bar > span {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--up-brand);
+  border-radius: 999px;
+  transition: width 0.3s;
+}
+
+/* Cards */
+.upload-portal-root .card {
+  background: var(--up-surface);
+  border: 1px solid var(--up-border);
+  border-radius: var(--up-r-lg);
+  box-shadow: var(--up-shadow-sm);
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+
+.upload-portal-root .card-head {
+  padding: 16px 18px 4px;
+}
+
+.upload-portal-root .card-head h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.2px;
+  color: var(--up-text);
+}
+
+.upload-portal-root .card-head p {
+  margin: 4px 0 0;
+  color: var(--up-muted);
+  font-size: 13px;
+}
+
+.upload-portal-root .group-title {
+  margin: 18px 18px 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--up-faint);
+}
+
+/* Form Grid */
+.upload-portal-root .grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 16px;
+  padding: 4px 18px 18px;
+}
+
+@media (max-width: 640px) {
+  .upload-portal-root .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.upload-portal-root .field label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: var(--up-text);
+}
+
+.upload-portal-root .field label .req {
+  color: var(--up-danger);
+}
+
+.upload-portal-root .field input,
+.upload-portal-root .field select {
+  width: 100%;
+  height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--up-border-strong);
+  border-radius: var(--up-r-md);
+  background: #fff;
+  outline: none;
+  font-size: 14px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.upload-portal-root .field input:focus,
+.upload-portal-root .field select:focus {
+  border-color: var(--up-focus);
+  box-shadow: 0 0 0 3px rgba(24, 154, 96, 0.18);
+}
+
+.upload-portal-root .field .hint {
+  font-size: 12px;
+  color: var(--up-faint);
+  margin-top: 5px;
+}
+
+.upload-portal-root .field.invalid input,
+.upload-portal-root .field.invalid select {
+  border-color: var(--up-danger);
+}
+
+.upload-portal-root .save-state {
+  font-size: 12px;
+  color: var(--up-faint);
+  padding: 0 18px 14px;
+  min-height: 18px;
+}
+
+/* Documents */
+.upload-portal-root .doc {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  border-top: 1px solid var(--up-border);
+}
+
+.upload-portal-root .doc:first-of-type {
+  border-top: 0;
+}
+
+.upload-portal-root .doc-icon {
+  flex: 0 0 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: var(--up-sunken);
+  border: 1px solid var(--up-border);
+  color: var(--up-faint);
+  font-weight: 800;
+  font-size: 12px;
+}
+
+.upload-portal-root .doc.done .doc-icon {
+  background: var(--up-brand-subtle);
+  border-color: var(--up-brand-border);
+  color: var(--up-brand);
+}
+
+.upload-portal-root .doc.rejected .doc-icon {
+  background: var(--up-danger-subtle);
+  border-color: #F3B8B3;
+  color: var(--up-danger);
+}
+
+.upload-portal-root .doc-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.upload-portal-root .doc-title {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--up-text);
+}
+
+.upload-portal-root .doc-title .opt {
+  font-weight: 500;
+  color: var(--up-faint);
+}
+
+.upload-portal-root .doc-hint {
+  font-size: 12.5px;
+  color: var(--up-muted);
+}
+
+.upload-portal-root .doc-file {
+  font-size: 12.5px;
+  color: var(--up-brand);
+  margin-top: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+}
+
+.upload-portal-root .doc-error {
+  font-size: 12.5px;
+  color: var(--up-danger);
+  margin-top: 3px;
+  font-weight: 600;
+}
+
+.upload-portal-root .doc-actions {
+  flex: 0 0 auto;
+}
+
+.upload-portal-root .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 16px;
+  border-radius: var(--up-r-md);
+  border: 1px solid var(--up-border-strong);
+  background: #fff;
+  font-weight: 700;
+  font-size: 13.5px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.upload-portal-root .btn:hover {
+  background: var(--up-sunken);
+}
+
+.upload-portal-root .btn.primary {
+  background: var(--up-brand);
+  border-color: var(--up-brand);
+  color: #fff;
+}
+
+.upload-portal-root .btn.primary:hover {
+  background: var(--up-brand-hover);
+}
+
+.upload-portal-root .btn[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.upload-portal-root .btn.lg {
+  height: 46px;
+  padding: 0 24px;
+  font-size: 15px;
+}
+
+@media (max-width: 560px) {
+  .upload-portal-root .doc {
+    flex-wrap: wrap;
+  }
+  .upload-portal-root .doc-actions {
+    width: 100%;
+    padding-left: 50px;
+  }
+}
+
+.upload-portal-root .spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: up-spin 0.7s linear infinite;
+  display: inline-block;
+}
+
+@keyframes up-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Floating Submit Bar */
+.upload-portal-root .submit-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(6px);
+  border-top: 1px solid var(--up-border);
+  z-index: 50;
+}
+
+.upload-portal-root .submit-inner {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.upload-portal-root .submit-note {
+  font-size: 13px;
+  color: var(--up-muted);
+}
+
+.upload-portal-root .submit-note.err {
+  color: var(--up-danger);
+  font-weight: 600;
+}
+
+/* State Screens (404, 410, 409, Done) */
+.upload-portal-root .state {
+  max-width: 560px;
+  margin: 48px auto;
+  background: var(--up-surface);
+  border: 1px solid var(--up-border);
+  border-radius: var(--up-r-xl);
+  padding: 32px 24px;
+  text-align: center;
+  box-shadow: var(--up-shadow-md);
+}
+
+.upload-portal-root .state .mark {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  margin: 0 auto 14px;
+  display: grid;
+  place-items: center;
+  font-size: 26px;
+  font-weight: 800;
+}
+
+.upload-portal-root .state.ok .mark {
+  background: var(--up-brand-subtle);
+  color: var(--up-brand);
+  border: 1px solid var(--up-brand-border);
+}
+
+.upload-portal-root .state.warn .mark {
+  background: var(--up-accent-subtle);
+  color: var(--up-accent);
+  border: 1px solid var(--up-accent-border);
+}
+
+.upload-portal-root .state h2 {
+  margin: 0 0 8px;
+  font-size: 20px;
+  color: var(--up-text);
+}
+
+.upload-portal-root .state p {
+  margin: 0 0 6px;
+  color: var(--up-muted);
+}
+
+.upload-portal-root .footer {
+  text-align: center;
+  font-size: 12px;
+  color: var(--up-faint);
+  padding: 8px 16px 24px;
+}
+
+.upload-portal-root .hidden {
+  display: none !important;
+}
+
+.upload-portal-root .skeleton {
+  height: 120px;
+  border-radius: var(--up-r-lg);
+  background: linear-gradient(90deg, #EEF3EF, #F6FAF7, #EEF3EF);
+  background-size: 200% 100%;
+  animation: up-sh 1.2s infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes up-sh {
+  to {
+    background-position: -200% 0;
+  }
+}

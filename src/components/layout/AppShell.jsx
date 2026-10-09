@@ -1,4 +1,5 @@
 import React from 'react';
+import { useLocation } from 'react-router-dom';
 import AppRail from './AppRail';
 import HubBar from './HubBar';
 import CommandPalette from './CommandPalette';
@@ -6,6 +7,28 @@ import AskCmpDrawer from './AskCmpDrawer';
 import NotificationsDrawer from './NotificationsDrawer';
 
 export default function AppShell({ children }) {
+  const location = useLocation();
+  const isUploadPortal = location.pathname.startsWith('/cmp-connect/upload');
+  if (isUploadPortal) {
+    return <>{children}</>;
+  }
+
+  const isOnboarding = 
+    location.pathname.startsWith('/onboarding') ||
+    location.pathname === '/signin' ||
+    location.pathname === '/signup' ||
+    location.pathname === '/register' ||
+    location.pathname === '/apply';
+
+  if (isOnboarding) {
+    return (
+      <>
+        {children}
+        <CommandPalette />
+      </>
+    );
+  }
+
   return (
     <div className="portal-shell">
       <AppRail />

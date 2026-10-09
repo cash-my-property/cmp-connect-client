@@ -27,6 +27,12 @@ import HelpPage from '../pages/help/HelpPage';
 
 import LiveDeskPage from '../pages/rto/LiveDeskPage';
 
+import OnboardingLandingPage from '../pages/onboarding/OnboardingLandingPage';
+import OnboardingSigninPage from '../pages/onboarding/OnboardingSigninPage';
+import OnboardingSignupPage from '../pages/onboarding/OnboardingSignupPage';
+import OnboardingWizardPage from '../pages/onboarding/OnboardingWizardPage';
+import UploadPortalPage from '../pages/onboarding/UploadPortalPage';
+
 export default function AppRoutes() {
   return (
     <Routes>
@@ -86,6 +92,17 @@ export default function AppRoutes() {
       <Route path="/rto/cheques" element={<LiveDeskPage />} />
       <Route path="/rto/new" element={<AddPropertyPage />} />
       <Route path="/rto/team" element={<TeamPage />} />
+
+      {/* Onboarding & Registration */}
+      <Route path="/onboarding" element={<OnboardingLandingPage />} />
+      <Route path="/signin" element={<OnboardingSigninPage />} />
+      <Route path="/signup" element={<OnboardingSignupPage />} />
+      <Route path="/register" element={<OnboardingSignupPage />} />
+      <Route path="/apply" element={<OnboardingWizardPage />} />
+      <Route path="/onboarding/apply" element={<OnboardingWizardPage />} />
+
+      {/* Standalone CMP Connect Document Upload Portal (Token Auth) */}
+      <Route path="/cmp-connect/upload/:token" element={<UploadPortalPage />} />
 
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />

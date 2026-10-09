@@ -38,7 +38,10 @@ export default function CommandPalette() {
     { title: 'Real Time Offer Live Desk', path: '/rto', icon: Radio, category: 'Pages' },
     { title: 'Wallet & Credits', path: '/wallet', icon: CreditCard, category: 'Pages' },
     { title: 'Agency Profile & Settings', path: '/account', icon: Settings, category: 'Pages' },
-    { title: 'Help & Knowledge Guides', path: '/help', icon: HelpCircle, category: 'Pages' }
+    { title: 'Help & Knowledge Guides', path: '/help', icon: HelpCircle, category: 'Pages' },
+    { title: 'Registration & Onboarding Portal', path: '/onboarding', icon: Building, category: 'Onboarding' },
+    { title: 'Register New Account (Sign up)', path: '/signup', icon: Users, category: 'Onboarding' },
+    { title: 'Sign In (Registration portal)', path: '/signin', icon: Settings, category: 'Onboarding' }
   ];
 
   const filteredPages = quickPages.filter((p) =>

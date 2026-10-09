@@ -1,0 +1,683 @@
+/* ------------------------------------------------------------- 
+   CMP Onboarding & Registration Styles
+   Pixel-perfect match with cmp-registration-html
+   ------------------------------------------------------------- */
+
+/* Split layout shell */
+.reg-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 400px) minmax(0, 1fr);
+  min-height: 100vh;
+  background: var(--cmp-bg);
+}
+
+/* Left brand hero panel */
+.reg-brand {
+  color: #EDF3EF;
+  padding: 40px 34px;
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+  background: radial-gradient(90% 120% at 100% 100%, rgba(184, 115, 51, 0.45), transparent 60%),
+              linear-gradient(150deg, #04150E 0%, #093A28 55%, #0C6140 100%);
+  position: relative;
+}
+
+.reg-logo {
+  font-weight: 800;
+  font-size: 19px;
+  color: #FFFFFF;
+  text-decoration: none;
+  letter-spacing: -0.02em;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.reg-logo span {
+  color: #E3A972;
+}
+
+.reg-brand h1 {
+  font-size: 28px;
+  line-height: 1.2;
+  color: #FFFFFF;
+  margin: 0 0 8px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.reg-brand .lead {
+  margin: 0;
+  color: #C9D8CF;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.reg-brand .points {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-gap: 12px;
+  gap: 12px;
+}
+
+.reg-brand .points li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 14px;
+  color: #D8E5DC;
+  line-height: 1.4;
+}
+
+.reg-brand .tick {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(110, 212, 161, 0.18);
+  color: #6ED4A1;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.reg-brand footer {
+  margin-top: auto;
+  font-size: 12.5px;
+  color: #A8BDB1;
+  display: grid;
+  grid-gap: 4px;
+  gap: 4px;
+  padding-top: 24px;
+}
+
+.reg-brand footer p {
+  margin: 0;
+}
+
+.reg-brand footer a {
+  color: #C9D8CF;
+  text-decoration: none;
+}
+
+.reg-brand footer a:hover {
+  text-decoration: underline;
+  color: #FFFFFF;
+}
+
+/* Right form container */
+.reg-panel {
+  padding: 36px 24px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  background: var(--cmp-bg);
+  min-height: 100vh;
+  overflow-y: auto;
+}
+
+.reg-card {
+  width: 100%;
+  max-width: 520px;
+  background: var(--cmp-surface);
+  border: 1px solid var(--cmp-border);
+  border-radius: 18px;
+  box-shadow: var(--cmp-shadow-lg);
+  padding: 28px;
+  transition: all var(--cmp-duration-fast) var(--cmp-ease);
+}
+
+.reg-card.wide {
+  max-width: 760px;
+}
+
+.reg-card h2 {
+  font-size: 23px;
+  letter-spacing: -0.02em;
+  margin: 0 0 6px;
+  color: var(--cmp-text);
+  font-weight: 700;
+}
+
+.reg-card .sub {
+  color: var(--cmp-text-muted);
+  font-size: 14.5px;
+  margin: 0 0 20px;
+  line-height: 1.45;
+}
+
+.eyebrow {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--cmp-accent);
+}
+
+.reg-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+/* Progress Stepper */
+.stage-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.stage {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--cmp-text-faint);
+  background: none;
+  border: none;
+  padding: 0 8px 0 0;
+  font-family: inherit;
+  cursor: default;
+  transition: color var(--cmp-duration-fast) var(--cmp-ease);
+}
+
+.stage i {
+  width: 23px;
+  height: 23px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-style: normal;
+  font-size: 12px;
+  background: var(--cmp-surface-sunken);
+  border: 1px solid var(--cmp-border);
+  transition: all var(--cmp-duration-fast) var(--cmp-ease);
+}
+
+.stage[data-state="done"] {
+  color: var(--cmp-brand);
+  cursor: pointer;
+}
+
+.stage[data-state="done"] i {
+  background: var(--cmp-brand);
+  border-color: var(--cmp-brand);
+  color: var(--cmp-text-on-brand);
+}
+
+.stage[data-state="now"] {
+  color: var(--cmp-text);
+}
+
+.stage[data-state="now"] i {
+  background: var(--cmp-accent);
+  border-color: var(--cmp-accent);
+  color: var(--cmp-text-on-accent);
+}
+
+button.stage:hover {
+  text-decoration: underline;
+}
+
+/* Account Type Switcher Pill */
+.type-switch {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  font-size: 12.5px;
+}
+
+.type-switch > div {
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  border-radius: 999px;
+  background: var(--cmp-surface-sunken);
+  border: 1px solid var(--cmp-border);
+}
+
+.type-switch button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--cmp-text-muted);
+  white-space: nowrap;
+  transition: all var(--cmp-duration-fast) var(--cmp-ease);
+}
+
+.type-switch button:hover {
+  color: var(--cmp-text);
+}
+
+.type-switch button[aria-pressed="true"] {
+  background: var(--cmp-brand);
+  color: var(--cmp-text-on-brand);
+}
+
+/* Account Type Picker Cards (Landing & Sign Up) */
+.type-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-gap: 12px;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.type-card {
+  display: grid;
+  grid-gap: 5px;
+  gap: 5px;
+  justify-items: start;
+  text-align: start;
+  padding: 16px;
+  border-radius: 14px;
+  border: 1.5px solid var(--cmp-border);
+  background: var(--cmp-surface);
+  cursor: pointer;
+  font: inherit;
+  transition: all var(--cmp-duration-fast) var(--cmp-ease);
+}
+
+.type-card:hover {
+  border-color: var(--cmp-brand-border);
+}
+
+.type-card[aria-pressed="true"] {
+  border-color: var(--cmp-brand);
+  background: var(--cmp-brand-subtle);
+}
+
+.type-card strong {
+  font-size: 15px;
+  color: var(--cmp-text);
+}
+
+.type-card .muted {
+  font-size: 13px;
+  color: var(--cmp-text-muted);
+  line-height: 1.4;
+}
+
+.type-card .faint {
+  font-size: 12px;
+  color: var(--cmp-text-faint);
+  line-height: 1.35;
+}
+
+.type-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: var(--cmp-brand-subtle);
+  color: var(--cmp-brand);
+  margin-bottom: 4px;
+}
+
+/* Form Sections and Field Grid */
+.form-section {
+  padding-top: 18px;
+  margin-top: 18px;
+  border-top: 1px solid var(--cmp-border);
+}
+
+.form-section:first-of-type {
+  border-top: none;
+  margin-top: 0;
+  padding-top: 0;
+}
+
+.form-section h3 {
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--cmp-text-muted);
+  margin: 0 0 12px;
+  font-weight: 700;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-gap: 14px;
+  gap: 14px;
+}
+
+.form-grid .field {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-gap: 6px;
+  gap: 6px;
+}
+
+.form-grid .field.half {
+  grid-column: span 1;
+}
+
+.field {
+  display: grid;
+  grid-gap: 6px;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.field > label {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--cmp-text);
+}
+
+.field .hint {
+  font-size: 12.5px;
+  color: var(--cmp-text-faint);
+}
+
+.error-text {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--cmp-danger);
+}
+
+[data-invalid] input,
+[data-invalid] select,
+[data-invalid] textarea {
+  border-color: var(--cmp-danger);
+  background: color-mix(in srgb, var(--cmp-danger) 4%, var(--cmp-surface));
+}
+
+.check {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 14px;
+  margin: 16px 0;
+  cursor: pointer;
+}
+
+.check input {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  accent-color: var(--cmp-brand);
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.check a {
+  color: var(--cmp-brand);
+  text-decoration: underline;
+}
+
+/* Document Upload Items */
+.doc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-gap: 10px;
+  gap: 10px;
+}
+
+.doc-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 13px 14px;
+  border: 1px solid var(--cmp-border);
+  border-radius: 12px;
+  background: var(--cmp-surface);
+  transition: all var(--cmp-duration-fast) var(--cmp-ease);
+}
+
+.doc-row[data-state="uploaded"] {
+  border-color: var(--cmp-brand-border);
+  background: var(--cmp-brand-subtle);
+}
+
+.doc-row[data-state="verified"] {
+  border-color: var(--cmp-brand-border);
+  background: var(--cmp-brand-subtle);
+}
+
+.doc-row[data-state="rejected"] {
+  border-color: var(--cmp-danger);
+  background: color-mix(in srgb, var(--cmp-danger) 8%, transparent);
+}
+
+.doc-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  background: var(--cmp-surface-sunken);
+  color: var(--cmp-text-muted);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.doc-row[data-state="uploaded"] .doc-icon,
+.doc-row[data-state="verified"] .doc-icon {
+  background: var(--cmp-brand);
+  color: var(--cmp-text-on-brand);
+}
+
+.doc-main {
+  flex: 1 1;
+  min-width: 0;
+  display: grid;
+  grid-gap: 2px;
+  gap: 2px;
+}
+
+.doc-main strong {
+  font-size: 14.5px;
+  color: var(--cmp-text);
+}
+
+.doc-main .muted {
+  font-size: 12.5px;
+  color: var(--cmp-text-muted);
+}
+
+.doc-main .faint {
+  font-size: 12.5px;
+  color: var(--cmp-text-faint);
+}
+
+.doc-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.doc-actions label.btn {
+  cursor: pointer;
+}
+
+/* Status badges */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.status-pill.uploaded {
+  color: var(--cmp-brand);
+  border: 1px solid color-mix(in srgb, var(--cmp-brand) 55%, transparent);
+  background: color-mix(in srgb, var(--cmp-brand) 10%, transparent);
+}
+
+.status-pill.in-review {
+  color: var(--cmp-warning);
+  border: 1px solid color-mix(in srgb, var(--cmp-warning) 55%, transparent);
+  background: color-mix(in srgb, var(--cmp-warning) 10%, transparent);
+}
+
+.status-pill.verified,
+.status-pill.checked {
+  color: var(--cmp-success);
+  border: 1px solid color-mix(in srgb, var(--cmp-success) 55%, transparent);
+  background: color-mix(in srgb, var(--cmp-success) 10%, transparent);
+}
+
+.status-pill.rejected {
+  color: var(--cmp-danger);
+  border: 1px solid color-mix(in srgb, var(--cmp-danger) 55%, transparent);
+  background: color-mix(in srgb, var(--cmp-danger) 10%, transparent);
+}
+
+/* Summary definition lists */
+.summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-gap: 12px;
+  gap: 12px;
+  margin: 0;
+}
+
+.summary dt {
+  font-size: 12px;
+  color: var(--cmp-text-faint);
+}
+
+.summary dd {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--cmp-text);
+  word-break: break-word;
+}
+
+/* Success icon indicator */
+.success-mark {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: var(--cmp-brand-subtle);
+  color: var(--cmp-brand);
+  display: grid;
+  place-items: center;
+  margin-bottom: 16px;
+}
+
+/* Notes & callout boxes */
+.note {
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+
+.note-green {
+  background: var(--cmp-brand-subtle);
+  border: 1px solid var(--cmp-brand-border);
+  color: var(--cmp-brand);
+}
+
+.note-warning {
+  background: color-mix(in srgb, var(--cmp-warning) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cmp-warning) 40%, transparent);
+  color: var(--cmp-warning);
+}
+
+/* Button rows */
+.btn-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+}
+
+.btn-block {
+  width: 100%;
+}
+
+.meta {
+  margin: 16px 0 0;
+  font-size: 14px;
+  color: var(--cmp-text-muted);
+  text-align: center;
+}
+
+.meta a {
+  color: var(--cmp-brand);
+  text-decoration: underline;
+  font-weight: 600;
+}
+
+/* Mobile responsive layout */
+@media (max-width: 900px) {
+  .reg-shell {
+    grid-template-columns: 1fr;
+  }
+  .reg-brand {
+    padding: 22px 18px;
+    gap: 16px;
+  }
+  .reg-brand .points,
+  .reg-brand footer {
+    display: none;
+  }
+  .reg-panel {
+    padding: 18px 12px 60px;
+  }
+  .reg-card {
+    padding: 20px;
+    box-shadow: none;
+  }
+  .type-grid,
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+  .form-grid .field.half {
+    grid-column: 1 / -1;
+  }
+}
+
+@keyframes cmp-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Ensure no horizontal scroll at mobile width >= 360px */
+@media (max-width: 600px) {
+  .reg-card {
+    padding: 18px 14px;
+    border-radius: 14px;
+  }
+  .type-card {
+    padding: 14px 12px;
+  }
+  .form-grid {
+    gap: 12px;
+  }
+}
+
