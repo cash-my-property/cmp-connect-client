@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import {
@@ -10,7 +10,10 @@ import {
   HelpCircle,
   Building,
   Radio,
-  Plus
+  Plus,
+  LogOut,
+  User,
+  Settings
 } from 'lucide-react';
 
 export default function HubBar() {
@@ -22,12 +25,37 @@ export default function HubBar() {
     setIsSearchOpen,
     setIsNotificationsOpen,
     agency,
-    needsYou
+    needsYou,
+    logout
   } = useApp();
+
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const userMenuRef = useRef(null);
 
   const location = useLocation();
   const navigate = useNavigate();
   const pathname = location.pathname;
+
+  // Close user menu on outside click
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target)) {
+        setIsUserMenuOpen(false);
+      }
+    };
+    if (isUserMenuOpen) {
+      document.addEventListener('mousedown', handleOutsideClick);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+    };
+  }, [isUserMenuOpen]);
+
+  const handleSignOut = () => {
+    setIsUserMenuOpen(false);
+    logout();
+    navigate('/signin');
+  };
 
   // Derive active hub information based on current URL path
   const getHubInfo = () => {
@@ -236,25 +264,113 @@ export default function HubBar() {
             <HelpCircle size={18} />
           </NavLink>
 
-          {/* User Profile Avatar */}
-          <NavLink
-            to="/account"
-            className="btn btn-outline btn-sm"
-            style={{
-              width: '38px',
-              height: '38px',
-              padding: 0,
-              borderRadius: '50%',
-              border: 'none',
-              background: 'var(--cmp-brand-subtle)',
-              color: 'var(--cmp-brand)',
-              fontWeight: 700,
-              fontSize: '13px'
-            }}
-            title={`${agency.currentUser.name} (${agency.currentUser.role})`}
-          >
-            {agency.currentUser.initials}
-          </NavLink>
+          {/* User Profile Avatar & Dropdown */}
+          <div style={{ position: 'relative' }} ref={userMenuRef}>
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={() => setIsUserMenuOpen((prev) => !prev)}
+              style={{
+                width: '38px',
+                height: '38px',
+                padding: 0,
+                borderRadius: '50%',
+                border: isUserMenuOpen ? '2px solid var(--cmp-brand)' : '1px solid var(--cmp-border)',
+                background: 'var(--cmp-brand-subtle)',
+                color: 'var(--cmp-brand)',
+                fontWeight: 700,
+                fontSize: '13px',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+              title={`${agency.currentUser.name} (${agency.currentUser.role})`}
+              aria-label="User account menu"
+              aria-expanded={isUserMenuOpen}
+            >
+              {agency.currentUser.initials}
+            </button>
+
+            {isUserMenuOpen && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 'calc(100% + 8px)',
+                  right: 0,
+                  width: '260px',
+                  backgroundColor: 'var(--cmp-surface)',
+                  border: '1px solid var(--cmp-border)',
+                  borderRadius: '10px',
+                  boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+                  padding: '12px',
+                  zIndex: 1000,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px'
+                }}
+              >
+                <div style={{ padding: '4px 6px', borderBottom: '1px solid var(--cmp-border)', paddingBottom: '10px' }}>
+                  <p style={{ margin: 0, fontWeight: 600, fontSize: '14px', color: 'var(--cmp-text)' }}>
+                    {agency.currentUser.name}
+                  </p>
+                  <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'var(--cmp-text-muted)' }}>
+                    {agency.currentUser.role}
+                  </p>
+                  <p style={{ margin: '4px 0 0', fontSize: '11.5px', color: 'var(--cmp-text-faint)', wordBreak: 'break-all' }}>
+                    {agency.currentUser.email}
+                  </p>
+                </div>
+
+                <NavLink
+                  to="/account"
+                  onClick={() => setIsUserMenuOpen(false)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    padding: '8px 10px',
+                    borderRadius: '6px',
+                    color: 'var(--cmp-text)',
+                    textDecoration: 'none',
+                    fontSize: '13px',
+                    transition: 'background-color 0.15s ease'
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--cmp-surface-sunken)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                >
+                  <Settings size={15} style={{ color: 'var(--cmp-text-muted)' }} />
+                  <span>Agency Profile & Settings</span>
+                </NavLink>
+
+                <button
+                  type="button"
+                  onClick={handleSignOut}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    width: '100%',
+                    padding: '8px 10px',
+                    borderRadius: '6px',
+                    border: 'none',
+                    backgroundColor: 'transparent',
+                    color: 'var(--cmp-danger, #ef4444)',
+                    fontSize: '13px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    transition: 'background-color 0.15s ease'
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'color-mix(in srgb, var(--cmp-danger, #ef4444) 10%, transparent)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                >
+                  <LogOut size={15} />
+                  <span>Sign out</span>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

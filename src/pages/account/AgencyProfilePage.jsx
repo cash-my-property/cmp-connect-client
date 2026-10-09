@@ -1,11 +1,18 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
-import { Building, Shield, Check, Save } from 'lucide-react';
+import { Building, Shield, Check, Save, LogOut } from 'lucide-react';
 
 export default function AgencyProfilePage() {
-  const { agency, setAgency } = useApp();
+  const navigate = useNavigate();
+  const { agency, setAgency, logout } = useApp();
   const [formData, setFormData] = useState({ ...agency });
   const [saved, setSaved] = useState(false);
+
+  const handleSignOut = () => {
+    logout();
+    navigate('/signin');
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -107,6 +114,29 @@ export default function AgencyProfilePage() {
             </button>
           </div>
         </form>
+      </div>
+
+      <div className="card" style={{ padding: '24px', maxWidth: '880px', marginTop: '20px', border: '1px solid var(--cmp-border)' }}>
+        <h3 style={{ fontSize: '16px', fontWeight: 600, margin: '0 0 6px' }}>Current User & Session</h3>
+        <p className="muted" style={{ fontSize: '13px', margin: '0 0 16px' }}>
+          You are currently signed in as <strong>{agency.currentUser.name}</strong> ({agency.currentUser.email}).
+        </p>
+
+        <button
+          type="button"
+          onClick={handleSignOut}
+          className="btn btn-outline"
+          style={{
+            borderColor: 'var(--cmp-danger, #ef4444)',
+            color: 'var(--cmp-danger, #ef4444)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+        >
+          <LogOut size={15} />
+          <span>Sign out of CMP Connect</span>
+        </button>
       </div>
     </div>
   );

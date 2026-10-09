@@ -19,7 +19,23 @@ export function AppProvider({ children }) {
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
 
-  const [agency, setAgency] = useState(initialAgency);
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    return localStorage.getItem('cmp_connect_auth') === 'true';
+  });
+
+  const [agency, setAgency] = useState(() => {
+    const savedEmail = localStorage.getItem('cmp_connect_user_email');
+    if (savedEmail) {
+      return {
+        ...initialAgency,
+        currentUser: {
+          ...initialAgency.currentUser,
+          email: savedEmail
+        }
+      };
+    }
+    return initialAgency;
+  });
   const [listings, setListings] = useState(initialListings);
   const [clients, setClients] = useState(initialClients);
   const [rtoLots, setRtoLots] = useState(initialRtoLots);
@@ -27,6 +43,41 @@ export function AppProvider({ children }) {
   const [team, setTeam] = useState(teamMembers);
   const [needsYou, setNeedsYou] = useState(needsYouItems);
   const [transactions, setTransactions] = useState(initialTransactions);
+
+  const login = (credentials) => {
+    setIsAuthenticated(true);
+    localStorage.setItem('cmp_connect_auth', 'true');
+    if (credentials?.email) {
+      const email = credentials.email.trim();
+      localStorage.setItem('cmp_connect_user_email', email);
+      const namePart = email.split('@')[0] || '';
+      const formattedName = namePart
+        .replace(/[._-]/g, ' ')
+        .replace(/\b\w/g, (c) => c.toUpperCase());
+      const initials = namePart
+        .split(/[._-]/)
+        .map((p) => p[0]?.toUpperCase())
+        .filter(Boolean)
+        .slice(0, 2)
+        .join('') || 'CU';
+
+      setAgency((prev) => ({
+        ...prev,
+        currentUser: {
+          ...prev.currentUser,
+          email,
+          name: formattedName || prev.currentUser.name,
+          initials: initials || prev.currentUser.initials
+        }
+      }));
+    }
+  };
+
+  const logout = () => {
+    setIsAuthenticated(false);
+    localStorage.removeItem('cmp_connect_auth');
+    localStorage.removeItem('cmp_connect_user_email');
+  };
 
   // Sync data attributes to HTML root element
   useEffect(() => {
@@ -128,6 +179,9 @@ export function AppProvider({ children }) {
   return (
     <AppContext.Provider
       value={{
+        isAuthenticated,
+        login,
+        logout,
         platform,
         setPlatform,
         theme,
