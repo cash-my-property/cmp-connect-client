@@ -4,7 +4,7 @@ import OnboardingLayout from './OnboardingLayout';
 import { cmpConnectApi } from '../../services/cmpConnectApi';
 
 // UAE Phone Number Validation Regex
-// Matches: +971 50 412 7781, 050 412 7781, 00971504127781, 504127781
+// Matches: +971 50 412 7781, 050 412 7781, 00971504127781, 504127781, landlines 04, 02 etc.
 const UAE_PHONE_REGEX = /^(?:\+971|00971|971|0)?(?:50|52|54|55|56|58|2|3|4|6|7|9)\d{7}$/;
 
 // Standard email regex
@@ -16,8 +16,73 @@ function isValidUaePhone(phone) {
   return UAE_PHONE_REGEX.test(cleaned);
 }
 
+// UAE Phone Formatter for clean input display
+function formatUaePhoneDisplay(phone) {
+  if (!phone || typeof phone !== 'string') return '';
+  const cleaned = phone.replace(/[\s-]/g, '');
+  if (!cleaned) return phone;
+  let digits = cleaned;
+  if (digits.startsWith('+971')) digits = digits.slice(4);
+  else if (digits.startsWith('00971')) digits = digits.slice(5);
+  else if (digits.startsWith('971')) digits = digits.slice(3);
+  else if (digits.startsWith('0')) digits = digits.slice(1);
+
+  if (digits.length === 8 || digits.length === 9) {
+    const prefix = digits.slice(0, 2);
+    if (['50', '52', '54', '55', '56', '58'].includes(prefix)) {
+      return `+971 ${prefix} ${digits.slice(2, 5)} ${digits.slice(5)}`;
+    } else {
+      const area = digits.slice(0, 1);
+      return `+971 ${area} ${digits.slice(1, 4)} ${digits.slice(4)}`;
+    }
+  }
+  return phone.startsWith('+') ? phone : `+${phone}`;
+}
+
+// Calculate Trade Licence Status based on expiryDate vs Date.now()
+// > 30 days -> 'Active', <= 30 days & >= 0 -> 'Expires soon', < 0 days -> 'Expired'
+function calculateTradeLicenceStatus(expiryDateStr) {
+  if (!expiryDateStr || typeof expiryDateStr !== 'string') return 'Active';
+
+  try {
+    const cleanStr = expiryDateStr.trim().split('T')[0];
+    const parts = cleanStr.split(/[-/]/);
+    let expiryDate;
+    if (parts.length === 3) {
+      if (parts[0].length === 4) {
+        // YYYY-MM-DD
+        expiryDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+      } else if (parts[2].length === 4) {
+        // DD-MM-YYYY
+        expiryDate = new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
+      } else {
+        expiryDate = new Date(cleanStr);
+      }
+    } else {
+      expiryDate = new Date(cleanStr);
+    }
+
+    if (isNaN(expiryDate.getTime())) return 'Active';
+
+    const now = new Date();
+    const nowStartOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const expiryStartOfDay = new Date(expiryDate.getFullYear(), expiryDate.getMonth(), expiryDate.getDate()).getTime();
+
+    const diffDays = Math.round((expiryStartOfDay - nowStartOfDay) / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 0) {
+      return 'Expired';
+    } else if (diffDays <= 30) {
+      return 'Expires soon';
+    } else {
+      return 'Active';
+    }
+  } catch (err) {
+    return 'Active';
+  }
+}
+
 // UAE Date/Time Formatter (Asia/Dubai)
-// Example output: "Link valid until 12 October 2026, 13:30 (UAE)"
 function formatUaeDateTime(isoString) {
   if (!isoString) return '';
   try {
@@ -32,13 +97,13 @@ function formatUaeDateTime(isoString) {
       hour12: false
     }).format(date);
     const clean = formatted.replace(' at ', ', ');
-    return `Link valid until ${clean} (UAE)`;
+    return `Link valid until ${clean} (Asia/Dubai)`;
   } catch (err) {
-    return `Link valid until ${isoString} (UAE)`;
+    return `Link valid until ${isoString} (Asia/Dubai)`;
   }
 }
 
-// Form validation helper
+// Form validation helper matching backend Joi constraints
 function validateForm(formData, accountType) {
   const errors = {};
 
@@ -67,7 +132,7 @@ function validateForm(formData, accountType) {
     errors.phone = 'Please provide a valid UAE phone number (e.g., +971501234567)';
   }
 
-  // Company / Developer
+  // Company / Developer details
   const compLabel = accountType === 'DEVELOPER' ? 'Developer' : 'Company';
   if (!formData.companyName.trim()) {
     errors.companyName = `${compLabel} name is required.`;
@@ -79,6 +144,39 @@ function validateForm(formData, accountType) {
     errors.emirate = 'Emirate is required.';
   }
 
+  if (!formData.tradeLicenceNumber.trim()) {
+    errors.tradeLicenceNumber = 'Trade licence number is required.';
+  } else if (formData.tradeLicenceNumber.trim().length < 1 || formData.tradeLicenceNumber.trim().length > 50) {
+    errors.tradeLicenceNumber = 'Trade licence number must be 1 to 50 characters.';
+  }
+
+  if (formData.trnNumber && formData.trnNumber.trim().length > 30) {
+    errors.trnNumber = 'TRN number cannot exceed 30 characters.';
+  }
+
+  if (!formData.officeAddress.trim()) {
+    errors.officeAddress = accountType === 'DEVELOPER' ? 'Head office address is required.' : 'Office address is required.';
+  } else if (formData.officeAddress.trim().length < 3 || formData.officeAddress.trim().length > 300) {
+    errors.officeAddress = 'Address must be 3 to 300 characters.';
+  }
+
+  if (!formData.officialEmail.trim()) {
+    errors.officialEmail = 'Official company email is required.';
+  } else if (!EMAIL_REGEX.test(formData.officialEmail.trim())) {
+    errors.officialEmail = 'Please enter a valid company email address.';
+  }
+
+  if (!formData.officialPhone.trim()) {
+    errors.officialPhone = 'Official company phone is required.';
+  } else if (!isValidUaePhone(formData.officialPhone)) {
+    errors.officialPhone = 'Please provide a valid UAE phone/landline number.';
+  }
+
+  if (formData.website && formData.website.trim().length > 200) {
+    errors.website = 'Website URL cannot exceed 200 characters.';
+  }
+
+  // Agency specific
   if (accountType === 'AGENCY') {
     if (!formData.companyType) {
       errors.companyType = 'Company type is required.';
@@ -91,10 +189,54 @@ function validateForm(formData, accountType) {
     } else if (formData.orn.trim().length < 1 || formData.orn.trim().length > 50) {
       errors.orn = 'RERA ORN number must be 1 to 50 characters.';
     }
-  } else {
+    if (!formData.numberOfAgents) {
+      errors.numberOfAgents = 'Number of agents is required.';
+    }
+  }
+
+  // Developer specific
+  if (accountType === 'DEVELOPER') {
     if (!formData.developerType) {
       errors.developerType = 'Developer type is required.';
     }
+
+    // firstProject object validation
+    const proj = formData.firstProject || {};
+    if (!proj.name?.trim() || proj.name.trim().length < 2 || proj.name.trim().length > 150) {
+      errors['firstProject.name'] = 'Project name must be 2 to 150 characters.';
+    }
+    if (!proj.community?.trim() || proj.community.trim().length < 2 || proj.community.trim().length > 150) {
+      errors['firstProject.community'] = 'Community must be 2 to 150 characters.';
+    }
+    if (!proj.reraProjectNumber?.trim() || proj.reraProjectNumber.trim().length < 1 || proj.reraProjectNumber.trim().length > 50) {
+      errors['firstProject.reraProjectNumber'] = 'RERA project number is required (1 to 50 characters).';
+    }
+    const unitsNum = parseInt(proj.units, 10);
+    if (!proj.units || isNaN(unitsNum) || unitsNum < 1) {
+      errors['firstProject.units'] = 'Units must be an integer of 1 or more.';
+    }
+    if (!proj.expectedHandover?.trim() || proj.expectedHandover.trim().length < 2 || proj.expectedHandover.trim().length > 30) {
+      errors['firstProject.expectedHandover'] = 'Expected handover is required (e.g. Q4 2028).';
+    }
+    if (!proj.escrowBank?.trim() || proj.escrowBank.trim().length < 2 || proj.escrowBank.trim().length > 100) {
+      errors['firstProject.escrowBank'] = 'Escrow bank is required (2 to 100 characters).';
+    }
+    if (!proj.escrowAccountNumber?.trim() || proj.escrowAccountNumber.trim().length < 4 || proj.escrowAccountNumber.trim().length > 50) {
+      errors['firstProject.escrowAccountNumber'] = 'Escrow account number is required (4 to 50 characters).';
+    }
+  }
+
+  // Signatory
+  if (!formData.signatoryFullName.trim()) {
+    errors.signatoryFullName = 'Signatory full name is required.';
+  } else if (formData.signatoryFullName.trim().length < 2 || formData.signatoryFullName.trim().length > 80) {
+    errors.signatoryFullName = 'Signatory full name must be 2 to 80 characters.';
+  }
+
+  if (!formData.signatoryDesignation.trim()) {
+    errors.signatoryDesignation = 'Signatory position is required.';
+  } else if (formData.signatoryDesignation.trim().length < 2 || formData.signatoryDesignation.trim().length > 80) {
+    errors.signatoryDesignation = 'Signatory position must be 2 to 80 characters.';
   }
 
   // Owner
@@ -145,7 +287,7 @@ export default function OnboardingSignupPage() {
   // 1. "Registering as" toggle: Real estate company (AGENCY) / Developer (DEVELOPER)
   const [accountType, setAccountType] = useState(initialType);
 
-  // 2. Form state
+  // 2. Form state with all details
   const [formData, setFormData] = useState({
     // Contact person
     firstName: '',
@@ -154,11 +296,33 @@ export default function OnboardingSignupPage() {
     phone: '',
     // Company / Developer
     companyName: '',
-    companyType: 'Real estate brokerage',
     emirate: 'Dubai',
-    tradeLicenceStatus: 'Valid and active',
+    tradeLicenceNumber: '',
+    trnNumber: '',
+    officeAddress: '',
+    officialEmail: '',
+    officialPhone: '',
+    website: '',
+    // Agency only
+    companyType: 'Real estate brokerage',
+    tradeLicenceStatus: 'Active',
     orn: '',
+    numberOfAgents: '1 to 5',
+    // Developer only
     developerType: 'Master developer',
+    firstProject: {
+      name: '',
+      community: '',
+      reraProjectNumber: '',
+      units: '',
+      expectedHandover: '',
+      escrowBank: '',
+      escrowAccountNumber: ''
+    },
+    // Signatory
+    signatoryFullName: '',
+    signatoryDesignation: '',
+    signatoryIsOwner: true,
     // Owner
     ownerFullName: '',
     ownerEmail: '',
@@ -166,14 +330,20 @@ export default function OnboardingSignupPage() {
     // Admin
     adminFullName: '',
     adminEmail: '',
-    adminMobile: ''
+    adminMobile: '',
+    // DLD pre-fill metadata (editable)
+    expiryDate: '',
+    issueDate: '',
+    companyLogo: ''
   });
 
   // 3. User interaction tracking
   const [touched, setTouched] = useState({});
 
+  // Flag indicating if details were pre-filled from official DLD/RERA records
+  const [autofilledFromDld, setAutofilledFromDld] = useState(false);
+
   // 4. Pre-check states
-  // Agency ORN pre-check
   const [agencyPrecheck, setAgencyPrecheck] = useState({
     loading: false,
     checkedOrn: '',
@@ -181,7 +351,6 @@ export default function OnboardingSignupPage() {
     error: null
   });
 
-  // Developer pre-check
   const [devPrecheck, setDevPrecheck] = useState({
     loading: false,
     checkedKey: '', // `${companyName}:::${email}`
@@ -208,7 +377,6 @@ export default function OnboardingSignupPage() {
   const agencyDebounceRef = useRef(null);
   const devDebounceRef = useRef(null);
 
-  // Clean up debounce timers
   useEffect(() => {
     return () => {
       if (agencyDebounceRef.current) clearTimeout(agencyDebounceRef.current);
@@ -219,82 +387,68 @@ export default function OnboardingSignupPage() {
   // 429 countdown ticker
   useEffect(() => {
     if (rateLimitCountdown <= 0) return;
-    const timer = setInterval(() => {
+    const interval = setInterval(() => {
       setRateLimitCountdown((prev) => {
         if (prev <= 1) {
-          clearInterval(timer);
+          clearInterval(interval);
+          setBackendErrors((b) => ({ ...b, general: '' }));
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
-    return () => clearInterval(timer);
+    return () => clearInterval(interval);
   }, [rateLimitCountdown]);
 
-  // Client validation
-  const formErrors = useMemo(() => {
-    return validateForm(formData, accountType);
-  }, [formData, accountType]);
-
-  const isFormValid = Object.keys(formErrors).length === 0;
-
-  // Single source of truth for canSubmit from backend pre-check
-  const canSubmitFromPrecheck = useMemo(() => {
-    if (accountType === 'AGENCY') {
-      return agencyPrecheck.result ? agencyPrecheck.result.canSubmit === true : false;
-    } else {
-      return devPrecheck.result ? devPrecheck.result.canSubmit === true : false;
-    }
-  }, [accountType, agencyPrecheck.result, devPrecheck.result]);
-
-  const isSubmitEnabled =
-    isFormValid &&
-    canSubmitFromPrecheck &&
-    !agencyPrecheck.loading &&
-    !devPrecheck.loading &&
-    !isSubmitting &&
-    rateLimitCountdown === 0;
-
-  // -------------------------------------------------------------
-  // Account Type Switch
-  // -------------------------------------------------------------
+  // Handle Account Type Change & Prune Other Type's Fields
   const handleAccountTypeChange = (newType) => {
     if (newType === accountType) return;
     setAccountType(newType);
 
-    // Reset pre-check and backend errors when switching types
-    if (agencyDebounceRef.current) clearTimeout(agencyDebounceRef.current);
-    if (devDebounceRef.current) clearTimeout(devDebounceRef.current);
+    // Clear backend error states & autofill flag
+    setBackendErrors({ orn: '', companyName: '', general: '', network: false });
+    setAutofilledFromDld(false);
 
+    // Reset pre-checks
     setAgencyPrecheck({ loading: false, checkedOrn: '', result: null, error: null });
     setDevPrecheck({ loading: false, checkedKey: '', result: null, error: null });
-    setBackendErrors({ orn: '', companyName: '', general: '', network: false });
+
+    // When switching, reset other type's specific values
+    if (newType === 'DEVELOPER') {
+      setFormData((prev) => ({
+        ...prev,
+        orn: '',
+        companyType: 'Real estate brokerage',
+        tradeLicenceStatus: 'Valid and active',
+        numberOfAgents: '1 to 5',
+        developerType: prev.developerType || 'Master developer'
+      }));
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        developerType: 'Master developer',
+        firstProject: {
+          name: '',
+          community: '',
+          reraProjectNumber: '',
+          units: '',
+          expectedHandover: '',
+          escrowBank: '',
+          escrowAccountNumber: ''
+        }
+      }));
+    }
   };
 
   // -------------------------------------------------------------
-  // Generic Field Input Handler
+  // AGENCY Pre-check: debounced 400ms on ORN change & on blur
+  // Auto-fills form when official DLD / RERA company data is returned
   // -------------------------------------------------------------
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleBlur = (e) => {
-    const { name } = e.target;
-    setTouched((prev) => ({ ...prev, [name]: true }));
-  };
-
-  // -------------------------------------------------------------
-  // AGENCY Pre-check: debounced 400ms & on blur
-  // -------------------------------------------------------------
-  const runAgencyCheck = async (ornValue) => {
-    const trimmed = (ornValue || '').trim();
+  const runAgencyCheck = async (ornVal) => {
+    const trimmed = (ornVal || '').trim();
     if (!trimmed) {
       setAgencyPrecheck({ loading: false, checkedOrn: '', result: null, error: null });
-      return;
-    }
-
-    if (agencyPrecheck.checkedOrn === trimmed && agencyPrecheck.result) {
+      setAutofilledFromDld(false);
       return;
     }
 
@@ -306,12 +460,41 @@ export default function OnboardingSignupPage() {
         orn: trimmed
       });
 
+      const data = res?.data || res;
       setAgencyPrecheck({
         loading: false,
         checkedOrn: trimmed,
-        result: res?.data || null,
+        result: data || null,
         error: null
       });
+
+      // 🔍 AUTO-FILL FROM DLD COMPANY DATA (if available)
+      const company = data?.company || res?.company || null;
+      if (company) {
+        setAutofilledFromDld(true);
+        setFormData((prev) => {
+          const updated = { ...prev };
+
+          // ONLY autofill official company details
+          if (company.companyName) updated.companyName = company.companyName;
+          if (company.tradeLicenceNumber) updated.tradeLicenceNumber = String(company.tradeLicenceNumber);
+          if (company.expiryDate) {
+            updated.expiryDate = company.expiryDate;
+            updated.tradeLicenceStatus = calculateTradeLicenceStatus(company.expiryDate);
+          } else if (company.tradeLicenceStatus) {
+            updated.tradeLicenceStatus = company.tradeLicenceStatus;
+          }
+          if (company.companyType) updated.companyType = company.companyType;
+          if (company.officialPhone) updated.officialPhone = formatUaePhoneDisplay(company.officialPhone);
+          if (company.officialEmail) updated.officialEmail = company.officialEmail;
+          if (company.issueDate) updated.issueDate = company.issueDate;
+          if (company.companyLogo) updated.companyLogo = company.companyLogo;
+          if (company.activities) updated.activities = company.activities;
+
+          // Contact Person, Signatory, Owner & Admin are filled manually by the user
+          return updated;
+        });
+      }
     } catch (err) {
       const msg = err.message || 'Error checking ORN';
       if (err.status === 429) {
@@ -336,9 +519,9 @@ export default function OnboardingSignupPage() {
     const val = e.target.value;
     setFormData((prev) => ({ ...prev, orn: val }));
 
-    // Clear previous result and backend error immediately upon edit
     setBackendErrors((prev) => ({ ...prev, orn: '' }));
     setAgencyPrecheck({ loading: false, checkedOrn: '', result: null, error: null });
+    setAutofilledFromDld(false);
 
     if (agencyDebounceRef.current) clearTimeout(agencyDebounceRef.current);
     if (val.trim()) {
@@ -357,27 +540,18 @@ export default function OnboardingSignupPage() {
   };
 
   // -------------------------------------------------------------
-  // DEVELOPER Pre-check: debounced 400ms once name & email are filled, and on blur
+  // DEVELOPER Pre-check: once both name & email are filled
   // -------------------------------------------------------------
   const runDeveloperCheck = async (nameVal, emailVal) => {
     const trimmedName = (nameVal || '').trim();
     const trimmedEmail = (emailVal || '').trim().toLowerCase();
 
-    // Check once developer name and email are BOTH filled
     if (!trimmedName || !trimmedEmail) {
       setDevPrecheck({ loading: false, checkedKey: '', result: null, error: null });
       return;
     }
 
-    if (!EMAIL_REGEX.test(trimmedEmail)) {
-      return;
-    }
-
     const key = `${trimmedName}:::${trimmedEmail}`;
-    if (devPrecheck.checkedKey === key && devPrecheck.result) {
-      return;
-    }
-
     setDevPrecheck((prev) => ({ ...prev, loading: true, error: null }));
 
     try {
@@ -395,21 +569,12 @@ export default function OnboardingSignupPage() {
       });
     } catch (err) {
       const msg = err.message || 'Error checking developer';
-      if (err.status === 429) {
-        setDevPrecheck({
-          loading: false,
-          checkedKey: key,
-          result: { canSubmit: false, message: 'Too many checks. Please wait a minute before trying again.' },
-          error: 'Too many checks. Please wait a minute before trying again.'
-        });
-      } else {
-        setDevPrecheck({
-          loading: false,
-          checkedKey: key,
-          result: { canSubmit: false, message: msg },
-          error: msg
-        });
-      }
+      setDevPrecheck({
+        loading: false,
+        checkedKey: key,
+        result: { canSubmit: false, message: msg },
+        error: msg
+      });
     }
   };
 
@@ -417,7 +582,6 @@ export default function OnboardingSignupPage() {
     const val = e.target.value;
     setFormData((prev) => ({ ...prev, companyName: val }));
 
-    // Clear previous check result and backend error on edit
     setBackendErrors((prev) => ({ ...prev, companyName: '' }));
     setDevPrecheck({ loading: false, checkedKey: '', result: null, error: null });
 
@@ -464,6 +628,55 @@ export default function OnboardingSignupPage() {
     }
   };
 
+  // General field handlers
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    if (name.startsWith('firstProject.')) {
+      const field = name.split('.')[1];
+      setFormData((prev) => ({
+        ...prev,
+        firstProject: {
+          ...prev.firstProject,
+          [field]: value
+        }
+      }));
+    } else if (type === 'checkbox') {
+      setFormData((prev) => ({ ...prev, [name]: checked }));
+    } else if (name === 'expiryDate') {
+      const calculatedStatus = calculateTradeLicenceStatus(value);
+      setFormData((prev) => ({
+        ...prev,
+        expiryDate: value,
+        tradeLicenceStatus: calculatedStatus
+      }));
+    } else {
+      setFormData((prev) => ({ ...prev, [name]: value }));
+    }
+  };
+
+  const handleBlur = (e) => {
+    const { name } = e.target;
+    setTouched((prev) => ({ ...prev, [name]: true }));
+  };
+
+  // Validation state
+  const formErrors = useMemo(() => {
+    return validateForm(formData, accountType);
+  }, [formData, accountType]);
+
+  // RULE: Submit is enabled ONLY when canSubmit === true
+  const canSubmitFromPrecheck = useMemo(() => {
+    if (accountType === 'AGENCY') {
+      if (!formData.orn.trim()) return false;
+      return agencyPrecheck.result?.canSubmit === true;
+    } else {
+      if (!formData.companyName.trim() || !formData.email.trim()) return false;
+      return devPrecheck.result?.canSubmit === true;
+    }
+  }, [accountType, formData.orn, formData.companyName, formData.email, agencyPrecheck.result, devPrecheck.result]);
+
+  const isFormValid = Object.keys(formErrors).length === 0;
+
   // -------------------------------------------------------------
   // Form Submission
   // -------------------------------------------------------------
@@ -475,6 +688,11 @@ export default function OnboardingSignupPage() {
     Object.keys(formData).forEach((k) => {
       allTouched[k] = true;
     });
+    if (accountType === 'DEVELOPER') {
+      ['name', 'community', 'reraProjectNumber', 'units', 'expectedHandover', 'escrowBank', 'escrowAccountNumber'].forEach((f) => {
+        allTouched[`firstProject.${f}`] = true;
+      });
+    }
     setTouched(allTouched);
 
     const currentErrors = validateForm(formData, accountType);
@@ -489,7 +707,7 @@ export default function OnboardingSignupPage() {
     setIsSubmitting(true);
     setBackendErrors({ orn: '', companyName: '', general: '', network: false });
 
-    // Send only the fields of the selected type
+    // Send only the selected type's fields (remove other type's fields to avoid 400)
     let payload;
     if (accountType === 'AGENCY') {
       payload = {
@@ -497,18 +715,32 @@ export default function OnboardingSignupPage() {
         firstName: formData.firstName.trim(),
         lastName: formData.lastName.trim(),
         email: formData.email.trim().toLowerCase(),
-        phone: formData.phone.trim(),
+        phone: formData.phone.trim().replace(/[\s-]/g, ''),
         companyName: formData.companyName.trim(),
         companyType: formData.companyType,
         emirate: formData.emirate,
-        tradeLicenceStatus: formData.tradeLicenceStatus,
+        tradeLicenceStatus: (() => {
+          if (formData.tradeLicenceStatus === 'Active') return 'Valid and active';
+          if (formData.tradeLicenceStatus === 'Expires soon' || formData.tradeLicenceStatus === 'Expired') return 'Under renewal';
+          return formData.tradeLicenceStatus || 'Valid and active';
+        })(),
         orn: formData.orn.trim(),
+        tradeLicenceNumber: formData.tradeLicenceNumber.trim(),
+        trnNumber: formData.trnNumber.trim(),
+        numberOfAgents: formData.numberOfAgents,
+        officeAddress: formData.officeAddress.trim(),
+        officialEmail: formData.officialEmail.trim().toLowerCase(),
+        officialPhone: formData.officialPhone.trim().replace(/[\s-]/g, ''),
+        website: formData.website.trim(),
+        signatoryFullName: formData.signatoryFullName.trim(),
+        signatoryDesignation: formData.signatoryDesignation.trim(),
+        signatoryIsOwner: Boolean(formData.signatoryIsOwner),
         ownerFullName: formData.ownerFullName.trim(),
         ownerEmail: formData.ownerEmail.trim().toLowerCase(),
-        ownerMobile: formData.ownerMobile.trim(),
+        ownerMobile: formData.ownerMobile.trim().replace(/[\s-]/g, ''),
         adminFullName: formData.adminFullName.trim(),
         adminEmail: formData.adminEmail.trim().toLowerCase(),
-        adminMobile: formData.adminMobile.trim()
+        adminMobile: formData.adminMobile.trim().replace(/[\s-]/g, '')
       };
     } else {
       payload = {
@@ -516,16 +748,34 @@ export default function OnboardingSignupPage() {
         firstName: formData.firstName.trim(),
         lastName: formData.lastName.trim(),
         email: formData.email.trim().toLowerCase(),
-        phone: formData.phone.trim(),
+        phone: formData.phone.trim().replace(/[\s-]/g, ''),
         companyName: formData.companyName.trim(),
         developerType: formData.developerType,
         emirate: formData.emirate,
+        tradeLicenceNumber: formData.tradeLicenceNumber.trim(),
+        trnNumber: formData.trnNumber.trim(),
+        officeAddress: formData.officeAddress.trim(),
+        officialEmail: formData.officialEmail.trim().toLowerCase(),
+        officialPhone: formData.officialPhone.trim().replace(/[\s-]/g, ''),
+        website: formData.website.trim(),
+        firstProject: {
+          name: formData.firstProject.name.trim(),
+          community: formData.firstProject.community.trim(),
+          reraProjectNumber: formData.firstProject.reraProjectNumber.trim(),
+          units: parseInt(formData.firstProject.units, 10),
+          expectedHandover: formData.firstProject.expectedHandover.trim(),
+          escrowBank: formData.firstProject.escrowBank.trim(),
+          escrowAccountNumber: formData.firstProject.escrowAccountNumber.trim()
+        },
+        signatoryFullName: formData.signatoryFullName.trim(),
+        signatoryDesignation: formData.signatoryDesignation.trim(),
+        signatoryIsOwner: Boolean(formData.signatoryIsOwner),
         ownerFullName: formData.ownerFullName.trim(),
         ownerEmail: formData.ownerEmail.trim().toLowerCase(),
-        ownerMobile: formData.ownerMobile.trim(),
+        ownerMobile: formData.ownerMobile.trim().replace(/[\s-]/g, ''),
         adminFullName: formData.adminFullName.trim(),
         adminEmail: formData.adminEmail.trim().toLowerCase(),
-        adminMobile: formData.adminMobile.trim()
+        adminMobile: formData.adminMobile.trim().replace(/[\s-]/g, '')
       };
     }
 
@@ -541,10 +791,8 @@ export default function OnboardingSignupPage() {
       const msg = err.message || 'An error occurred during registration.';
 
       if (status === 400) {
-        // 400 -> show message above the submit button
         setBackendErrors((prev) => ({ ...prev, general: msg }));
       } else if (status === 403) {
-        // 403 -> show message on the ORN field
         setBackendErrors((prev) => ({ ...prev, orn: msg }));
         if (accountType === 'AGENCY') {
           setAgencyPrecheck((prev) => ({
@@ -553,7 +801,6 @@ export default function OnboardingSignupPage() {
           }));
         }
       } else if (status === 409) {
-        // 409 -> show message on the ORN field (AGENCY) or the name field (DEVELOPER). Disable submit.
         if (accountType === 'AGENCY') {
           setBackendErrors((prev) => ({ ...prev, orn: msg }));
           setAgencyPrecheck((prev) => ({
@@ -568,14 +815,12 @@ export default function OnboardingSignupPage() {
           }));
         }
       } else if (status === 429) {
-        // 429 -> "Please wait a minute and try again." Re-enable submit after 60 seconds.
         setBackendErrors((prev) => ({
           ...prev,
           general: 'Please wait a minute and try again.'
         }));
         setRateLimitCountdown(60);
       } else {
-        // Network or 5xx -> keep all values and show a Retry button.
         setBackendErrors((prev) => ({
           ...prev,
           general: msg || 'Unable to connect to the server. Please check your connection and retry.',
@@ -593,13 +838,13 @@ export default function OnboardingSignupPage() {
   if (successData) {
     return (
       <OnboardingLayout
-        title="Cash My Property"
+        title="CMP Connect"
         subtitle="Registration request submitted."
         points={[
           "Your request is with our verification team",
           "Upload link sent to your registered email",
-          "Link is active for 3 days to complete uploads",
-          "Instant activation once documents are approved"
+          "Link is active for 3 days to complete document uploads",
+          "Account login details issued upon verification"
         ]}
       >
         <div className="reg-card wide">
@@ -632,21 +877,21 @@ export default function OnboardingSignupPage() {
             }}
           >
             <div>
-              <dt style={{ fontSize: '12px', color: 'var(--cmp-text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Reference number</dt>
+              <dt style={{ fontSize: '12px', color: 'var(--cmp-text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Registration code</dt>
               <dd style={{ fontSize: '18px', fontWeight: 800, color: 'var(--cmp-brand)', marginTop: 4 }}>
                 {successData.code}
               </dd>
             </div>
 
             <div>
-              <dt style={{ fontSize: '12px', color: 'var(--cmp-text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Email address</dt>
+              <dt style={{ fontSize: '12px', color: 'var(--cmp-text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Sent to email</dt>
               <dd style={{ fontSize: '15px', fontWeight: 600, marginTop: 4, wordBreak: 'break-all' }}>
                 {successData.email}
               </dd>
             </div>
 
             <div>
-              <dt style={{ fontSize: '12px', color: 'var(--cmp-text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Link validity</dt>
+              <dt style={{ fontSize: '12px', color: 'var(--cmp-text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Link expiry</dt>
               <dd style={{ fontSize: '14px', fontWeight: 600, color: 'var(--cmp-text-muted)', marginTop: 4 }}>
                 {formatUaeDateTime(successData.linkExpiresAt)}
               </dd>
@@ -685,64 +930,69 @@ export default function OnboardingSignupPage() {
   // -------------------------------------------------------------
   return (
     <OnboardingLayout
-      title="Join Cash My Property"
-      subtitle="One account for listings and Real Time Offer, on the app, the website and CMP Connect."
+      title="Join CMP Connect"
+      subtitle="Public partner registration for real estate brokerages and property developers."
       points={[
-        "Register your company or your projects",
-        "Upload your documents once",
-        "Track the checks as they happen",
-        "Go live as soon as you are approved"
+        "Register your company or your developments",
+        "Upload verification documents directly from your email link",
+        "Transparent real-time RERA & compliance validation",
+        "Go live on CMP Connect once verified by our team"
       ]}
     >
       <div className="reg-card wide">
-        <p className="eyebrow">CMP Connect</p>
-        <h2>Registration form</h2>
-        <p className="sub">
-          Submit your company registration request. Once received, we will send an upload link to complete your verification documents.
-        </p>
+        <div className="reg-card-header">
+          <p className="eyebrow">CMP Connect</p>
+          <h2>Registration form</h2>
+          <p className="sub">
+            Submit your company registration request. Once received, we will send an upload link to complete your verification documents.
+          </p>
 
-        {/* 1. Registering as Toggle */}
-        <div className="type-grid">
-          <button
-            type="button"
-            className="type-card"
-            aria-pressed={accountType === 'AGENCY'}
-            onClick={() => handleAccountTypeChange('AGENCY')}
-          >
-            <span className="type-icon">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
-                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8m14 10v-2a4 4 0 0 0-3-3.87" />
-              </svg>
-            </span>
-            <strong>Real estate company</strong>
-            <span className="muted">Brokerages and agencies that list and sell other people’s property.</span>
-            <span className="faint">Brokerage, agency, property management, holiday homes</span>
-          </button>
+          {/* 1. Registering as Toggle */}
+          <div className="type-grid">
+            <button
+              type="button"
+              className="type-card"
+              aria-pressed={accountType === 'AGENCY'}
+              onClick={() => handleAccountTypeChange('AGENCY')}
+            >
+              <span className="type-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8m14 10v-2a4 4 0 0 0-3-3.87" />
+                </svg>
+              </span>
+              <strong>Real estate company</strong>
+              <span className="muted">Brokerages and agencies marketing and selling property.</span>
+              <span className="faint">Brokerage, agency, property management, holiday homes</span>
+            </button>
 
-          <button
-            type="button"
-            className="type-card"
-            aria-pressed={accountType === 'DEVELOPER'}
-            onClick={() => handleAccountTypeChange('DEVELOPER')}
-          >
-            <span className="type-icon">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
-                <path d="M4 21V10l8-6 8 6v11M9 21v-6h6v6" />
-              </svg>
-            </span>
-            <strong>Developer</strong>
-            <span className="muted">Developers selling their own projects, off-plan or ready.</span>
-            <span className="faint">Master developer, sub developer, project owner</span>
-          </button>
+            <button
+              type="button"
+              className="type-card"
+              aria-pressed={accountType === 'DEVELOPER'}
+              onClick={() => handleAccountTypeChange('DEVELOPER')}
+            >
+              <span className="type-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+                  <path d="M4 21V10l8-6 8 6v11M9 21v-6h6v6" />
+                </svg>
+              </span>
+              <strong>Developer</strong>
+              <span className="muted">Developers building and selling their own projects.</span>
+              <span className="faint">Master developer, sub developer</span>
+            </button>
+          </div>
         </div>
 
-        <form onSubmit={handleSubmit} noValidate>
+        <form onSubmit={handleSubmit} noValidate className="reg-card-form">
           {/* 2. Contact Person Section */}
           <section className="form-section">
             <h3>Contact person</h3>
+            <p className="section-sub" style={{ fontSize: '13px', color: 'var(--cmp-text-muted)', marginBottom: 14 }}>
+              The upload link and login details are sent here; this email becomes your login username.
+            </p>
             <div className="form-grid">
               <div className="field half" data-invalid={touched.firstName && formErrors.firstName ? true : undefined}>
-                <label htmlFor="reg-first-name">First name</label>
+                <label htmlFor="reg-first-name">First name *</label>
                 <input
                   id="reg-first-name"
                   name="firstName"
@@ -758,7 +1008,7 @@ export default function OnboardingSignupPage() {
               </div>
 
               <div className="field half" data-invalid={touched.lastName && formErrors.lastName ? true : undefined}>
-                <label htmlFor="reg-last-name">Last name</label>
+                <label htmlFor="reg-last-name">Last name *</label>
                 <input
                   id="reg-last-name"
                   name="lastName"
@@ -774,34 +1024,36 @@ export default function OnboardingSignupPage() {
               </div>
 
               <div className="field half" data-invalid={touched.email && formErrors.email ? true : undefined}>
-                <label htmlFor="reg-contact-email">Email</label>
+                <label htmlFor="reg-contact-email">Email *</label>
                 <input
                   id="reg-contact-email"
                   name="email"
                   type="email"
+                  placeholder="name@company.ae"
                   value={formData.email}
                   onChange={handleContactEmailChange}
                   onBlur={handleContactEmailBlur}
                   required
                 />
-                <span className="hint">We send the upload link and all updates here.</span>
+                <span className="hint">We send the upload link and login username here.</span>
                 {touched.email && formErrors.email && (
                   <span className="error-text">{formErrors.email}</span>
                 )}
               </div>
 
               <div className="field half" data-invalid={touched.phone && formErrors.phone ? true : undefined}>
-                <label htmlFor="reg-contact-phone">Phone number</label>
+                <label htmlFor="reg-contact-phone">Phone number *</label>
                 <input
                   id="reg-contact-phone"
                   name="phone"
                   type="tel"
-                  placeholder="+971 50 412 7781"
+                  placeholder="+971 50 123 4567"
                   value={formData.phone}
                   onChange={handleChange}
                   onBlur={handleBlur}
                   required
                 />
+                <span className="hint">UAE mobile number.</span>
                 {touched.phone && formErrors.phone && (
                   <span className="error-text">{formErrors.phone}</span>
                 )}
@@ -809,335 +1061,602 @@ export default function OnboardingSignupPage() {
             </div>
           </section>
 
-          {/* 3. Company (AGENCY) or Developer (DEVELOPER) Section */}
-          {accountType === 'AGENCY' ? (
-            <section className="form-section">
-              <h3>Company</h3>
-              <div className="form-grid">
-                <div className="field" data-invalid={touched.companyName && formErrors.companyName ? true : undefined}>
-                  <label htmlFor="reg-company-name">Company name</label>
+          {/* 3. Company Section */}
+          <section className="form-section">
+            <h3>{accountType === 'AGENCY' ? 'Company details' : 'Developer details'}</h3>
+            <div className="form-grid">
+              <div className="field" data-invalid={touched.companyName && formErrors.companyName ? true : undefined}>
+                <label htmlFor="reg-company-name">{accountType === 'DEVELOPER' ? 'Developer name *' : 'Company name *'}</label>
+                <input
+                  id="reg-company-name"
+                  name="companyName"
+                  type="text"
+                  value={formData.companyName}
+                  onChange={accountType === 'DEVELOPER' ? handleDevNameChange : handleChange}
+                  onBlur={accountType === 'DEVELOPER' ? handleDevNameBlur : handleBlur}
+                  required
+                />
+                <span className="hint">As it appears on the official trade licence.</span>
+                {touched.companyName && formErrors.companyName && (
+                  <span className="error-text">{formErrors.companyName}</span>
+                )}
+                {backendErrors.companyName && (
+                  <span className="error-text">{backendErrors.companyName}</span>
+                )}
+              </div>
+
+              {/* AGENCY specific: ORN, Company Type, Licence Status, Number of Agents */}
+              {accountType === 'AGENCY' && (
+                <>
+                  <div className="field half" data-invalid={(touched.orn && formErrors.orn) || backendErrors.orn ? true : undefined}>
+                    <label htmlFor="reg-orn">RERA ORN number *</label>
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        id="reg-orn"
+                        name="orn"
+                        type="text"
+                        placeholder="e.g. 28841"
+                        value={formData.orn}
+                        onChange={handleOrnChange}
+                        onBlur={handleOrnBlur}
+                        style={{ paddingRight: agencyPrecheck.loading ? 36 : undefined }}
+                        required
+                      />
+                      {agencyPrecheck.loading && (
+                        <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--cmp-text-muted)' }}>
+                          ⏳
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Pre-check hints & badges for ORN */}
+                    {agencyPrecheck.result && (
+                      <div style={{ marginTop: 6 }}>
+                        {agencyPrecheck.result.canSubmit && agencyPrecheck.result.whitelisted && (
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--cmp-success)' }}>
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M20 6 9 17l-5-5" />
+                            </svg>
+                            <span>Verified RERA ORN</span>
+                          </div>
+                        )}
+
+                        {autofilledFromDld && (
+                          <div
+                            className="note"
+                            style={{
+                              background: 'var(--cmp-brand-subtle)',
+                              border: '1px solid var(--cmp-brand-border)',
+                              color: 'var(--cmp-brand)',
+                              marginTop: 8,
+                              fontSize: 12.5,
+                              padding: '8px 12px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 12,
+                              borderRadius: 8
+                            }}
+                          >
+                            {formData.companyLogo && (
+                              <img
+                                src={formData.companyLogo}
+                                alt="Company Logo"
+                                style={{
+                                  width: 38,
+                                  height: 38,
+                                  objectFit: 'contain',
+                                  borderRadius: 6,
+                                  background: '#fff',
+                                  border: '1px solid var(--cmp-border)',
+                                  padding: 2,
+                                  flexShrink: 0
+                                }}
+                                onError={(e) => { e.target.style.display = 'none'; }}
+                              />
+                            )}
+                            <div>
+                              <strong>DLD records matched:</strong> Company details pre-filled below. All fields remain fully editable.
+                              {formData.expiryDate && (
+                                <span style={{ display: 'block', marginTop: 2, fontSize: 12, opacity: 0.9 }}>
+                                  Licence valid until: {formData.expiryDate} ({formData.tradeLicenceStatus})
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {agencyPrecheck.result.canSubmit && agencyPrecheck.result.whitelisted === false && (
+                          <div className="note" style={{ background: 'color-mix(in srgb, var(--cmp-warning) 10%, transparent)', border: '1px solid var(--cmp-warning)', color: 'var(--cmp-warning)', marginTop: 6, fontSize: 12.5, padding: '8px 12px' }}>
+                            ⚠️ We could not find this ORN in the RERA list. You can still submit. Our team will verify it.
+                          </div>
+                        )}
+
+                        {agencyPrecheck.result.registeredOnApp && (
+                          <div className="note" style={{ background: 'var(--cmp-brand-subtle)', border: '1px solid var(--cmp-brand)', color: 'var(--cmp-brand)', marginTop: 6, fontSize: 12.5, padding: '8px 12px' }}>
+                            ℹ️ This agency already uses the CMP app. Registering here adds your documents to the same account.
+                          </div>
+                        )}
+
+                        {!agencyPrecheck.result.canSubmit && (
+                          <div className="note" style={{ background: 'color-mix(in srgb, var(--cmp-danger) 10%, transparent)', border: '1px solid var(--cmp-danger)', color: 'var(--cmp-danger)', marginTop: 6, fontSize: 12.5, padding: '8px 12px' }}>
+                            ⛔ {agencyPrecheck.result.message || 'Registration is blocked for this ORN.'}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {touched.orn && formErrors.orn && (
+                      <span className="error-text">{formErrors.orn}</span>
+                    )}
+                    {backendErrors.orn && (
+                      <span className="error-text">{backendErrors.orn}</span>
+                    )}
+                  </div>
+
+                  <div className="field half" data-invalid={touched.companyType && formErrors.companyType ? true : undefined}>
+                    <label htmlFor="reg-company-type">Company type *</label>
+                    <select
+                      id="reg-company-type"
+                      name="companyType"
+                      value={formData.companyType}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                      required
+                    >
+                      <option value="Real estate brokerage">Real estate brokerage</option>
+                      <option value="Property management">Property management</option>
+                      <option value="Holiday homes operator">Holiday homes operator</option>
+                      <option value="Other">Other</option>
+                    </select>
+                    {touched.companyType && formErrors.companyType && (
+                      <span className="error-text">{formErrors.companyType}</span>
+                    )}
+                  </div>
+
+                  <div className="field half" data-invalid={touched.tradeLicenceStatus && formErrors.tradeLicenceStatus ? true : undefined}>
+                    <label htmlFor="reg-licence-status">Trade licence status *</label>
+                    <select
+                      id="reg-licence-status"
+                      name="tradeLicenceStatus"
+                      value={formData.tradeLicenceStatus}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                      required
+                    >
+                      <option value="Active">Active</option>
+                      <option value="Expires soon">Expires soon</option>
+                      <option value="Expired">Expired</option>
+                      <option value="Valid and active">Valid and active</option>
+                      <option value="Under renewal">Under renewal</option>
+                      <option value="New application">New application</option>
+                    </select>
+                    {formData.tradeLicenceStatus === 'Expires soon' && (
+                      <span className="hint" style={{ color: 'var(--cmp-warning, #d97706)', fontWeight: 500 }}>
+                        ⚠️ Licence expires within 30 days
+                      </span>
+                    )}
+                    {formData.tradeLicenceStatus === 'Expired' && (
+                      <span className="hint" style={{ color: 'var(--cmp-danger, #dc2626)', fontWeight: 500 }}>
+                        ⛔ Licence has expired
+                      </span>
+                    )}
+                    {formData.tradeLicenceStatus === 'Active' && formData.expiryDate && (
+                      <span className="hint" style={{ color: 'var(--cmp-success, #16a34a)', fontWeight: 500 }}>
+                        ✓ Licence is active
+                      </span>
+                    )}
+                    {touched.tradeLicenceStatus && formErrors.tradeLicenceStatus && (
+                      <span className="error-text">{formErrors.tradeLicenceStatus}</span>
+                    )}
+                  </div>
+
+                  <div className="field half" data-invalid={touched.numberOfAgents && formErrors.numberOfAgents ? true : undefined}>
+                    <label htmlFor="reg-number-of-agents">Number of agents *</label>
+                    <select
+                      id="reg-number-of-agents"
+                      name="numberOfAgents"
+                      value={formData.numberOfAgents}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                      required
+                    >
+                      <option value="1 to 5">1 to 5</option>
+                      <option value="6 to 20">6 to 20</option>
+                      <option value="21 to 50">21 to 50</option>
+                      <option value="More than 50">More than 50</option>
+                    </select>
+                    {touched.numberOfAgents && formErrors.numberOfAgents && (
+                      <span className="error-text">{formErrors.numberOfAgents}</span>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {/* DEVELOPER specific: Developer Type */}
+              {accountType === 'DEVELOPER' && (
+                <>
+                  <div className="field half" data-invalid={touched.developerType && formErrors.developerType ? true : undefined}>
+                    <label htmlFor="reg-developer-type">Developer type *</label>
+                    <select
+                      id="reg-developer-type"
+                      name="developerType"
+                      value={formData.developerType}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                      required
+                    >
+                      <option value="Master developer">Master developer</option>
+                      <option value="Sub developer">Sub developer</option>
+                    </select>
+                    {touched.developerType && formErrors.developerType && (
+                      <span className="error-text">{formErrors.developerType}</span>
+                    )}
+                  </div>
+
+                  {/* Pre-check notice for Developer */}
+                  {devPrecheck.result && !devPrecheck.result.canSubmit && (
+                    <div className="field" style={{ gridColumn: '1 / -1' }}>
+                      <div className="note" style={{ background: 'color-mix(in srgb, var(--cmp-danger) 10%, transparent)', border: '1px solid var(--cmp-danger)', color: 'var(--cmp-danger)', fontSize: 13, padding: '8px 12px' }}>
+                        ⛔ {devPrecheck.result.message || 'Registration is already in progress for this developer.'}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Common company details */}
+              <div className="field half" data-invalid={touched.emirate && formErrors.emirate ? true : undefined}>
+                <label htmlFor="reg-emirate">Emirate *</label>
+                <select
+                  id="reg-emirate"
+                  name="emirate"
+                  value={formData.emirate}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  required
+                >
+                  <option value="Dubai">Dubai</option>
+                  <option value="Abu Dhabi">Abu Dhabi</option>
+                  <option value="Sharjah">Sharjah</option>
+                  <option value="Ajman">Ajman</option>
+                  <option value="Ras Al Khaimah">Ras Al Khaimah</option>
+                  <option value="Fujairah">Fujairah</option>
+                  <option value="Umm Al Quwain">Umm Al Quwain</option>
+                </select>
+                {touched.emirate && formErrors.emirate && (
+                  <span className="error-text">{formErrors.emirate}</span>
+                )}
+              </div>
+
+              <div className="field half" data-invalid={touched.tradeLicenceNumber && formErrors.tradeLicenceNumber ? true : undefined}>
+                <label htmlFor="reg-licence-number">Trade licence number *</label>
+                <input
+                  id="reg-licence-number"
+                  name="tradeLicenceNumber"
+                  type="text"
+                  placeholder="e.g. 771204"
+                  value={formData.tradeLicenceNumber}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  required
+                />
+                {touched.tradeLicenceNumber && formErrors.tradeLicenceNumber && (
+                  <span className="error-text">{formErrors.tradeLicenceNumber}</span>
+                )}
+              </div>
+
+              {accountType === 'AGENCY' && formData.expiryDate && (
+                <div className="field half">
+                  <label htmlFor="reg-licence-expiry">Trade licence expiry</label>
                   <input
-                    id="reg-company-name"
-                    name="companyName"
+                    id="reg-licence-expiry"
+                    name="expiryDate"
                     type="text"
-                    value={formData.companyName}
+                    placeholder="YYYY-MM-DD"
+                    value={formData.expiryDate}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                  />
+                  <span className="hint">As registered with official DLD / licensing authority.</span>
+                </div>
+              )}
+
+              <div className="field half" data-invalid={touched.trnNumber && formErrors.trnNumber ? true : undefined}>
+                <label htmlFor="reg-trn-number">TRN number (optional)</label>
+                <input
+                  id="reg-trn-number"
+                  name="trnNumber"
+                  type="text"
+                  placeholder="e.g. 100412887600003"
+                  value={formData.trnNumber}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                />
+                <span className="hint">Leave empty if you are not VAT registered.</span>
+                {touched.trnNumber && formErrors.trnNumber && (
+                  <span className="error-text">{formErrors.trnNumber}</span>
+                )}
+              </div>
+
+              <div className="field" data-invalid={touched.officeAddress && formErrors.officeAddress ? true : undefined}>
+                <label htmlFor="reg-office-address">{accountType === 'DEVELOPER' ? 'Head office address *' : 'Office address *'}</label>
+                <input
+                  id="reg-office-address"
+                  name="officeAddress"
+                  type="text"
+                  placeholder="Building, Suite, Area, City"
+                  value={formData.officeAddress}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  required
+                />
+                {touched.officeAddress && formErrors.officeAddress && (
+                  <span className="error-text">{formErrors.officeAddress}</span>
+                )}
+              </div>
+
+              <div className="field half" data-invalid={touched.officialEmail && formErrors.officialEmail ? true : undefined}>
+                <label htmlFor="reg-official-email">Official company email *</label>
+                <input
+                  id="reg-official-email"
+                  name="officialEmail"
+                  type="email"
+                  placeholder="info@company.ae"
+                  value={formData.officialEmail}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  required
+                />
+                {touched.officialEmail && formErrors.officialEmail && (
+                  <span className="error-text">{formErrors.officialEmail}</span>
+                )}
+              </div>
+
+              <div className="field half" data-invalid={touched.officialPhone && formErrors.officialPhone ? true : undefined}>
+                <label htmlFor="reg-official-phone">Official company phone *</label>
+                <input
+                  id="reg-official-phone"
+                  name="officialPhone"
+                  type="tel"
+                  placeholder="+971 4 455 0142"
+                  value={formData.officialPhone}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  required
+                />
+                <span className="hint">Landline or office number.</span>
+                {touched.officialPhone && formErrors.officialPhone && (
+                  <span className="error-text">{formErrors.officialPhone}</span>
+                )}
+              </div>
+
+              <div className="field half" data-invalid={touched.website && formErrors.website ? true : undefined}>
+                <label htmlFor="reg-website">Website (optional)</label>
+                <input
+                  id="reg-website"
+                  name="website"
+                  type="text"
+                  placeholder="company.ae"
+                  value={formData.website}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                />
+                {touched.website && formErrors.website && (
+                  <span className="error-text">{formErrors.website}</span>
+                )}
+              </div>
+            </div>
+          </section>
+
+          {/* 4. DEVELOPER First Project Section */}
+          {accountType === 'DEVELOPER' && (
+            <section className="form-section">
+              <h3>First project</h3>
+              <p className="section-sub" style={{ fontSize: '13px', color: 'var(--cmp-text-muted)', marginBottom: 14 }}>
+                Enter details for your primary or active project to list on CMP Connect.
+              </p>
+              <div className="form-grid">
+                <div className="field half" data-invalid={touched['firstProject.name'] && formErrors['firstProject.name'] ? true : undefined}>
+                  <label htmlFor="reg-proj-name">Project name *</label>
+                  <input
+                    id="reg-proj-name"
+                    name="firstProject.name"
+                    type="text"
+                    placeholder="e.g. Aurora Heights"
+                    value={formData.firstProject.name}
                     onChange={handleChange}
                     onBlur={handleBlur}
                     required
                   />
-                  <span className="hint">As it appears on the trade licence.</span>
-                  {touched.companyName && formErrors.companyName && (
-                    <span className="error-text">{formErrors.companyName}</span>
+                  {touched['firstProject.name'] && formErrors['firstProject.name'] && (
+                    <span className="error-text">{formErrors['firstProject.name']}</span>
                   )}
                 </div>
 
-                <div className="field half" data-invalid={touched.companyType && formErrors.companyType ? true : undefined}>
-                  <label htmlFor="reg-company-type">Company type</label>
-                  <select
-                    id="reg-company-type"
-                    name="companyType"
-                    value={formData.companyType}
+                <div className="field half" data-invalid={touched['firstProject.community'] && formErrors['firstProject.community'] ? true : undefined}>
+                  <label htmlFor="reg-proj-community">Community / Location *</label>
+                  <input
+                    id="reg-proj-community"
+                    name="firstProject.community"
+                    type="text"
+                    placeholder="e.g. Dubai Hills Estate"
+                    value={formData.firstProject.community}
                     onChange={handleChange}
                     onBlur={handleBlur}
                     required
-                  >
-                    <option value="Real estate brokerage">Real estate brokerage</option>
-                    <option value="Property management">Property management</option>
-                    <option value="Holiday homes operator">Holiday homes operator</option>
-                    <option value="Other">Other</option>
-                  </select>
-                  {touched.companyType && formErrors.companyType && (
-                    <span className="error-text">{formErrors.companyType}</span>
+                  />
+                  {touched['firstProject.community'] && formErrors['firstProject.community'] && (
+                    <span className="error-text">{formErrors['firstProject.community']}</span>
                   )}
                 </div>
 
-                <div className="field half" data-invalid={touched.emirate && formErrors.emirate ? true : undefined}>
-                  <label htmlFor="reg-emirate">Emirate</label>
-                  <select
-                    id="reg-emirate"
-                    name="emirate"
-                    value={formData.emirate}
+                <div className="field half" data-invalid={touched['firstProject.reraProjectNumber'] && formErrors['firstProject.reraProjectNumber'] ? true : undefined}>
+                  <label htmlFor="reg-proj-rera">RERA project number *</label>
+                  <input
+                    id="reg-proj-rera"
+                    name="firstProject.reraProjectNumber"
+                    type="text"
+                    placeholder="e.g. RERA-P-7781"
+                    value={formData.firstProject.reraProjectNumber}
                     onChange={handleChange}
                     onBlur={handleBlur}
                     required
-                  >
-                    <option value="Dubai">Dubai</option>
-                    <option value="Abu Dhabi">Abu Dhabi</option>
-                    <option value="Sharjah">Sharjah</option>
-                    <option value="Ajman">Ajman</option>
-                    <option value="Ras Al Khaimah">Ras Al Khaimah</option>
-                    <option value="Fujairah">Fujairah</option>
-                    <option value="Umm Al Quwain">Umm Al Quwain</option>
-                  </select>
-                  {touched.emirate && formErrors.emirate && (
-                    <span className="error-text">{formErrors.emirate}</span>
+                  />
+                  {touched['firstProject.reraProjectNumber'] && formErrors['firstProject.reraProjectNumber'] && (
+                    <span className="error-text">{formErrors['firstProject.reraProjectNumber']}</span>
                   )}
                 </div>
 
-                <div className="field half" data-invalid={touched.tradeLicenceStatus && formErrors.tradeLicenceStatus ? true : undefined}>
-                  <label htmlFor="reg-trade-status">Trade licence status</label>
-                  <select
-                    id="reg-trade-status"
-                    name="tradeLicenceStatus"
-                    value={formData.tradeLicenceStatus}
+                <div className="field half" data-invalid={touched['firstProject.units'] && formErrors['firstProject.units'] ? true : undefined}>
+                  <label htmlFor="reg-proj-units">Total units *</label>
+                  <input
+                    id="reg-proj-units"
+                    name="firstProject.units"
+                    type="number"
+                    min="1"
+                    placeholder="e.g. 214"
+                    value={formData.firstProject.units}
                     onChange={handleChange}
                     onBlur={handleBlur}
                     required
-                  >
-                    <option value="Valid and active">Valid and active</option>
-                    <option value="Under renewal">Under renewal</option>
-                    <option value="New application">New application</option>
-                  </select>
-                  {touched.tradeLicenceStatus && formErrors.tradeLicenceStatus && (
-                    <span className="error-text">{formErrors.tradeLicenceStatus}</span>
+                  />
+                  {touched['firstProject.units'] && formErrors['firstProject.units'] && (
+                    <span className="error-text">{formErrors['firstProject.units']}</span>
                   )}
                 </div>
 
-                <div
-                  className="field half"
-                  data-invalid={
-                    backendErrors.orn ||
-                    (agencyPrecheck.result && agencyPrecheck.result.canSubmit === false) ||
-                    (touched.orn && formErrors.orn)
-                      ? true
-                      : undefined
-                  }
-                >
-                  <label htmlFor="reg-orn">RERA ORN number</label>
-                  <div style={{ position: 'relative' }}>
-                    <input
-                      id="reg-orn"
-                      name="orn"
-                      type="text"
-                      placeholder="e.g. 90996"
-                      value={formData.orn}
-                      onChange={handleOrnChange}
-                      onBlur={handleOrnBlur}
-                      required
-                    />
-                    {agencyPrecheck.loading && (
-                      <span
-                        style={{
-                          position: 'absolute',
-                          right: 12,
-                          top: 12,
-                          fontSize: 12,
-                          color: 'var(--cmp-text-faint)',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 6
-                        }}
-                      >
-                        <svg
-                          style={{ animation: 'cmp-spin 0.85s linear infinite' }}
-                          width="13"
-                          height="13"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2.5"
-                        >
-                          <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
-                          <path d="M12 2a10 10 0 0 1 10 10" />
-                        </svg>
-                        Checking...
-                      </span>
-                    )}
-                  </div>
-
-                  {backendErrors.orn && (
-                    <span className="error-text" style={{ display: 'block', marginTop: 4 }}>
-                      {backendErrors.orn}
-                    </span>
-                  )}
-
-                  {touched.orn && formErrors.orn && !backendErrors.orn && (
-                    <span className="error-text" style={{ display: 'block', marginTop: 4 }}>
-                      {formErrors.orn}
-                    </span>
-                  )}
-
-                  {!backendErrors.orn && agencyPrecheck.result && (
-                    <>
-                      {agencyPrecheck.result.canSubmit === false ? (
-                        <span className="error-text" style={{ display: 'block', marginTop: 4 }}>
-                          {agencyPrecheck.result.message || 'This ORN is not registered with RERA. Check the number or contact CMP.'}
-                        </span>
-                      ) : agencyPrecheck.result.whitelisted ? (
-                        <span
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 6,
-                            marginTop: 4,
-                            color: 'var(--cmp-success)',
-                            fontSize: '13px',
-                            fontWeight: 600
-                          }}
-                        >
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="20 6 9 17 4 12" />
-                          </svg>
-                          ORN verified with RERA
-                        </span>
-                      ) : agencyPrecheck.result.registeredOnApp ? (
-                        <div
-                          className="note"
-                          style={{
-                            background: 'color-mix(in srgb, var(--cmp-info) 10%, transparent)',
-                            border: '1px solid var(--cmp-info)',
-                            color: 'var(--cmp-info)',
-                            fontSize: '12.5px',
-                            marginTop: 6,
-                            padding: '8px 10px'
-                          }}
-                        >
-                          This agency already uses the CMP app. Registering here adds your documents to the same account.
-                        </div>
-                      ) : (
-                        <div
-                          className="note"
-                          style={{
-                            background: 'color-mix(in srgb, var(--cmp-warning) 12%, transparent)',
-                            border: '1px solid var(--cmp-warning)',
-                            color: 'var(--cmp-warning)',
-                            fontSize: '12.5px',
-                            marginTop: 6,
-                            padding: '8px 10px'
-                          }}
-                        >
-                          We could not find this ORN in the RERA list. You can still submit. Our team will verify it.
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              </div>
-            </section>
-          ) : (
-            <section className="form-section">
-              <h3>Developer</h3>
-              <div className="form-grid">
-                <div
-                  className="field"
-                  data-invalid={
-                    backendErrors.companyName ||
-                    (devPrecheck.result && devPrecheck.result.canSubmit === false) ||
-                    (touched.companyName && formErrors.companyName)
-                      ? true
-                      : undefined
-                  }
-                >
-                  <label htmlFor="reg-dev-name">Developer name</label>
-                  <div style={{ position: 'relative' }}>
-                    <input
-                      id="reg-dev-name"
-                      name="companyName"
-                      type="text"
-                      value={formData.companyName}
-                      onChange={handleDevNameChange}
-                      onBlur={handleDevNameBlur}
-                      required
-                    />
-                    {devPrecheck.loading && (
-                      <span
-                        style={{
-                          position: 'absolute',
-                          right: 12,
-                          top: 12,
-                          fontSize: 12,
-                          color: 'var(--cmp-text-faint)',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 6
-                        }}
-                      >
-                        <svg
-                          style={{ animation: 'cmp-spin 0.85s linear infinite' }}
-                          width="13"
-                          height="13"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2.5"
-                        >
-                          <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
-                          <path d="M12 2a10 10 0 0 1 10 10" />
-                        </svg>
-                        Checking...
-                      </span>
-                    )}
-                  </div>
-
-                  {backendErrors.companyName && (
-                    <span className="error-text" style={{ display: 'block', marginTop: 4 }}>
-                      {backendErrors.companyName}
-                    </span>
-                  )}
-
-                  {touched.companyName && formErrors.companyName && !backendErrors.companyName && (
-                    <span className="error-text" style={{ display: 'block', marginTop: 4 }}>
-                      {formErrors.companyName}
-                    </span>
-                  )}
-
-                  {!backendErrors.companyName && devPrecheck.result && devPrecheck.result.canSubmit === false && (
-                    <span className="error-text" style={{ display: 'block', marginTop: 4 }}>
-                      {devPrecheck.result.message || 'This developer registration cannot be submitted.'}
-                    </span>
-                  )}
-                </div>
-
-                <div className="field half" data-invalid={touched.developerType && formErrors.developerType ? true : undefined}>
-                  <label htmlFor="reg-dev-type">Developer type</label>
-                  <select
-                    id="reg-dev-type"
-                    name="developerType"
-                    value={formData.developerType}
+                <div className="field half" data-invalid={touched['firstProject.expectedHandover'] && formErrors['firstProject.expectedHandover'] ? true : undefined}>
+                  <label htmlFor="reg-proj-handover">Expected handover *</label>
+                  <input
+                    id="reg-proj-handover"
+                    name="firstProject.expectedHandover"
+                    type="text"
+                    placeholder="e.g. Q4 2028"
+                    value={formData.firstProject.expectedHandover}
                     onChange={handleChange}
                     onBlur={handleBlur}
                     required
-                  >
-                    <option value="Master developer">Master developer</option>
-                    <option value="Sub developer">Sub developer</option>
-                  </select>
-                  {touched.developerType && formErrors.developerType && (
-                    <span className="error-text">{formErrors.developerType}</span>
+                  />
+                  {touched['firstProject.expectedHandover'] && formErrors['firstProject.expectedHandover'] && (
+                    <span className="error-text">{formErrors['firstProject.expectedHandover']}</span>
                   )}
                 </div>
 
-                <div className="field half" data-invalid={touched.emirate && formErrors.emirate ? true : undefined}>
-                  <label htmlFor="reg-dev-emirate">Emirate</label>
-                  <select
-                    id="reg-dev-emirate"
-                    name="emirate"
-                    value={formData.emirate}
+                <div className="field half" data-invalid={touched['firstProject.escrowBank'] && formErrors['firstProject.escrowBank'] ? true : undefined}>
+                  <label htmlFor="reg-proj-bank">Escrow bank *</label>
+                  <input
+                    id="reg-proj-bank"
+                    name="firstProject.escrowBank"
+                    type="text"
+                    placeholder="e.g. Emirates NBD"
+                    value={formData.firstProject.escrowBank}
                     onChange={handleChange}
                     onBlur={handleBlur}
                     required
-                  >
-                    <option value="Dubai">Dubai</option>
-                    <option value="Abu Dhabi">Abu Dhabi</option>
-                    <option value="Sharjah">Sharjah</option>
-                    <option value="Ajman">Ajman</option>
-                    <option value="Ras Al Khaimah">Ras Al Khaimah</option>
-                    <option value="Fujairah">Fujairah</option>
-                    <option value="Umm Al Quwain">Umm Al Quwain</option>
-                  </select>
-                  {touched.emirate && formErrors.emirate && (
-                    <span className="error-text">{formErrors.emirate}</span>
+                  />
+                  {touched['firstProject.escrowBank'] && formErrors['firstProject.escrowBank'] && (
+                    <span className="error-text">{formErrors['firstProject.escrowBank']}</span>
+                  )}
+                </div>
+
+                <div className="field" data-invalid={touched['firstProject.escrowAccountNumber'] && formErrors['firstProject.escrowAccountNumber'] ? true : undefined}>
+                  <label htmlFor="reg-proj-escrow-acc">Escrow account number *</label>
+                  <input
+                    id="reg-proj-escrow-acc"
+                    name="firstProject.escrowAccountNumber"
+                    type="text"
+                    placeholder="e.g. AE07 0331 2345 6789 0123 456"
+                    value={formData.firstProject.escrowAccountNumber}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    required
+                  />
+                  {touched['firstProject.escrowAccountNumber'] && formErrors['firstProject.escrowAccountNumber'] && (
+                    <span className="error-text">{formErrors['firstProject.escrowAccountNumber']}</span>
                   )}
                 </div>
               </div>
             </section>
           )}
 
-          {/* 4. Owner Section */}
+          {/* 5. Signatory Section */}
+          <section className="form-section">
+            <h3>Signatory</h3>
+            <div className="form-grid">
+              <div className="field half" data-invalid={touched.signatoryFullName && formErrors.signatoryFullName ? true : undefined}>
+                <label htmlFor="reg-signatory-name">Signatory full name *</label>
+                <input
+                  id="reg-signatory-name"
+                  name="signatoryFullName"
+                  type="text"
+                  placeholder="Exactly as printed on Emirates ID"
+                  value={formData.signatoryFullName}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  required
+                />
+                <span className="hint">Exactly as printed on the Emirates ID.</span>
+                {touched.signatoryFullName && formErrors.signatoryFullName && (
+                  <span className="error-text">{formErrors.signatoryFullName}</span>
+                )}
+              </div>
+
+              <div className="field half" data-invalid={touched.signatoryDesignation && formErrors.signatoryDesignation ? true : undefined}>
+                <label htmlFor="reg-signatory-designation">Position *</label>
+                <input
+                  id="reg-signatory-designation"
+                  name="signatoryDesignation"
+                  type="text"
+                  placeholder="e.g. Managing Director"
+                  value={formData.signatoryDesignation}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  required
+                />
+                {touched.signatoryDesignation && formErrors.signatoryDesignation && (
+                  <span className="error-text">{formErrors.signatoryDesignation}</span>
+                )}
+              </div>
+
+              <div className="field" style={{ gridColumn: '1 / -1' }}>
+                <label style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>
+                  Is the signatory the owner or a listed manager? *
+                </label>
+                <div style={{ display: 'flex', gap: 20, alignItems: 'center', marginTop: 4 }}>
+                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 'normal' }}>
+                    <input
+                      type="radio"
+                      name="signatoryIsOwner"
+                      checked={formData.signatoryIsOwner === true}
+                      onChange={() => setFormData((prev) => ({ ...prev, signatoryIsOwner: true }))}
+                    />
+                    <span>Yes</span>
+                  </label>
+                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 'normal' }}>
+                    <input
+                      type="radio"
+                      name="signatoryIsOwner"
+                      checked={formData.signatoryIsOwner === false}
+                      onChange={() => setFormData((prev) => ({ ...prev, signatoryIsOwner: false }))}
+                    />
+                    <span>No</span>
+                  </label>
+                </div>
+                {formData.signatoryIsOwner === false && (
+                  <span className="hint" style={{ color: 'var(--cmp-warning)', marginTop: 4, display: 'block' }}>
+                    ℹ️ If not, you will need to upload a Power of Attorney on the documents portal.
+                  </span>
+                )}
+              </div>
+            </div>
+          </section>
+
+          {/* 6. Owner Section */}
           <section className="form-section">
             <h3>Owner</h3>
             <div className="form-grid">
               <div className="field" data-invalid={touched.ownerFullName && formErrors.ownerFullName ? true : undefined}>
-                <label htmlFor="reg-owner-name">Owner full name</label>
+                <label htmlFor="reg-owner-name">Owner full name *</label>
                 <input
                   id="reg-owner-name"
                   name="ownerFullName"
@@ -1153,11 +1672,12 @@ export default function OnboardingSignupPage() {
               </div>
 
               <div className="field half" data-invalid={touched.ownerEmail && formErrors.ownerEmail ? true : undefined}>
-                <label htmlFor="reg-owner-email">Owner email</label>
+                <label htmlFor="reg-owner-email">Owner email *</label>
                 <input
                   id="reg-owner-email"
                   name="ownerEmail"
                   type="email"
+                  placeholder="owner@company.ae"
                   value={formData.ownerEmail}
                   onChange={handleChange}
                   onBlur={handleBlur}
@@ -1169,12 +1689,12 @@ export default function OnboardingSignupPage() {
               </div>
 
               <div className="field half" data-invalid={touched.ownerMobile && formErrors.ownerMobile ? true : undefined}>
-                <label htmlFor="reg-owner-mobile">Owner mobile</label>
+                <label htmlFor="reg-owner-mobile">Owner mobile *</label>
                 <input
                   id="reg-owner-mobile"
                   name="ownerMobile"
                   type="tel"
-                  placeholder="+971 50 412 7781"
+                  placeholder="+971 50 123 4567"
                   value={formData.ownerMobile}
                   onChange={handleChange}
                   onBlur={handleBlur}
@@ -1187,12 +1707,15 @@ export default function OnboardingSignupPage() {
             </div>
           </section>
 
-          {/* 5. Admin Section */}
+          {/* 7. Admin Section */}
           <section className="form-section">
             <h3>Admin</h3>
+            <p className="section-sub" style={{ fontSize: '13px', color: 'var(--cmp-text-muted)', marginBottom: 14 }}>
+              The person who runs the account day to day.
+            </p>
             <div className="form-grid">
               <div className="field" data-invalid={touched.adminFullName && formErrors.adminFullName ? true : undefined}>
-                <label htmlFor="reg-admin-name">Admin full name</label>
+                <label htmlFor="reg-admin-name">Admin full name *</label>
                 <input
                   id="reg-admin-name"
                   name="adminFullName"
@@ -1202,18 +1725,18 @@ export default function OnboardingSignupPage() {
                   onBlur={handleBlur}
                   required
                 />
-                <span className="hint">The person who runs the account day to day.</span>
                 {touched.adminFullName && formErrors.adminFullName && (
                   <span className="error-text">{formErrors.adminFullName}</span>
                 )}
               </div>
 
               <div className="field half" data-invalid={touched.adminEmail && formErrors.adminEmail ? true : undefined}>
-                <label htmlFor="reg-admin-email">Admin email</label>
+                <label htmlFor="reg-admin-email">Admin email *</label>
                 <input
                   id="reg-admin-email"
                   name="adminEmail"
                   type="email"
+                  placeholder="admin@company.ae"
                   value={formData.adminEmail}
                   onChange={handleChange}
                   onBlur={handleBlur}
@@ -1225,12 +1748,12 @@ export default function OnboardingSignupPage() {
               </div>
 
               <div className="field half" data-invalid={touched.adminMobile && formErrors.adminMobile ? true : undefined}>
-                <label htmlFor="reg-admin-mobile">Admin mobile</label>
+                <label htmlFor="reg-admin-mobile">Admin mobile *</label>
                 <input
                   id="reg-admin-mobile"
                   name="adminMobile"
                   type="tel"
-                  placeholder="+971 50 412 7781"
+                  placeholder="+971 55 123 4567"
                   value={formData.adminMobile}
                   onChange={handleChange}
                   onBlur={handleBlur}
@@ -1243,7 +1766,7 @@ export default function OnboardingSignupPage() {
             </div>
           </section>
 
-          {/* 6. Submit Button & Server Feedback */}
+          {/* General backend error banner */}
           {backendErrors.general && (
             <div
               className="note"
@@ -1251,63 +1774,47 @@ export default function OnboardingSignupPage() {
                 background: 'color-mix(in srgb, var(--cmp-danger) 10%, transparent)',
                 border: '1px solid var(--cmp-danger)',
                 color: 'var(--cmp-danger)',
-                marginTop: 20,
-                marginBottom: 16,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 12
+                marginBottom: 16
               }}
             >
-              <span>{backendErrors.general}</span>
+              {backendErrors.general}
               {backendErrors.network && (
-                <button
-                  type="button"
-                  className="btn btn-sm btn-outline"
-                  onClick={() => handleSubmit()}
-                  style={{ borderColor: 'var(--cmp-danger)', color: 'var(--cmp-danger)', flexShrink: 0 }}
-                >
-                  Retry
-                </button>
+                <div style={{ marginTop: 8 }}>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline"
+                    onClick={handleSubmit}
+                    style={{ borderColor: 'var(--cmp-danger)', color: 'var(--cmp-danger)' }}
+                  >
+                    Retry
+                  </button>
+                </div>
               )}
             </div>
           )}
 
-          <div style={{ marginTop: 24 }}>
+          {/* Submit Action */}
+          <div className="form-actions" style={{ marginTop: 24 }}>
             <button
               type="submit"
               className="btn btn-primary btn-block"
-              disabled={!isSubmitEnabled}
-              style={{
-                height: 48,
-                fontSize: 15,
-                fontWeight: 700,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 10
-              }}
+              disabled={isSubmitting || !canSubmitFromPrecheck || rateLimitCountdown > 0}
+              style={{ padding: '14px 20px', fontSize: '15px', fontWeight: 600 }}
             >
-              {isSubmitting && (
-                <svg
-                  style={{ animation: 'cmp-spin 0.85s linear infinite' }}
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                >
-                  <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
-                  <path d="M12 2a10 10 0 0 1 10 10" />
-                </svg>
-              )}
               {isSubmitting
                 ? 'Submitting registration...'
                 : rateLimitCountdown > 0
-                ? `Please wait (${rateLimitCountdown}s)`
-                : 'Submit registration'}
+                ? `Please wait ${rateLimitCountdown}s...`
+                : 'Submit registration request'}
             </button>
+
+            {!canSubmitFromPrecheck && (
+              <p className="faint" style={{ textAlign: 'center', marginTop: 10, fontSize: '12px' }}>
+                {accountType === 'AGENCY'
+                  ? 'Enter a valid, verified RERA ORN number above to enable registration submission.'
+                  : 'Enter developer name and contact email above to verify eligibility and enable submission.'}
+              </p>
+            )}
           </div>
         </form>
       </div>

@@ -222,10 +222,13 @@ export default function DetailsStage({
               <label htmlFor="f-licence_state">Trade licence status</label>
               <select
                 id="f-licence_state"
-                value={details.tradeLicenceStatus || 'Valid and active'}
+                value={details.tradeLicenceStatus || 'Active'}
                 onChange={(e) => handleChange('tradeLicenceStatus', e.target.value)}
                 required
               >
+                <option value="Active">Active</option>
+                <option value="Expires soon">Expires soon</option>
+                <option value="Expired">Expired</option>
                 <option value="Valid and active">Valid and active</option>
                 <option value="Under renewal">Under renewal</option>
                 <option value="New application">New application</option>
