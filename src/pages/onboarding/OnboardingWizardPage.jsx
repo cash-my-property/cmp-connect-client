@@ -33,7 +33,7 @@ export default function OnboardingWizardPage() {
     companyType: 'Real estate brokerage',
     emirate: 'Abu Dhabi',
     tradeLicenceNumber: '771204',
-    tradeLicenceStatus: 'Valid and active',
+    tradeLicenceStatus: 'Active',
     reraOrnNumber: 'ORN-28841',
     trnNumber: '100412887600003',
     numberOfAgents: '6 to 20',

@@ -220,19 +220,24 @@ export default function DetailsStage({
           {!isDeveloper ? (
             <div className="field half">
               <label htmlFor="f-licence_state">Trade licence status</label>
-              <select
+              <input
                 id="f-licence_state"
+                name="tradeLicenceStatus"
+                type="text"
                 value={details.tradeLicenceStatus || 'Active'}
-                onChange={(e) => handleChange('tradeLicenceStatus', e.target.value)}
-                required
-              >
-                <option value="Active">Active</option>
-                <option value="Expires soon">Expires soon</option>
-                <option value="Expired">Expired</option>
-                <option value="Valid and active">Valid and active</option>
-                <option value="Under renewal">Under renewal</option>
-                <option value="New application">New application</option>
-              </select>
+                readOnly
+                style={{
+                  backgroundColor: 'var(--cmp-surface-sunken, #f8fafc)',
+                  cursor: 'default',
+                  fontWeight: 600,
+                  color: details.tradeLicenceStatus === 'Expired'
+                    ? 'var(--cmp-danger, #dc2626)'
+                    : details.tradeLicenceStatus === 'Expires soon'
+                    ? 'var(--cmp-warning, #d97706)'
+                    : 'var(--cmp-success, #16a34a)'
+                }}
+              />
+              <span className="hint">Auto-calculated from licence expiry date.</span>
             </div>
           ) : (
             <div className="field half">

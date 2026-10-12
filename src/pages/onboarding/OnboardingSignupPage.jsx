@@ -419,7 +419,7 @@ export default function OnboardingSignupPage() {
         ...prev,
         orn: '',
         companyType: 'Real estate brokerage',
-        tradeLicenceStatus: 'Valid and active',
+        tradeLicenceStatus: 'Active',
         numberOfAgents: '1 to 5',
         developerType: prev.developerType || 'Master developer'
       }));
@@ -1214,35 +1214,37 @@ export default function OnboardingSignupPage() {
                   </div>
 
                   <div className="field half" data-invalid={touched.tradeLicenceStatus && formErrors.tradeLicenceStatus ? true : undefined}>
-                    <label htmlFor="reg-licence-status">Trade licence status *</label>
-                    <select
+                    <label htmlFor="reg-licence-status">Trade licence status</label>
+                    <input
                       id="reg-licence-status"
                       name="tradeLicenceStatus"
-                      value={formData.tradeLicenceStatus}
-                      onChange={handleChange}
-                      onBlur={handleBlur}
-                      required
-                    >
-                      <option value="Active">Active</option>
-                      <option value="Expires soon">Expires soon</option>
-                      <option value="Expired">Expired</option>
-                      <option value="Valid and active">Valid and active</option>
-                      <option value="Under renewal">Under renewal</option>
-                      <option value="New application">New application</option>
-                    </select>
+                      type="text"
+                      value={formData.tradeLicenceStatus || 'Active'}
+                      readOnly
+                      style={{
+                        backgroundColor: 'var(--cmp-surface-sunken, #f8fafc)',
+                        cursor: 'default',
+                        fontWeight: 600,
+                        color: formData.tradeLicenceStatus === 'Expired'
+                          ? 'var(--cmp-danger, #dc2626)'
+                          : formData.tradeLicenceStatus === 'Expires soon'
+                          ? 'var(--cmp-warning, #d97706)'
+                          : 'var(--cmp-success, #16a34a)'
+                      }}
+                    />
                     {formData.tradeLicenceStatus === 'Expires soon' && (
                       <span className="hint" style={{ color: 'var(--cmp-warning, #d97706)', fontWeight: 500 }}>
-                        ⚠️ Licence expires within 30 days
+                        ⚠️ Licence expires within 30 days (Auto-calculated)
                       </span>
                     )}
                     {formData.tradeLicenceStatus === 'Expired' && (
                       <span className="hint" style={{ color: 'var(--cmp-danger, #dc2626)', fontWeight: 500 }}>
-                        ⛔ Licence has expired
+                        ⛔ Licence has expired (Auto-calculated)
                       </span>
                     )}
-                    {formData.tradeLicenceStatus === 'Active' && formData.expiryDate && (
+                    {formData.tradeLicenceStatus === 'Active' && (
                       <span className="hint" style={{ color: 'var(--cmp-success, #16a34a)', fontWeight: 500 }}>
-                        ✓ Licence is active
+                        ✓ Licence is active (Auto-calculated)
                       </span>
                     )}
                     {touched.tradeLicenceStatus && formErrors.tradeLicenceStatus && (
