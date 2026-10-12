@@ -38,12 +38,48 @@ function resolveApiUrl(path) {
   return `${base}${cleanPath}`;
 }
 
+const AUTH_TOKEN_KEY = 'cmp_connect_auth_token';
+
+export function getAuthToken() {
+  try {
+    return sessionStorage.getItem(AUTH_TOKEN_KEY) || null;
+  } catch {
+    return null;
+  }
+}
+
+export function setAuthToken(token) {
+  try {
+    if (token) {
+      sessionStorage.setItem(AUTH_TOKEN_KEY, token);
+    } else {
+      sessionStorage.removeItem(AUTH_TOKEN_KEY);
+    }
+  } catch (e) {
+    console.error('[cmpConnectApi] Failed to set auth token:', e);
+  }
+}
+
+export function clearAuthToken() {
+  try {
+    sessionStorage.removeItem(AUTH_TOKEN_KEY);
+  } catch (e) {
+    console.error('[cmpConnectApi] Failed to clear auth token:', e);
+  }
+}
+
 /**
  * Generic request helper with robust error handling
  */
 async function apiRequest(endpoint, options = {}) {
   const url = resolveApiUrl(endpoint);
   const headers = { ...options.headers };
+
+  // If token is provided or exists in storage, attach Bearer auth header
+  const token = options.token || getAuthToken();
+  if (token && !headers['Authorization']) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
 
   // If body is NOT FormData, set JSON Content-Type
   if (options.body && !(options.body instanceof FormData)) {
@@ -65,6 +101,7 @@ async function apiRequest(endpoint, options = {}) {
     }
 
     if (!response.ok) {
+      // Backend error format: { "status": "error", "message": "..." } or rate limit: { "status": false, "message": "..." }
       const errorMsg = data?.message || data?.error || (typeof data === 'string' ? data : `HTTP ${response.status}`);
       const err = new Error(errorMsg);
       err.status = response.status;
@@ -162,6 +199,46 @@ export const cmpConnectApi = {
   async submit(token) {
     return apiRequest(`/api/cmpConnect/upload/${token}/submit`, {
       method: 'POST'
+    });
+  },
+
+  /**
+   * 8. CMP Connect Login
+   * POST /api/cmpConnect/auth/login
+   */
+  async login({ email, password }) {
+    return apiRequest('/api/cmpConnect/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({
+        email: email ? email.trim().toLowerCase() : '',
+        password
+      })
+    });
+  },
+
+  /**
+   * 9. CMP Connect Change Password (Mandatory on first login or user request)
+   * POST /api/cmpConnect/auth/change-password
+   */
+  async changePassword({ currentPassword, newPassword }, token) {
+    return apiRequest('/api/cmpConnect/auth/change-password', {
+      method: 'POST',
+      token,
+      body: JSON.stringify({
+        currentPassword,
+        newPassword
+      })
+    });
+  },
+
+  /**
+   * 10. CMP Connect Current Session
+   * GET /api/cmpConnect/auth/me
+   */
+  async getMe(token) {
+    return apiRequest('/api/cmpConnect/auth/me', {
+      method: 'GET',
+      token
     });
   }
 };

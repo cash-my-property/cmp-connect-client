@@ -10,6 +10,8 @@ import {
   initialTransactions
 } from '../data/mockData';
 
+import { cmpConnectApi, getAuthToken, setAuthToken, clearAuthToken } from '../services/cmpConnectApi';
+
 const AppContext = createContext();
 
 export function AppProvider({ children }) {
@@ -19,23 +21,13 @@ export function AppProvider({ children }) {
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
 
-  const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return localStorage.getItem('cmp_connect_auth') === 'true';
-  });
+  // CMP Connect Real Auth State
+  const [authToken, setAuthTokenState] = useState(() => getAuthToken());
+  const [account, setAccount] = useState(null);
+  const [mustChangePassword, setMustChangePassword] = useState(false);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
 
-  const [agency, setAgency] = useState(() => {
-    const savedEmail = localStorage.getItem('cmp_connect_user_email');
-    if (savedEmail) {
-      return {
-        ...initialAgency,
-        currentUser: {
-          ...initialAgency.currentUser,
-          email: savedEmail
-        }
-      };
-    }
-    return initialAgency;
-  });
+  const [agency, setAgency] = useState(initialAgency);
   const [listings, setListings] = useState(initialListings);
   const [clients, setClients] = useState(initialClients);
   const [rtoLots, setRtoLots] = useState(initialRtoLots);
@@ -44,40 +36,88 @@ export function AppProvider({ children }) {
   const [needsYou, setNeedsYou] = useState(needsYouItems);
   const [transactions, setTransactions] = useState(initialTransactions);
 
-  const login = (credentials) => {
-    setIsAuthenticated(true);
-    localStorage.setItem('cmp_connect_auth', 'true');
-    if (credentials?.email) {
-      const email = credentials.email.trim();
-      localStorage.setItem('cmp_connect_user_email', email);
-      const namePart = email.split('@')[0] || '';
-      const formattedName = namePart
-        .replace(/[._-]/g, ' ')
-        .replace(/\b\w/g, (c) => c.toUpperCase());
-      const initials = namePart
-        .split(/[._-]/)
-        .map((p) => p[0]?.toUpperCase())
-        .filter(Boolean)
-        .slice(0, 2)
-        .join('') || 'CU';
+  // Validate session on app mount
+  useEffect(() => {
+    const token = getAuthToken();
+    if (!token) {
+      setIsAuthLoading(false);
+      return;
+    }
 
+    cmpConnectApi.getMe(token)
+      .then((res) => {
+        const acc = res?.data;
+        if (acc) {
+          setAccount(acc);
+          setMustChangePassword(Boolean(acc.mustChangePassword));
+          setAgency((prev) => ({
+            ...prev,
+            name: acc.organization?.companyName || prev.name,
+            orn: acc.organization?.orn || prev.orn,
+            currentUser: {
+              ...prev.currentUser,
+              name: acc.fullName || prev.currentUser.name,
+              email: acc.email || prev.currentUser.email,
+              role: acc.role || prev.currentUser.role,
+              initials: acc.fullName
+                ? acc.fullName.split(' ').map((n) => n[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
+                : prev.currentUser.initials
+            }
+          }));
+        }
+      })
+      .catch((err) => {
+        console.warn('[AppContext] Session expired or invalid:', err.message);
+        clearAuthToken();
+        setAuthTokenState(null);
+        setAccount(null);
+        setMustChangePassword(false);
+      })
+      .finally(() => {
+        setIsAuthLoading(false);
+      });
+  }, []);
+
+  const loginUser = ({ token, account: acc, mustChangePassword: mcp }) => {
+    setAuthToken(token);
+    setAuthTokenState(token);
+    setAccount(acc);
+    setMustChangePassword(Boolean(mcp));
+    if (acc) {
       setAgency((prev) => ({
         ...prev,
+        name: acc.organization?.companyName || prev.name,
+        orn: acc.organization?.orn || prev.orn,
         currentUser: {
           ...prev.currentUser,
-          email,
-          name: formattedName || prev.currentUser.name,
-          initials: initials || prev.currentUser.initials
+          name: acc.fullName || prev.currentUser.name,
+          email: acc.email || prev.currentUser.email,
+          role: acc.role || prev.currentUser.role,
+          initials: acc.fullName
+            ? acc.fullName.split(' ').map((n) => n[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
+            : prev.currentUser.initials
         }
       }));
     }
   };
 
-  const logout = () => {
-    setIsAuthenticated(false);
-    localStorage.removeItem('cmp_connect_auth');
-    localStorage.removeItem('cmp_connect_user_email');
+  const updateToken = (newToken) => {
+    setAuthToken(newToken);
+    setAuthTokenState(newToken);
+    setMustChangePassword(false);
+    if (account) {
+      setAccount((prev) => (prev ? { ...prev, mustChangePassword: false } : prev));
+    }
   };
+
+  const logout = () => {
+    clearAuthToken();
+    setAuthTokenState(null);
+    setAccount(null);
+    setMustChangePassword(false);
+  };
+
+  const isAuthenticated = Boolean(authToken && account && !mustChangePassword);
 
   // Sync data attributes to HTML root element
   useEffect(() => {
@@ -180,7 +220,12 @@ export function AppProvider({ children }) {
     <AppContext.Provider
       value={{
         isAuthenticated,
-        login,
+        authToken,
+        account,
+        mustChangePassword,
+        isAuthLoading,
+        loginUser,
+        updateToken,
         logout,
         platform,
         setPlatform,

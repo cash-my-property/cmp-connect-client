@@ -20,6 +20,7 @@ export default function AppShell({ children }) {
 
   const isPublicAuthOrOnboarding = 
     !isAuthenticated ||
+    location.pathname.startsWith('/cmp-connect') ||
     location.pathname.startsWith('/onboarding') ||
     location.pathname === '/signin' ||
     location.pathname === '/login' ||

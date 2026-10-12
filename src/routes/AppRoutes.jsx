@@ -33,13 +33,19 @@ import OnboardingSigninPage from '../pages/onboarding/OnboardingSigninPage';
 import OnboardingSignupPage from '../pages/onboarding/OnboardingSignupPage';
 import OnboardingWizardPage from '../pages/onboarding/OnboardingWizardPage';
 import UploadPortalPage from '../pages/onboarding/UploadPortalPage';
+import CmpConnectLoginPage from '../pages/onboarding/CmpConnectLoginPage';
+import ChangePasswordPage from '../pages/onboarding/ChangePasswordPage';
 
 function ProtectedLayout() {
-  const { isAuthenticated } = useApp();
+  const { isAuthenticated, mustChangePassword } = useApp();
   const location = useLocation();
 
   if (!isAuthenticated) {
-    return <Navigate to="/signin" state={{ from: location }} replace />;
+    return <Navigate to="/cmp-connect/login" state={{ from: location }} replace />;
+  }
+
+  if (mustChangePassword) {
+    return <Navigate to="/cmp-connect/change-password" replace />;
   }
 
   return <Outlet />;
@@ -50,21 +56,26 @@ export default function AppRoutes() {
 
   return (
     <Routes>
-      {/* Public Auth Routes */}
+      {/* Public CMP Connect Auth Routes */}
+      <Route
+        path="/cmp-connect/login"
+        element={<CmpConnectLoginPage />}
+      />
+      <Route
+        path="/cmp-connect/change-password"
+        element={<ChangePasswordPage />}
+      />
       <Route
         path="/signin"
-        element={
-          isAuthenticated ? <Navigate to="/" replace /> : <OnboardingSigninPage />
-        }
+        element={isAuthenticated ? <Navigate to="/" replace /> : <CmpConnectLoginPage />}
       />
       <Route
         path="/login"
-        element={
-          isAuthenticated ? <Navigate to="/" replace /> : <OnboardingSigninPage />
-        }
+        element={isAuthenticated ? <Navigate to="/" replace /> : <CmpConnectLoginPage />}
       />
 
       {/* Public Onboarding & Registration */}
+      <Route path="/cmp-connect/register" element={<OnboardingSignupPage />} />
       <Route path="/onboarding" element={<OnboardingLandingPage />} />
       <Route path="/signup" element={<OnboardingSignupPage />} />
       <Route path="/register" element={<OnboardingSignupPage />} />
