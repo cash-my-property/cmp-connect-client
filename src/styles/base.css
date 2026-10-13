@@ -116,6 +116,45 @@ body {
   font-size: 15px;
 }
 
+/* ------------------------------------------------------------- Menu Items & Dropdowns */
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: var(--cmp-text);
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: var(--cmp-radius-sm, 6px);
+  cursor: pointer;
+  text-align: start;
+  text-decoration: none;
+  transition: background-color var(--cmp-duration-fast, 0.15s) ease, color var(--cmp-duration-fast, 0.15s) ease;
+  user-select: none;
+  box-sizing: border-box;
+}
+
+.menu-item:hover {
+  background: var(--cmp-surface-sunken);
+  color: var(--cmp-brand);
+}
+
+.menu-item:active {
+  background: var(--cmp-brand-subtle);
+}
+
+.menu-item-danger {
+  color: var(--cmp-danger) !important;
+}
+
+.menu-item-danger:hover {
+  background: rgba(179, 38, 30, 0.08) !important;
+  color: var(--cmp-danger) !important;
+}
+
 /* ------------------------------------------------------------- Cards */
 .card {
   background: var(--cmp-surface);

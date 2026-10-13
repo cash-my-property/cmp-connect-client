@@ -11,6 +11,7 @@ import {
 } from '../data/mockData';
 
 import { cmpConnectApi, getAuthToken, setAuthToken, clearAuthToken } from '../services/cmpConnectApi';
+import { can as checkPermission } from '../utils/permissions';
 
 const AppContext = createContext();
 
@@ -224,6 +225,9 @@ export function AppProvider({ children }) {
         account,
         mustChangePassword,
         isAuthLoading,
+        can: (...keys) => checkPermission(account, ...keys),
+        userPermissions: account?.permissions || [],
+        userRole: account?.role || null,
         loginUser,
         updateToken,
         logout,

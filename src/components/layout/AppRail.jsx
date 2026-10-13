@@ -1,5 +1,4 @@
-import React from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import {
   Home,
@@ -18,7 +17,8 @@ import {
 
 export default function AppRail() {
   const { platform } = useApp();
-  const isRto = platform === 'auctions';
+  const location = useLocation();
+  const isRto = platform === 'auctions' || location.pathname.startsWith('/rto');
 
   return (
     <nav className="app-rail" aria-label="Main" data-side={isRto ? 'rto' : 'listings'}>

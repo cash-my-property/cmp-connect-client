@@ -240,6 +240,152 @@ export const cmpConnectApi = {
       method: 'GET',
       token
     });
+  },
+
+  // ─────────────────────────────────────────────────────────────
+  // TEAM: MEMBERS (users.html)
+  // ─────────────────────────────────────────────────────────────
+
+  /**
+   * 11. List Team Members
+   * GET /api/cmpConnect/team/members?search=&roleId=&status=&page=&limit=
+   */
+  async listMembers(params = {}, token) {
+    const query = new URLSearchParams();
+    if (params.search) query.append('search', params.search);
+    if (params.roleId) query.append('roleId', params.roleId);
+    if (params.status && params.status !== 'all') query.append('status', params.status);
+    if (params.page) query.append('page', params.page);
+    if (params.limit) query.append('limit', params.limit);
+
+    const queryString = query.toString();
+    const endpoint = `/api/cmpConnect/team/members${queryString ? `?${queryString}` : ''}`;
+    return apiRequest(endpoint, {
+      method: 'GET',
+      token
+    });
+  },
+
+  /**
+   * 12. Invite New Team Member
+   * POST /api/cmpConnect/team/invite
+   */
+  async inviteMember(data, token) {
+    return apiRequest('/api/cmpConnect/team/invite', {
+      method: 'POST',
+      token,
+      body: JSON.stringify(data)
+    });
+  },
+
+  /**
+   * 13. Resend Member Invite Email
+   * POST /api/cmpConnect/team/members/:id/resend-invite
+   */
+  async resendInvite(memberId, token) {
+    return apiRequest(`/api/cmpConnect/team/members/${memberId}/resend-invite`, {
+      method: 'POST',
+      token
+    });
+  },
+
+  /**
+   * 14. Change Member Role
+   * PATCH /api/cmpConnect/team/members/:id/role
+   */
+  async changeMemberRole(memberId, roleId, token) {
+    return apiRequest(`/api/cmpConnect/team/members/${memberId}/role`, {
+      method: 'PATCH',
+      token,
+      body: JSON.stringify({ roleId })
+    });
+  },
+
+  /**
+   * 15. Set Member Status (Active / Inactive)
+   * PATCH /api/cmpConnect/team/members/:id/status
+   */
+  async setMemberStatus(memberId, status, token) {
+    return apiRequest(`/api/cmpConnect/team/members/${memberId}/status`, {
+      method: 'PATCH',
+      token,
+      body: JSON.stringify({ status })
+    });
+  },
+
+  // ─────────────────────────────────────────────────────────────
+  // TEAM: ROLES & ACCESS (roles.html)
+  // ─────────────────────────────────────────────────────────────
+
+  /**
+   * 16. List Roles & Permission Matrix
+   * GET /api/cmpConnect/roles
+   */
+  async listRoles(token) {
+    return apiRequest('/api/cmpConnect/roles', {
+      method: 'GET',
+      token
+    });
+  },
+
+  /**
+   * 17. Create Custom Role
+   * POST /api/cmpConnect/roles/custom
+   */
+  async createCustomRole(data, token) {
+    return apiRequest('/api/cmpConnect/roles/custom', {
+      method: 'POST',
+      token,
+      body: JSON.stringify(data)
+    });
+  },
+
+  /**
+   * 18. Update Custom Role
+   * PATCH /api/cmpConnect/roles/custom/:id
+   */
+  async updateCustomRole(roleId, data, token) {
+    return apiRequest(`/api/cmpConnect/roles/custom/${roleId}`, {
+      method: 'PATCH',
+      token,
+      body: JSON.stringify(data)
+    });
+  },
+
+  /**
+   * 19. Delete Custom Role
+   * DELETE /api/cmpConnect/roles/custom/:id
+   */
+  async deleteCustomRole(roleId, token) {
+    return apiRequest(`/api/cmpConnect/roles/custom/${roleId}`, {
+      method: 'DELETE',
+      token
+    });
+  },
+
+  // ─────────────────────────────────────────────────────────────
+  // TEAM: INVITE ACCEPT / SET PASSWORD (Public)
+  // ─────────────────────────────────────────────────────────────
+
+  /**
+   * 20. Get Invite Details by Token
+   * GET /api/cmpConnect/auth/invite/:token
+   */
+  async getInviteDetails(inviteToken) {
+    return apiRequest(`/api/cmpConnect/auth/invite/${inviteToken}`, {
+      method: 'GET'
+    });
+  },
+
+  /**
+   * 21. Accept Invite and Set Password
+   * POST /api/cmpConnect/auth/accept-invite
+   */
+  async acceptInvite({ token, password }) {
+    return apiRequest('/api/cmpConnect/auth/accept-invite', {
+      method: 'POST',
+      body: JSON.stringify({ token, password })
+    });
   }
 };
 

@@ -26,7 +26,9 @@ export default function HubBar() {
     setIsNotificationsOpen,
     agency,
     needsYou,
-    logout
+    logout,
+    account,
+    can
   } = useApp();
 
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -60,9 +62,27 @@ export default function HubBar() {
   // Derive active hub information based on current URL path
   const getHubInfo = () => {
     if (pathname.startsWith('/rto')) {
+      const isProperties = pathname === '/rto/entries' || pathname === '/rto/results';
+      const isBuyers = pathname === '/rto/bidders' || pathname === '/rto/cheques';
+      const isNew = pathname === '/rto/new';
+
+      let title = 'Live desk';
+      let blurb = 'Offers arriving right now on properties with a closing date.';
+
+      if (isProperties) {
+        title = 'Properties';
+        blurb = 'Properties entered into Real Time Offer and how their offer windows closed.';
+      } else if (isBuyers) {
+        title = 'Buyers';
+        blurb = 'Registered buyers and the 10% security cheques they lodge before placing offers.';
+      } else if (isNew) {
+        title = 'Enter a property';
+        blurb = 'Registered buyers place offers against a clock. The reserve stays private.';
+      }
+
       return {
-        title: 'Live desk',
-        blurb: 'Offers arriving right now on properties with a closing date.',
+        title,
+        blurb,
         tabs: [
           { label: 'Live desk', path: '/rto' },
           { label: 'Entries', path: '/rto/entries' },
@@ -130,14 +150,15 @@ export default function HubBar() {
       };
     }
     if (pathname.startsWith('/team')) {
+      const teamTabs = [];
+      if (!account || can('insights.agents_view')) teamTabs.push({ label: 'Leaderboard', path: '/team' });
+      if (!account || can('team.view')) teamTabs.push({ label: 'Members', path: '/team/members' });
+      if (!account || can('roles.view')) teamTabs.push({ label: 'Roles & access', path: '/team/roles' });
+
       return {
         title: 'Team',
         blurb: 'Your people, how they are performing and what they can access.',
-        tabs: [
-          { label: 'Leaderboard', path: '/team' },
-          { label: 'Members', path: '/team/members' },
-          { label: 'Roles & access', path: '/team/roles' }
-        ]
+        tabs: teamTabs
       };
     }
     if (pathname.startsWith('/account')) {
@@ -190,7 +211,7 @@ export default function HubBar() {
         <nav className="platform-switch" aria-label="Platform">
           <button
             type="button"
-            className={platform === 'listings' ? 'active' : ''}
+            className={!pathname.startsWith('/rto') && platform === 'listings' ? 'active' : ''}
             onClick={() => handlePlatformChange('listings')}
           >
             <Building size={16} />
@@ -198,7 +219,7 @@ export default function HubBar() {
           </button>
           <button
             type="button"
-            className={platform === 'auctions' ? 'active' : ''}
+            className={pathname.startsWith('/rto') || platform === 'auctions' ? 'active' : ''}
             onClick={() => handlePlatformChange('auctions')}
           >
             <Radio size={16} />

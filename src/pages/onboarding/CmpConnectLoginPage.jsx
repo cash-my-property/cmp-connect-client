@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { cmpConnectApi } from '../../services/cmpConnectApi';
 import OnboardingLayout from './OnboardingLayout';
@@ -19,8 +19,7 @@ export default function CmpConnectLoginPage() {
 
   // If already authenticated and password is not forced to change, redirect
   if (isAuthenticated && !location.state?.forced) {
-    navigate('/', { replace: true });
-    return null;
+    return <Navigate to={from} replace />;
   }
 
   const handleSubmit = async (e) => {
