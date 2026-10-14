@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { Phone, MessageSquare, Mail, MessageCircle, TrendingUp, Calendar, ArrowUpRight } from 'lucide-react';
+import { useApp } from '../../context/AppContext';
 
 export default function LeadInsightsPage() {
+  const { isLiveData } = useApp();
   const [period, setPeriod] = useState('7d'); // '7d' | '30d' | '90d'
   const [channelFilter, setChannelFilter] = useState('all'); // 'all' | 'whatsapp' | 'calls' | 'email'
   const [callChartTab, setCallChartTab] = useState('calls'); // 'calls' | 'rate'
@@ -56,53 +58,57 @@ export default function LeadInsightsPage() {
           <div style={{ position: 'relative', width: '170px', height: '170px', margin: '0 auto' }}>
             <svg width="170" height="170" style={{ transform: 'rotate(-90deg)' }} aria-hidden="true">
               <circle cx="85" cy="85" r="74" fill="none" stroke="var(--cmp-surface-sunken)" strokeWidth="22" />
-              {/* WhatsApp: 22 / 43 = 51% */}
-              <circle
-                cx="85"
-                cy="85"
-                r="74"
-                fill="none"
-                stroke="var(--cmp-brand)"
-                strokeWidth="22"
-                strokeDasharray="235.8 464.9"
-                strokeDashoffset="0"
-              />
-              {/* Calls: 9 / 43 = 21% */}
-              <circle
-                cx="85"
-                cy="85"
-                r="74"
-                fill="none"
-                stroke="var(--cmp-accent)"
-                strokeWidth="22"
-                strokeDasharray="95.3 464.9"
-                strokeDashoffset="-237.8"
-              />
-              {/* Email: 7 / 43 = 16% */}
-              <circle
-                cx="85"
-                cy="85"
-                r="74"
-                fill="none"
-                stroke="var(--cmp-info)"
-                strokeWidth="22"
-                strokeDasharray="73.6 464.9"
-                strokeDashoffset="-335.2"
-              />
-              {/* Chat: 5 / 43 = 12% */}
-              <circle
-                cx="85"
-                cy="85"
-                r="74"
-                fill="none"
-                stroke="var(--cmp-warning)"
-                strokeWidth="22"
-                strokeDasharray="52.0 464.9"
-                strokeDashoffset="-410.8"
-              />
+              {!isLiveData && (
+                <>
+                  {/* WhatsApp: 22 / 43 = 51% */}
+                  <circle
+                    cx="85"
+                    cy="85"
+                    r="74"
+                    fill="none"
+                    stroke="var(--cmp-brand)"
+                    strokeWidth="22"
+                    strokeDasharray="235.8 464.9"
+                    strokeDashoffset="0"
+                  />
+                  {/* Calls: 9 / 43 = 21% */}
+                  <circle
+                    cx="85"
+                    cy="85"
+                    r="74"
+                    fill="none"
+                    stroke="var(--cmp-accent)"
+                    strokeWidth="22"
+                    strokeDasharray="95.3 464.9"
+                    strokeDashoffset="-237.8"
+                  />
+                  {/* Email: 7 / 43 = 16% */}
+                  <circle
+                    cx="85"
+                    cy="85"
+                    r="74"
+                    fill="none"
+                    stroke="var(--cmp-info)"
+                    strokeWidth="22"
+                    strokeDasharray="73.6 464.9"
+                    strokeDashoffset="-335.2"
+                  />
+                  {/* Chat: 5 / 43 = 12% */}
+                  <circle
+                    cx="85"
+                    cy="85"
+                    r="74"
+                    fill="none"
+                    stroke="var(--cmp-warning)"
+                    strokeWidth="22"
+                    strokeDasharray="52.0 464.9"
+                    strokeDashoffset="-410.8"
+                  />
+                </>
+              )}
             </svg>
             <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', alignContent: 'center', textAlign: 'center' }}>
-              <span style={{ fontSize: '28px', fontWeight: 800 }}>43</span>
+              <span style={{ fontSize: '28px', fontWeight: 800 }}>{isLiveData ? 0 : 43}</span>
               <span className="faint" style={{ fontSize: '12px' }}>Total Leads</span>
             </div>
           </div>
@@ -111,22 +117,22 @@ export default function LeadInsightsPage() {
             <li className="row" style={{ gap: '6px' }}>
               <span style={{ width: '10px', height: '10px', borderRadius: '2px', background: 'var(--cmp-brand)' }} />
               <span className="muted">WhatsApp</span>
-              <strong>22</strong>
+              <strong>{isLiveData ? 0 : 22}</strong>
             </li>
             <li className="row" style={{ gap: '6px' }}>
               <span style={{ width: '10px', height: '10px', borderRadius: '2px', background: 'var(--cmp-accent)' }} />
               <span className="muted">Calls</span>
-              <strong>9</strong>
+              <strong>{isLiveData ? 0 : 9}</strong>
             </li>
             <li className="row" style={{ gap: '6px' }}>
               <span style={{ width: '10px', height: '10px', borderRadius: '2px', background: 'var(--cmp-info)' }} />
               <span className="muted">Email</span>
-              <strong>7</strong>
+              <strong>{isLiveData ? 0 : 7}</strong>
             </li>
             <li className="row" style={{ gap: '6px' }}>
               <span style={{ width: '10px', height: '10px', borderRadius: '2px', background: 'var(--cmp-warning)' }} />
               <span className="muted">Chat</span>
-              <strong>5</strong>
+              <strong>{isLiveData ? 0 : 5}</strong>
             </li>
           </ul>
 
@@ -200,47 +206,67 @@ export default function LeadInsightsPage() {
             </div>
           </div>
 
-          <div style={{ position: 'relative' }}>
-            <svg viewBox="0 0 760 240" width="100%" role="img" aria-label="Leads chart">
-              <g>
-                <line x1="48" x2="744" y1="210" y2="210" stroke="var(--cmp-border)" strokeWidth="1" />
-                <text x="40" y="214" textAnchor="end" fontSize="11" fill="var(--cmp-text-faint)">0</text>
-              </g>
-              <g>
-                <line x1="48" x2="744" y1="112" y2="112" stroke="var(--cmp-border)" strokeWidth="1" />
-                <text x="40" y="116" textAnchor="end" fontSize="11" fill="var(--cmp-text-faint)">5</text>
-              </g>
-              <g>
-                <line x1="48" x2="744" y1="14" y2="14" stroke="var(--cmp-border)" strokeWidth="1" />
-                <text x="40" y="18" textAnchor="end" fontSize="11" fill="var(--cmp-text-faint)">10</text>
-              </g>
+          {isLiveData ? (
+            <div
+              style={{
+                height: '240px',
+                display: 'grid',
+                placeItems: 'center',
+                textAlign: 'center',
+                background: 'var(--cmp-surface-sunken)',
+                borderRadius: 'var(--cmp-radius-md)',
+                border: '1px dashed var(--cmp-border)',
+                padding: '16px'
+              }}
+            >
+              <div>
+                <p style={{ margin: 0, fontWeight: 700, fontSize: '14px' }}>No enquiry trends recorded</p>
+                <p className="muted" style={{ margin: '4px 0 0', fontSize: '12px' }}>Direct leads across all channels over time will be charted here.</p>
+              </div>
+            </div>
+          ) : (
+            <div style={{ position: 'relative' }}>
+              <svg viewBox="0 0 760 240" width="100%" role="img" aria-label="Leads chart">
+                <g>
+                  <line x1="48" x2="744" y1="210" y2="210" stroke="var(--cmp-border)" strokeWidth="1" />
+                  <text x="40" y="214" textAnchor="end" fontSize="11" fill="var(--cmp-text-faint)">0</text>
+                </g>
+                <g>
+                  <line x1="48" x2="744" y1="112" y2="112" stroke="var(--cmp-border)" strokeWidth="1" />
+                  <text x="40" y="116" textAnchor="end" fontSize="11" fill="var(--cmp-text-faint)">5</text>
+                </g>
+                <g>
+                  <line x1="48" x2="744" y1="14" y2="14" stroke="var(--cmp-border)" strokeWidth="1" />
+                  <text x="40" y="18" textAnchor="end" fontSize="11" fill="var(--cmp-text-faint)">10</text>
+                </g>
 
-              <text x="48" y="232" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">11 Sep</text>
-              <text x="164" y="232" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">12 Sep</text>
-              <text x="280" y="232" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">13 Sep</text>
-              <text x="396" y="232" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">14 Sep</text>
-              <text x="512" y="232" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">15 Sep</text>
-              <text x="628" y="232" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">16 Sep</text>
-              <text x="744" y="232" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">17 Sep</text>
+                <text x="48" y="232" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">11 Sep</text>
+                <text x="164" y="232" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">12 Sep</text>
+                <text x="280" y="232" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">13 Sep</text>
+                <text x="396" y="232" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">14 Sep</text>
+                <text x="512" y="232" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">15 Sep</text>
+                <text x="628" y="232" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">16 Sep</text>
+                <text x="744" y="232" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">17 Sep</text>
 
-              <g>
-                <path
-                  d="M48,170.8 L164,131.6 L280,72.8 L396,33.6 L512,72.8 L628,53.2 L744,92.4 L744,210 L48,210 Z"
-                  fill="var(--cmp-brand)"
-                  opacity="0.12"
-                />
-                <path
-                  d="M48,170.8 L164,131.6 L280,72.8 L396,33.6 L512,72.8 L628,53.2 L744,92.4"
-                  fill="none"
-                  stroke="var(--cmp-brand)"
-                  strokeWidth="2.5"
-                  strokeLinejoin="round"
-                  strokeLinecap="round"
-                />
-                <circle cx="744" cy="92.4" r="5" fill="var(--cmp-brand)" stroke="var(--cmp-surface)" strokeWidth="2" />
-              </g>
-            </svg>
-          </div>
+                <g>
+                  <path
+                    d="M48,170.8 L164,131.6 L280,72.8 L396,33.6 L512,72.8 L628,53.2 L744,92.4 L744,210 L48,210 Z"
+                    fill="var(--cmp-brand)"
+                    opacity="0.12"
+                  />
+                  <path
+                    d="M48,170.8 L164,131.6 L280,72.8 L396,33.6 L512,72.8 L628,53.2 L744,92.4"
+                    fill="none"
+                    stroke="var(--cmp-brand)"
+                    strokeWidth="2.5"
+                    strokeLinejoin="round"
+                    strokeLinecap="round"
+                  />
+                  <circle cx="744" cy="92.4" r="5" fill="var(--cmp-brand)" stroke="var(--cmp-surface)" strokeWidth="2" />
+                </g>
+              </svg>
+            </div>
+          )}
         </section>
       </div>
 
@@ -260,16 +286,16 @@ export default function LeadInsightsPage() {
         <section className="card" style={{ padding: '20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', alignContent: 'start' }}>
           <div>
             <p className="muted" style={{ margin: 0, fontSize: '13px' }}>Total calls</p>
-            <p style={{ margin: '6px 0 0', fontSize: '30px', fontWeight: 800 }}>9</p>
-            <p style={{ margin: '4px 0 0', fontSize: '13px', fontWeight: 600, color: 'var(--cmp-danger)' }}>
-              ↓ 10% vs prev 7 days
+            <p style={{ margin: '6px 0 0', fontSize: '30px', fontWeight: 800 }}>{isLiveData ? 0 : 9}</p>
+            <p style={{ margin: '4px 0 0', fontSize: '13px', fontWeight: 600, color: isLiveData ? 'var(--cmp-text-faint)' : 'var(--cmp-danger)' }}>
+              {isLiveData ? 'No earlier period' : '↓ 10% vs prev 7 days'}
             </p>
           </div>
           <div>
             <p className="muted" style={{ margin: 0, fontSize: '13px' }}>Answering rate</p>
-            <p style={{ margin: '6px 0 0', fontSize: '30px', fontWeight: 800 }}>100%</p>
+            <p style={{ margin: '6px 0 0', fontSize: '30px', fontWeight: 800 }}>{isLiveData ? '—' : '100%'}</p>
             <p className="faint" style={{ margin: '4px 0 0', fontSize: '13px' }}>
-              +10 points
+              {isLiveData ? 'No calls recorded' : '+10 points'}
             </p>
           </div>
         </section>
@@ -316,47 +342,67 @@ export default function LeadInsightsPage() {
             </button>
           </div>
 
-          <div style={{ position: 'relative' }}>
-            <svg viewBox="0 0 760 220" width="100%" role="img" aria-label="Calls trend">
-              <g>
-                <line x1="48" x2="744" y1="190" y2="190" stroke="var(--cmp-border)" strokeWidth="1" />
-                <text x="40" y="194" textAnchor="end" fontSize="11" fill="var(--cmp-text-faint)">0</text>
-              </g>
-              <g>
-                <line x1="48" x2="744" y1="102" y2="102" stroke="var(--cmp-border)" strokeWidth="1" />
-                <text x="40" y="106" textAnchor="end" fontSize="11" fill="var(--cmp-text-faint)">1</text>
-              </g>
-              <g>
-                <line x1="48" x2="744" y1="14" y2="14" stroke="var(--cmp-border)" strokeWidth="1" />
-                <text x="40" y="18" textAnchor="end" fontSize="11" fill="var(--cmp-text-faint)">2</text>
-              </g>
+          {isLiveData ? (
+            <div
+              style={{
+                height: '220px',
+                display: 'grid',
+                placeItems: 'center',
+                textAlign: 'center',
+                background: 'var(--cmp-surface-sunken)',
+                borderRadius: 'var(--cmp-radius-md)',
+                border: '1px dashed var(--cmp-border)',
+                padding: '16px'
+              }}
+            >
+              <div>
+                <p style={{ margin: 0, fontWeight: 700, fontSize: '14px' }}>No call activity recorded</p>
+                <p className="muted" style={{ margin: '4px 0 0', fontSize: '12px' }}>Call volume and answering rates will appear here once calls are tracked.</p>
+              </div>
+            </div>
+          ) : (
+            <div style={{ position: 'relative' }}>
+              <svg viewBox="0 0 760 220" width="100%" role="img" aria-label="Calls trend">
+                <g>
+                  <line x1="48" x2="744" y1="190" y2="190" stroke="var(--cmp-border)" strokeWidth="1" />
+                  <text x="40" y="194" textAnchor="end" fontSize="11" fill="var(--cmp-text-faint)">0</text>
+                </g>
+                <g>
+                  <line x1="48" x2="744" y1="102" y2="102" stroke="var(--cmp-border)" strokeWidth="1" />
+                  <text x="40" y="106" textAnchor="end" fontSize="11" fill="var(--cmp-text-faint)">1</text>
+                </g>
+                <g>
+                  <line x1="48" x2="744" y1="14" y2="14" stroke="var(--cmp-border)" strokeWidth="1" />
+                  <text x="40" y="18" textAnchor="end" fontSize="11" fill="var(--cmp-text-faint)">2</text>
+                </g>
 
-              <text x="48" y="212" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">11 Sep</text>
-              <text x="164" y="212" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">12 Sep</text>
-              <text x="280" y="212" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">13 Sep</text>
-              <text x="396" y="212" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">14 Sep</text>
-              <text x="512" y="212" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">15 Sep</text>
-              <text x="628" y="212" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">16 Sep</text>
-              <text x="744" y="212" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">17 Sep</text>
+                <text x="48" y="212" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">11 Sep</text>
+                <text x="164" y="212" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">12 Sep</text>
+                <text x="280" y="212" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">13 Sep</text>
+                <text x="396" y="212" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">14 Sep</text>
+                <text x="512" y="212" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">15 Sep</text>
+                <text x="628" y="212" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">16 Sep</text>
+                <text x="744" y="212" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">17 Sep</text>
 
-              <g>
-                <path
-                  d="M48,190 L164,190 L280,102 L396,14 L512,14 L628,14 L744,14 L744,190 L48,190 Z"
-                  fill="var(--cmp-accent)"
-                  opacity="0.12"
-                />
-                <path
-                  d="M48,190 L164,190 L280,102 L396,14 L512,14 L628,14 L744,14"
-                  fill="none"
-                  stroke="var(--cmp-accent)"
-                  strokeWidth="2.5"
-                  strokeLinejoin="round"
-                  strokeLinecap="round"
-                />
-                <circle cx="744" cy="14" r="5" fill="var(--cmp-accent)" stroke="var(--cmp-surface)" strokeWidth="2" />
-              </g>
-            </svg>
-          </div>
+                <g>
+                  <path
+                    d="M48,190 L164,190 L280,102 L396,14 L512,14 L628,14 L744,14 L744,190 L48,190 Z"
+                    fill="var(--cmp-accent)"
+                    opacity="0.12"
+                  />
+                  <path
+                    d="M48,190 L164,190 L280,102 L396,14 L512,14 L628,14 L744,14"
+                    fill="none"
+                    stroke="var(--cmp-accent)"
+                    strokeWidth="2.5"
+                    strokeLinejoin="round"
+                    strokeLinecap="round"
+                  />
+                  <circle cx="744" cy="14" r="5" fill="var(--cmp-accent)" stroke="var(--cmp-surface)" strokeWidth="2" />
+                </g>
+              </svg>
+            </div>
+          )}
         </section>
       </div>
     </div>

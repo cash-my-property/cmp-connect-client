@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { Zap, Calculator, Plus, ChevronDown, Copy, Check, Star } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
@@ -52,8 +52,13 @@ const initialBoostItems = [
 ];
 
 export default function SmartBoostPage() {
-  const { agency } = useApp();
-  const [items, setItems] = useState(initialBoostItems);
+  const { agency, isLiveData } = useApp();
+  const [items, setItems] = useState(() => (isLiveData ? [] : initialBoostItems));
+
+  useEffect(() => {
+    setItems(isLiveData ? [] : initialBoostItems);
+  }, [isLiveData]);
+
   const [activeTab, setActiveTab] = useState('suggestions'); // 'suggestions' | 'results'
   const [opportunityFilter, setOpportunityFilter] = useState('all');
   const [budgetFilter, setBudgetFilter] = useState('');
@@ -295,7 +300,11 @@ export default function SmartBoostPage() {
             {filteredItems.length === 0 ? (
               <tr>
                 <td colSpan="7" style={{ textAlign: 'center', padding: '36px' }} className="muted">
-                  {activeTab === 'results' ? 'No boosted listings yet.' : 'No listings matching this filter.'}
+                  {isLiveData
+                    ? 'No live listings recommended for smart boost at this time.'
+                    : activeTab === 'results'
+                    ? 'No boosted listings yet.'
+                    : 'No listings matching this filter.'}
                 </td>
               </tr>
             ) : (

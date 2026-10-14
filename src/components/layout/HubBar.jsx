@@ -13,11 +13,14 @@ import {
   Plus,
   LogOut,
   User,
-  Settings
+  Settings,
+  Sparkles
 } from 'lucide-react';
 
 export default function HubBar() {
   const {
+    dataMode,
+    setDataMode,
     platform,
     setPlatform,
     theme,
@@ -240,7 +243,29 @@ export default function HubBar() {
         </button>
 
         {/* Actions / Wallet / Notifications / Profile */}
-        <div className="row" style={{ gap: '8px', marginInlineStart: 'auto' }}>
+        <div className="row" style={{ gap: '8px', marginInlineStart: 'auto', alignItems: 'center' }}>
+          {/* Data Mode Switcher: Live Data vs Mock Data */}
+          <div className="data-mode-switch" role="group" aria-label="Data Source Mode">
+            <button
+              type="button"
+              className={`data-mode-btn ${dataMode === 'live' ? 'active live' : ''}`}
+              onClick={() => setDataMode('live')}
+              title="Live Data Mode: Only real data from APIs, static data disabled"
+            >
+              <span className={`live-indicator-dot ${dataMode !== 'live' ? 'dormant' : ''}`} />
+              <span>Live Data</span>
+            </button>
+            <button
+              type="button"
+              className={`data-mode-btn ${dataMode === 'mock' ? 'active mock' : ''}`}
+              onClick={() => setDataMode('mock')}
+              title="Mock Data Mode: Rich demo data for clients, APIs off"
+            >
+              <Sparkles size={13} style={{ color: dataMode === 'mock' ? 'var(--cmp-accent)' : 'inherit' }} />
+              <span>Mock Data</span>
+            </button>
+          </div>
+
           {/* Wallet Pill */}
           <NavLink
             to="/wallet"

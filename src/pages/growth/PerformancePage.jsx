@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { NavLink } from 'react-router-dom';
+import { useApp } from '../../context/AppContext';
 import {
   Chip,
   Dropdown
@@ -74,7 +75,18 @@ const RANKED_LISTINGS = [
   { title: 'Three bed townhouse near the park', ref: 'CMP-S-001005', location: 'Dubai Hills Estate', views: '1,740', leads: 22, per100: '1.3', quality: 81 }
 ];
 
+const LIVE_KPI_TABS = [
+  { key: 'credits', label: 'Credits spent', value: '0', desc: 'The credits used on publishing and upgrading your listings in the selected period and filters.' },
+  { key: 'published', label: 'Published listings', value: '0', desc: 'Total listings marketed on Cash My Property across the chosen dates.' },
+  { key: 'live', label: 'Live listings', value: '0', desc: 'Active listings currently visible to buyers and tenants in search results.' },
+  { key: 'impressions', label: 'Impressions', value: '0', desc: 'Times your property cards appeared on search, category and map results.' },
+  { key: 'clicks', label: 'Listing clicks', value: '0', desc: 'Detailed views where a prospective client clicked into your property page.' },
+  { key: 'leads', label: 'Leads', value: '0', desc: 'Direct enquiries received via Phone, WhatsApp, Email, Chat and Booking requests.' },
+  { key: 'leads_per_listing', label: 'Leads per listing', value: '0', desc: 'Average conversion volume generated per published property.' }
+];
+
 export default function PerformancePage() {
+  const { isLiveData } = useApp();
   const [showSecurityBanner, setShowSecurityBanner] = useState(true);
   const [selectedKpi, setSelectedKpi] = useState('credits');
   const [dateRangeChip, setDateRangeChip] = useState('Last 30 days');
@@ -86,9 +98,11 @@ export default function PerformancePage() {
   const [locationFilter, setLocationFilter] = useState('All locations');
   const [periodFilter, setPeriodFilter] = useState('Last 30 days');
 
+  const activeKpis = isLiveData ? LIVE_KPI_TABS : KPI_TABS;
+
   const activeTabMeta = useMemo(() => {
-    return KPI_TABS.find((t) => t.key === selectedKpi) || KPI_TABS[0];
-  }, [selectedKpi]);
+    return activeKpis.find((t) => t.key === selectedKpi) || activeKpis[0];
+  }, [selectedKpi, activeKpis]);
 
   return (
     <div>
@@ -130,7 +144,7 @@ export default function PerformancePage() {
       <section className="health-hero">
         <span
           role="img"
-          aria-label="58%"
+          aria-label={isLiveData ? "0%" : "58%"}
           style={{
             position: 'relative',
             display: 'inline-grid',
@@ -142,18 +156,20 @@ export default function PerformancePage() {
         >
           <svg width="96" height="96" aria-hidden="true" style={{ transform: 'rotate(-90deg)' }}>
             <circle cx="48" cy="48" r="43.5" fill="none" stroke="var(--cmp-border)" strokeWidth="9" />
-            <circle
-              cx="48"
-              cy="48"
-              r="43.5"
-              fill="none"
-              stroke="#E0A36C"
-              strokeWidth="9"
-              strokeLinecap="round"
-              strokeDasharray="158.52 273.32"
-            />
+            {!isLiveData && (
+              <circle
+                cx="48"
+                cy="48"
+                r="43.5"
+                fill="none"
+                stroke="#E0A36C"
+                strokeWidth="9"
+                strokeLinecap="round"
+                strokeDasharray="158.52 273.32"
+              />
+            )}
           </svg>
-          <span style={{ position: 'absolute', fontSize: '23.04px', fontWeight: 700 }}>58</span>
+          <span style={{ position: 'absolute', fontSize: '23.04px', fontWeight: 700 }}>{isLiveData ? 0 : 58}</span>
         </span>
 
         <div style={{ flex: '1 1 260px' }}>
@@ -170,51 +186,57 @@ export default function PerformancePage() {
             Portfolio health
           </p>
           <h2 style={{ fontSize: '22px', color: '#FFFFFF', margin: '4px 0 6px' }}>
-            A few fixes will lift your results
+            {isLiveData ? 'No active listings to evaluate' : 'A few fixes will lift your results'}
           </h2>
           <p style={{ margin: 0, fontSize: '14px', color: 'rgb(201, 216, 207)' }}>
-            Biggest win:{' '}
-            <NavLink to="/properties" style={{ color: '#FFFFFF', fontWeight: 700 }}>
-              auto renew on
-            </NavLink>{' '}
-            is only at 38% of your properties.
+            {isLiveData ? (
+              <>Publish and manage properties in your <NavLink to="/properties" style={{ color: '#FFFFFF', fontWeight: 700 }}>portfolio</NavLink> to track quality scores and health insights.</>
+            ) : (
+              <>
+                Biggest win:{' '}
+                <NavLink to="/properties" style={{ color: '#FFFFFF', fontWeight: 700 }}>
+                  auto renew on
+                </NavLink>{' '}
+                is only at 38% of your properties.
+              </>
+            )}
           </p>
         </div>
 
         <ul className="health-bars">
           <li>
             <span>Quality score 80+</span>
-            <strong>50%</strong>
+            <strong>{isLiveData ? '0%' : '50%'}</strong>
             <span className="health-track" aria-hidden="true">
-              <span style={{ width: '50%' }} />
+              <span style={{ width: isLiveData ? '0%' : '50%' }} />
             </span>
           </li>
           <li>
             <span>Valid DLD permit</span>
-            <strong>50%</strong>
+            <strong>{isLiveData ? '0%' : '50%'}</strong>
             <span className="health-track" aria-hidden="true">
-              <span style={{ width: '50%' }} />
+              <span style={{ width: isLiveData ? '0%' : '50%' }} />
             </span>
           </li>
           <li>
             <span>Form F</span>
-            <strong>75%</strong>
+            <strong>{isLiveData ? '0%' : '75%'}</strong>
             <span className="health-track" aria-hidden="true">
-              <span style={{ width: '75%' }} />
+              <span style={{ width: isLiveData ? '0%' : '75%' }} />
             </span>
           </li>
           <li>
             <span>10+ photos</span>
-            <strong>75%</strong>
+            <strong>{isLiveData ? '0%' : '75%'}</strong>
             <span className="health-track" aria-hidden="true">
-              <span style={{ width: '75%' }} />
+              <span style={{ width: isLiveData ? '0%' : '75%' }} />
             </span>
           </li>
           <li>
             <span>Auto renew on</span>
-            <strong>38%</strong>
+            <strong>{isLiveData ? '0%' : '38%'}</strong>
             <span className="health-track" aria-hidden="true">
-              <span style={{ width: '38%' }} />
+              <span style={{ width: isLiveData ? '0%' : '38%' }} />
             </span>
           </li>
         </ul>
@@ -338,7 +360,7 @@ export default function PerformancePage() {
             gap: '10px'
           }}
         >
-          {KPI_TABS.map((tab) => {
+          {activeKpis.map((tab) => {
             const isSelected = selectedKpi === tab.key;
             return (
               <button
@@ -385,72 +407,89 @@ export default function PerformancePage() {
         </p>
 
         {/* Trend Polyline Chart & Package Breakdown */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'minmax(0, 3fr) minmax(200px, 1fr)',
-            gap: '20px',
-            alignItems: 'end'
-          }}
-        >
-          {/* Main SVG Trend Chart */}
-          <div style={{ position: 'relative' }}>
-            <svg viewBox="0 0 760 240" width="100%" role="img" aria-label={activeTabMeta.label}>
-              {/* Horizontal grid lines */}
-              <g>
-                <line x1="48" x2="744" y1="210" y2="210" stroke="var(--cmp-border)" strokeWidth="1" />
-                <text x="40" y="214" textAnchor="end" fontSize="11" fill="var(--cmp-text-faint)">0</text>
-              </g>
-              <g>
-                <line x1="48" x2="744" y1="144.6" y2="144.6" stroke="var(--cmp-border)" strokeWidth="1" />
-                <text x="40" y="148.6" textAnchor="end" fontSize="11" fill="var(--cmp-text-faint)">200</text>
-              </g>
-              <g>
-                <line x1="48" x2="744" y1="79.3" y2="79.3" stroke="var(--cmp-border)" strokeWidth="1" />
-                <text x="40" y="83.3" textAnchor="end" fontSize="11" fill="var(--cmp-text-faint)">400</text>
-              </g>
-              <g>
-                <line x1="48" x2="744" y1="14" y2="14" stroke="var(--cmp-border)" strokeWidth="1" />
-                <text x="40" y="18" textAnchor="end" fontSize="11" fill="var(--cmp-text-faint)">600</text>
-              </g>
-
-              {/* Date ticks */}
-              <text x="48" y="232" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">19 Aug</text>
-              <text x="168" y="232" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">24 Aug</text>
-              <text x="288" y="232" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">29 Aug</text>
-              <text x="408" y="232" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">3 Sep</text>
-              <text x="528" y="232" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">8 Sep</text>
-              <text x="648" y="232" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">13 Sep</text>
-              <text x="744" y="232" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">17 Sep</text>
-
-              {/* Dynamic Trend Polyline */}
-              <g>
-                <path
-                  d="M48,46.99 L72,180.92 L96,177.00 L120,169.16 L144,179.94 L168,86.52 L192,173.74 L216,180.6 L240,184.19 L264,163.61 L288,188.76 L312,182.88 L336,179.62 L360,170.8 L384,170.47 L408,160.01 L432,172.43 L456,175.04 L480,181.25 L504,120.82 L528,174.06 L552,181.58 L576,172.43 L600,176.68 L624,183.21 L648,178.96 L672,89.46 L696,149.56 L720,179.62 L744,176.02"
-                  fill="none"
-                  stroke="var(--cmp-accent)"
-                  strokeWidth="2.2"
-                  strokeLinejoin="round"
-                  strokeLinecap="round"
-                />
-                <circle
-                  cx="744"
-                  cy="176.02"
-                  r="4"
-                  fill="var(--cmp-accent)"
-                  stroke="var(--cmp-surface)"
-                  strokeWidth="2"
-                />
-              </g>
-            </svg>
+        {isLiveData ? (
+          <div
+            style={{
+              padding: '60px 20px',
+              textAlign: 'center',
+              background: 'var(--cmp-surface-sunken)',
+              borderRadius: 'var(--cmp-radius-md)',
+              border: '1px dashed var(--cmp-border)'
+            }}
+          >
+            <TrendingUp size={28} style={{ color: 'var(--cmp-text-faint)', marginBottom: '8px' }} />
+            <p style={{ margin: 0, fontWeight: 700, fontSize: '15px' }}>No performance data for this period</p>
+            <p className="muted" style={{ margin: '4px 0 0', fontSize: '13px' }}>
+              Traffic impressions, listing clicks and client enquiries will be charted here in real-time as your properties go live.
+            </p>
           </div>
+        ) : (
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'minmax(0, 3fr) minmax(200px, 1fr)',
+              gap: '20px',
+              alignItems: 'end'
+            }}
+          >
+            {/* Main SVG Trend Chart */}
+            <div style={{ position: 'relative' }}>
+              <svg viewBox="0 0 760 240" width="100%" role="img" aria-label={activeTabMeta.label}>
+                {/* Horizontal grid lines */}
+                <g>
+                  <line x1="48" x2="744" y1="210" y2="210" stroke="var(--cmp-border)" strokeWidth="1" />
+                  <text x="40" y="214" textAnchor="end" fontSize="11" fill="var(--cmp-text-faint)">0</text>
+                </g>
+                <g>
+                  <line x1="48" x2="744" y1="144.6" y2="144.6" stroke="var(--cmp-border)" strokeWidth="1" />
+                  <text x="40" y="148.6" textAnchor="end" fontSize="11" fill="var(--cmp-text-faint)">200</text>
+                </g>
+                <g>
+                  <line x1="48" x2="744" y1="79.3" y2="79.3" stroke="var(--cmp-border)" strokeWidth="1" />
+                  <text x="40" y="83.3" textAnchor="end" fontSize="11" fill="var(--cmp-text-faint)">400</text>
+                </g>
+                <g>
+                  <line x1="48" x2="744" y1="14" y2="14" stroke="var(--cmp-border)" strokeWidth="1" />
+                  <text x="40" y="18" textAnchor="end" fontSize="11" fill="var(--cmp-text-faint)">600</text>
+                </g>
 
-          {/* Listing Tier Spend Breakdown */}
-          <div style={{ display: 'grid', gap: '10px' }}>
-            <div
-              className="row"
-              role="img"
-              aria-label="Standard 2,170, Featured 1,246, Premium 850"
+                {/* Date ticks */}
+                <text x="48" y="232" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">19 Aug</text>
+                <text x="168" y="232" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">24 Aug</text>
+                <text x="288" y="232" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">29 Aug</text>
+                <text x="408" y="232" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">3 Sep</text>
+                <text x="528" y="232" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">8 Sep</text>
+                <text x="648" y="232" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">13 Sep</text>
+                <text x="744" y="232" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">17 Sep</text>
+
+                {/* Dynamic Trend Polyline */}
+                <g>
+                  <path
+                    d="M48,46.99 L72,180.92 L96,177.00 L120,169.16 L144,179.94 L168,86.52 L192,173.74 L216,180.6 L240,184.19 L264,163.61 L288,188.76 L312,182.88 L336,179.62 L360,170.8 L384,170.47 L408,160.01 L432,172.43 L456,175.04 L480,181.25 L504,120.82 L528,174.06 L552,181.58 L576,172.43 L600,176.68 L624,183.21 L648,178.96 L672,89.46 L696,149.56 L720,179.62 L744,176.02"
+                    fill="none"
+                    stroke="var(--cmp-accent)"
+                    strokeWidth="2.2"
+                    strokeLinejoin="round"
+                    strokeLinecap="round"
+                  />
+                  <circle
+                    cx="744"
+                    cy="176.02"
+                    r="4"
+                    fill="var(--cmp-accent)"
+                    stroke="var(--cmp-surface)"
+                    strokeWidth="2"
+                  />
+                </g>
+              </svg>
+            </div>
+
+            {/* Listing Tier Spend Breakdown */}
+            <div style={{ display: 'grid', gap: '10px' }}>
+              <div
+                className="row"
+                role="img"
+                aria-label="Standard 2,170, Featured 1,246, Premium 850"
               style={{
                 alignItems: 'flex-end',
                 gap: '14px',
@@ -489,7 +528,8 @@ export default function PerformancePage() {
             </ul>
           </div>
         </div>
-      </section>
+      )}
+    </section>
 
       {/* Section 2: Views, leads and locations */}
       <h2 style={{ fontSize: '18px', margin: '32px 0 6px' }}>
@@ -523,7 +563,7 @@ export default function PerformancePage() {
             Listing views
           </p>
           <p style={{ margin: '8px 0 0', fontSize: '28px', fontWeight: 700 }}>
-            16,359
+            {isLiveData ? '0' : '16,359'}
           </p>
           <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--cmp-text-faint)' }}>
             No earlier period to compare
@@ -535,7 +575,7 @@ export default function PerformancePage() {
             Leads
           </p>
           <p style={{ margin: '8px 0 0', fontSize: '28px', fontWeight: 700 }}>
-            286
+            {isLiveData ? '0' : '286'}
           </p>
           <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--cmp-text-faint)' }}>
             No earlier period to compare
@@ -547,7 +587,7 @@ export default function PerformancePage() {
             Leads per 100 views
           </p>
           <p style={{ margin: '8px 0 0', fontSize: '28px', fontWeight: 700 }}>
-            1.7
+            {isLiveData ? '0' : '1.7'}
           </p>
           <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--cmp-text-faint)' }}>
             No earlier period to compare
@@ -570,64 +610,84 @@ export default function PerformancePage() {
           <p className="faint" style={{ margin: '4px 0 12px', fontSize: '12px' }}>
             Every time a listing page was opened
           </p>
-          <div style={{ position: 'relative' }}>
-            <svg
-              width="100%"
-              height="210"
-              viewBox="0 0 596 210"
-              role="group"
-              aria-label="Listing views per day"
-              style={{ display: 'block' }}
+          {isLiveData ? (
+            <div
+              style={{
+                height: '210px',
+                display: 'grid',
+                placeItems: 'center',
+                textAlign: 'center',
+                background: 'var(--cmp-surface-sunken)',
+                borderRadius: 'var(--cmp-radius-md)',
+                border: '1px dashed var(--cmp-border)',
+                padding: '16px'
+              }}
             >
-              <g>
-                <line x1="44" x2="584" y1="184" y2="184" stroke="var(--cmp-border)" strokeWidth="1" />
-                <text x="36" y="188" textAnchor="end" fontSize="11" fill="var(--cmp-text-faint)">0</text>
-              </g>
-              <g>
-                <line x1="44" x2="584" y1="142.5" y2="142.5" stroke="var(--cmp-border)" strokeWidth="1" />
-                <text x="36" y="146.5" textAnchor="end" fontSize="11" fill="var(--cmp-text-faint)">250</text>
-              </g>
-              <g>
-                <line x1="44" x2="584" y1="101" y2="101" stroke="var(--cmp-border)" strokeWidth="1" />
-                <text x="36" y="105" textAnchor="end" fontSize="11" fill="var(--cmp-text-faint)">500</text>
-              </g>
-              <g>
-                <line x1="44" x2="584" y1="59.5" y2="59.5" stroke="var(--cmp-border)" strokeWidth="1" />
-                <text x="36" y="63.5" textAnchor="end" fontSize="11" fill="var(--cmp-text-faint)">750</text>
-              </g>
-              <g>
-                <line x1="44" x2="584" y1="18" y2="18" stroke="var(--cmp-border)" strokeWidth="1" />
-                <text x="36" y="22" textAnchor="end" fontSize="11" fill="var(--cmp-text-faint)">1,000</text>
-              </g>
+              <div>
+                <p style={{ margin: 0, fontWeight: 700, fontSize: '14px' }}>No views recorded</p>
+                <p className="muted" style={{ margin: '4px 0 0', fontSize: '12px' }}>Daily listing views will appear here once properties go live.</p>
+              </div>
+            </div>
+          ) : (
+            <div style={{ position: 'relative' }}>
+              <svg
+                width="100%"
+                height="210"
+                viewBox="0 0 596 210"
+                role="group"
+                aria-label="Listing views per day"
+                style={{ display: 'block' }}
+              >
+                <g>
+                  <line x1="44" x2="584" y1="184" y2="184" stroke="var(--cmp-border)" strokeWidth="1" />
+                  <text x="36" y="188" textAnchor="end" fontSize="11" fill="var(--cmp-text-faint)">0</text>
+                </g>
+                <g>
+                  <line x1="44" x2="584" y1="142.5" y2="142.5" stroke="var(--cmp-border)" strokeWidth="1" />
+                  <text x="36" y="146.5" textAnchor="end" fontSize="11" fill="var(--cmp-text-faint)">250</text>
+                </g>
+                <g>
+                  <line x1="44" x2="584" y1="101" y2="101" stroke="var(--cmp-border)" strokeWidth="1" />
+                  <text x="36" y="105" textAnchor="end" fontSize="11" fill="var(--cmp-text-faint)">500</text>
+                </g>
+                <g>
+                  <line x1="44" x2="584" y1="59.5" y2="59.5" stroke="var(--cmp-border)" strokeWidth="1" />
+                  <text x="36" y="63.5" textAnchor="end" fontSize="11" fill="var(--cmp-text-faint)">750</text>
+                </g>
+                <g>
+                  <line x1="44" x2="584" y1="18" y2="18" stroke="var(--cmp-border)" strokeWidth="1" />
+                  <text x="36" y="22" textAnchor="end" fontSize="11" fill="var(--cmp-text-faint)">1,000</text>
+                </g>
 
-              {/* Day Bars */}
-              {DAILY_DATA.slice().reverse().map((d, idx) => {
-                const x = 45 + idx * 18;
-                const barHeight = (d.views / 1000) * 166;
-                const y = 184 - barHeight;
-                return (
-                  <g key={d.day}>
-                    <rect
-                      x={x}
-                      y={y}
-                      width="12"
-                      height={barHeight}
-                      rx="3"
-                      fill="var(--cmp-brand)"
-                    />
-                    {idx % 5 === 4 && (
-                      <text x={x + 6} y="202" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">
-                        {d.day}
-                      </text>
-                    )}
-                  </g>
-                );
-              })}
-              <text x="485" y="52" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--cmp-text-muted)">
-                758
-              </text>
-            </svg>
-          </div>
+                {/* Day Bars */}
+                {DAILY_DATA.slice().reverse().map((d, idx) => {
+                  const x = 45 + idx * 18;
+                  const barHeight = (d.views / 1000) * 166;
+                  const y = 184 - barHeight;
+                  return (
+                    <g key={d.day}>
+                      <rect
+                        x={x}
+                        y={y}
+                        width="12"
+                        height={barHeight}
+                        rx="3"
+                        fill="var(--cmp-brand)"
+                      />
+                      {idx % 5 === 4 && (
+                        <text x={x + 6} y="202" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">
+                          {d.day}
+                        </text>
+                      )}
+                    </g>
+                  );
+                })}
+                <text x="485" y="52" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--cmp-text-muted)">
+                  758
+                </text>
+              </svg>
+            </div>
+          )}
         </section>
 
         {/* Leads per day Area Chart */}
@@ -636,65 +696,85 @@ export default function PerformancePage() {
           <p className="faint" style={{ margin: '4px 0 12px', fontSize: '12px' }}>
             Calls, WhatsApp, email, chat and viewing requests
           </p>
-          <div style={{ position: 'relative' }}>
-            <svg
-              width="100%"
-              height="210"
-              viewBox="0 0 596 210"
-              role="group"
-              aria-label="Leads per day"
-              style={{ display: 'block' }}
+          {isLiveData ? (
+            <div
+              style={{
+                height: '210px',
+                display: 'grid',
+                placeItems: 'center',
+                textAlign: 'center',
+                background: 'var(--cmp-surface-sunken)',
+                borderRadius: 'var(--cmp-radius-md)',
+                border: '1px dashed var(--cmp-border)',
+                padding: '16px'
+              }}
             >
-              <g>
-                <line x1="44" x2="584" y1="184" y2="184" stroke="var(--cmp-border)" strokeWidth="1" />
-                <text x="36" y="188" textAnchor="end" fontSize="11" fill="var(--cmp-text-faint)">0</text>
-              </g>
-              <g>
-                <line x1="44" x2="584" y1="142.5" y2="142.5" stroke="var(--cmp-border)" strokeWidth="1" />
-                <text x="36" y="146.5" textAnchor="end" fontSize="11" fill="var(--cmp-text-faint)">5</text>
-              </g>
-              <g>
-                <line x1="44" x2="584" y1="101" y2="101" stroke="var(--cmp-border)" strokeWidth="1" />
-                <text x="36" y="105" textAnchor="end" fontSize="11" fill="var(--cmp-text-faint)">10</text>
-              </g>
-              <g>
-                <line x1="44" x2="584" y1="59.5" y2="59.5" stroke="var(--cmp-border)" strokeWidth="1" />
-                <text x="36" y="63.5" textAnchor="end" fontSize="11" fill="var(--cmp-text-faint)">15</text>
-              </g>
-              <g>
-                <line x1="44" x2="584" y1="18" y2="18" stroke="var(--cmp-border)" strokeWidth="1" />
-                <text x="36" y="22" textAnchor="end" fontSize="11" fill="var(--cmp-text-faint)">20</text>
-              </g>
+              <div>
+                <p style={{ margin: 0, fontWeight: 700, fontSize: '14px' }}>No leads recorded</p>
+                <p className="muted" style={{ margin: '4px 0 0', fontSize: '12px' }}>Incoming client enquiries will be graphed daily here.</p>
+              </div>
+            </div>
+          ) : (
+            <div style={{ position: 'relative' }}>
+              <svg
+                width="100%"
+                height="210"
+                viewBox="0 0 596 210"
+                role="group"
+                aria-label="Leads per day"
+                style={{ display: 'block' }}
+              >
+                <g>
+                  <line x1="44" x2="584" y1="184" y2="184" stroke="var(--cmp-border)" strokeWidth="1" />
+                  <text x="36" y="188" textAnchor="end" fontSize="11" fill="var(--cmp-text-faint)">0</text>
+                </g>
+                <g>
+                  <line x1="44" x2="584" y1="142.5" y2="142.5" stroke="var(--cmp-border)" strokeWidth="1" />
+                  <text x="36" y="146.5" textAnchor="end" fontSize="11" fill="var(--cmp-text-faint)">5</text>
+                </g>
+                <g>
+                  <line x1="44" x2="584" y1="101" y2="101" stroke="var(--cmp-border)" strokeWidth="1" />
+                  <text x="36" y="105" textAnchor="end" fontSize="11" fill="var(--cmp-text-faint)">10</text>
+                </g>
+                <g>
+                  <line x1="44" x2="584" y1="59.5" y2="59.5" stroke="var(--cmp-border)" strokeWidth="1" />
+                  <text x="36" y="63.5" textAnchor="end" fontSize="11" fill="var(--cmp-text-faint)">15</text>
+                </g>
+                <g>
+                  <line x1="44" x2="584" y1="18" y2="18" stroke="var(--cmp-border)" strokeWidth="1" />
+                  <text x="36" y="22" textAnchor="end" fontSize="11" fill="var(--cmp-text-faint)">20</text>
+                </g>
 
-              {/* Area path */}
-              <path
-                d="M44,109.3 L81,92.7 L118,117.6 L155,125.9 L192,125.9 L230,101 L267,109.3 L304,109.3 L341,109.3 L379,125.9 L416,117.6 L453,92.7 L472,67.8 L490,59.5 L509,76.1 L546,84.4 L584,109.3 L584,184 L44,184 Z"
-                fill="var(--cmp-brand)"
-                fillOpacity="0.12"
-              />
-              <path
-                d="M44,109.3 L81,92.7 L118,117.6 L155,125.9 L192,125.9 L230,101 L267,109.3 L304,109.3 L341,109.3 L379,125.9 L416,117.6 L453,92.7 L472,67.8 L490,59.5 L509,76.1 L546,84.4 L584,109.3"
-                fill="none"
-                stroke="var(--cmp-brand)"
-                strokeWidth="2.2"
-                strokeLinejoin="round"
-                strokeLinecap="round"
-              />
+                {/* Area path */}
+                <path
+                  d="M44,109.3 L81,92.7 L118,117.6 L155,125.9 L192,125.9 L230,101 L267,109.3 L304,109.3 L341,109.3 L379,125.9 L416,117.6 L453,92.7 L472,67.8 L490,59.5 L509,76.1 L546,84.4 L584,109.3 L584,184 L44,184 Z"
+                  fill="var(--cmp-brand)"
+                  fillOpacity="0.12"
+                />
+                <path
+                  d="M44,109.3 L81,92.7 L118,117.6 L155,125.9 L192,125.9 L230,101 L267,109.3 L304,109.3 L341,109.3 L379,125.9 L416,117.6 L453,92.7 L472,67.8 L490,59.5 L509,76.1 L546,84.4 L584,109.3"
+                  fill="none"
+                  stroke="var(--cmp-brand)"
+                  strokeWidth="2.2"
+                  strokeLinejoin="round"
+                  strokeLinecap="round"
+                />
 
-              {/* Dates */}
-              <text x="118" y="202" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">23 Aug</text>
-              <text x="211" y="202" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">28 Aug</text>
-              <text x="304" y="202" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">2 Sep</text>
-              <text x="397" y="202" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">7 Sep</text>
-              <text x="490" y="202" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">12 Sep</text>
-              <text x="584" y="202" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">17 Sep</text>
+                {/* Dates */}
+                <text x="118" y="202" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">23 Aug</text>
+                <text x="211" y="202" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">28 Aug</text>
+                <text x="304" y="202" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">2 Sep</text>
+                <text x="397" y="202" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">7 Sep</text>
+                <text x="490" y="202" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">12 Sep</text>
+                <text x="584" y="202" textAnchor="middle" fontSize="11" fill="var(--cmp-text-faint)">17 Sep</text>
 
-              <circle cx="584" cy="109.3" r="4" fill="var(--cmp-brand)" stroke="var(--cmp-surface)" strokeWidth="2" />
-              <text x="576" y="99.3" textAnchor="end" fontSize="11" fontWeight="600" fill="var(--cmp-text-muted)">
-                9 today
-              </text>
-            </svg>
-          </div>
+                <circle cx="584" cy="109.3" r="4" fill="var(--cmp-brand)" stroke="var(--cmp-surface)" strokeWidth="2" />
+                <text x="576" y="99.3" textAnchor="end" fontSize="11" fontWeight="600" fill="var(--cmp-text-muted)">
+                  9 today
+                </text>
+              </svg>
+            </div>
+          )}
         </section>
       </div>
 
@@ -713,17 +793,25 @@ export default function PerformancePage() {
               </tr>
             </thead>
             <tbody>
-              {DAILY_DATA.map((row) => (
-                <tr key={row.day}>
-                  <td className="muted">{row.day}</td>
-                  <td style={{ textAlign: 'end', fontVariantNumeric: 'tabular-nums' }}>
-                    {formatNumber(row.views)}
-                  </td>
-                  <td style={{ textAlign: 'end', fontVariantNumeric: 'tabular-nums' }}>
-                    {row.leads}
+              {isLiveData ? (
+                <tr>
+                  <td colSpan="3" style={{ textAlign: 'center', padding: '24px' }} className="muted">
+                    No daily numbers recorded yet.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                DAILY_DATA.map((row) => (
+                  <tr key={row.day}>
+                    <td className="muted">{row.day}</td>
+                    <td style={{ textAlign: 'end', fontVariantNumeric: 'tabular-nums' }}>
+                      {formatNumber(row.views)}
+                    </td>
+                    <td style={{ textAlign: 'end', fontVariantNumeric: 'tabular-nums' }}>
+                      {row.leads}
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
@@ -735,56 +823,72 @@ export default function PerformancePage() {
         <p className="faint" style={{ margin: '4px 0 14px', fontSize: '12px' }}>
           How buyers and tenants got in touch
         </p>
-        <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: '10px' }}>
-          {[
-            { channel: 'WhatsApp', count: 116, pct: '41%', width: '100%' },
-            { channel: 'Phone call', count: 78, pct: '27%', width: '67.2%' },
-            { channel: 'Email', count: 71, pct: '25%', width: '61.2%' },
-            { channel: 'Chat', count: 21, pct: '7%', width: '18.1%' }
-          ].map((item) => (
-            <li
-              key={item.channel}
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '130px minmax(0, 1fr)',
-                alignItems: 'center',
-                gap: '12px'
-              }}
-            >
-              <span style={{ fontSize: '13px', color: 'var(--cmp-text-muted)' }}>
-                {item.channel}
-              </span>
-              <span className="row" style={{ gap: '8px', minWidth: 0 }}>
-                <span style={{ flex: '1 1 auto', minWidth: 0 }}>
+        {isLiveData ? (
+          <div
+            style={{
+              padding: '36px 20px',
+              textAlign: 'center',
+              background: 'var(--cmp-surface-sunken)',
+              borderRadius: 'var(--cmp-radius-md)',
+              border: '1px dashed var(--cmp-border)'
+            }}
+          >
+            <p style={{ margin: 0, fontWeight: 600, fontSize: '13px' }} className="muted">
+              No lead channels recorded for this period.
+            </p>
+          </div>
+        ) : (
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: '10px' }}>
+            {[
+              { channel: 'WhatsApp', count: 116, pct: '41%', width: '100%' },
+              { channel: 'Phone call', count: 78, pct: '27%', width: '67.2%' },
+              { channel: 'Email', count: 71, pct: '25%', width: '61.2%' },
+              { channel: 'Chat', count: 21, pct: '7%', width: '18.1%' }
+            ].map((item) => (
+              <li
+                key={item.channel}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '130px minmax(0, 1fr)',
+                  alignItems: 'center',
+                  gap: '12px'
+                }}
+              >
+                <span style={{ fontSize: '13px', color: 'var(--cmp-text-muted)' }}>
+                  {item.channel}
+                </span>
+                <span className="row" style={{ gap: '8px', minWidth: 0 }}>
+                  <span style={{ flex: '1 1 auto', minWidth: 0 }}>
+                    <span
+                      style={{
+                        display: 'block',
+                        height: '16px',
+                        minWidth: '2px',
+                        borderRadius: '0 4px 4px 0',
+                        width: item.width,
+                        background: 'var(--cmp-brand)'
+                      }}
+                    />
+                  </span>
                   <span
                     style={{
-                      display: 'block',
-                      height: '16px',
-                      minWidth: '2px',
-                      borderRadius: '0 4px 4px 0',
-                      width: item.width,
-                      background: 'var(--cmp-brand)'
+                      flex: '0 0 76px',
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      whiteSpace: 'nowrap',
+                      fontVariantNumeric: 'tabular-nums'
                     }}
-                  />
-                </span>
-                <span
-                  style={{
-                    flex: '0 0 76px',
-                    fontSize: '13px',
-                    fontWeight: 600,
-                    whiteSpace: 'nowrap',
-                    fontVariantNumeric: 'tabular-nums'
-                  }}
-                >
-                  {item.count}{' '}
-                  <span className="faint" style={{ fontWeight: 400 }}>
-                    · {item.pct}
+                  >
+                    {item.count}{' '}
+                    <span className="faint" style={{ fontWeight: 400 }}>
+                      · {item.pct}
+                    </span>
                   </span>
                 </span>
-              </span>
-            </li>
-          ))}
-        </ul>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       {/* Performance by Location Card */}
@@ -793,99 +897,120 @@ export default function PerformancePage() {
         <p className="faint" style={{ margin: '4px 0 12px', fontSize: '12px' }}>
           Your listings grouped by community, always the last 30 days
         </p>
-        <p className="muted" style={{ margin: '0 0 16px', fontSize: '14px' }}>
-          Palm Jumeirah draws the most views (6,340). Dubai Marina brings in the most leads (63). Dubai Marina turns views into leads best, at 1.5 per 100 views.
-        </p>
+        {isLiveData ? (
+          <div
+            style={{
+              padding: '40px 20px',
+              textAlign: 'center',
+              background: 'var(--cmp-surface-sunken)',
+              borderRadius: 'var(--cmp-radius-md)',
+              border: '1px dashed var(--cmp-border)'
+            }}
+          >
+            <p style={{ margin: 0, fontWeight: 600, fontSize: '14px' }} className="muted">
+              No performance data by location recorded yet.
+            </p>
+            <p className="faint" style={{ margin: '4px 0 0', fontSize: '12px' }}>
+              Once your published properties generate views and enquiries, community breakdown will be shown here.
+            </p>
+          </div>
+        ) : (
+          <>
+            <p className="muted" style={{ margin: '0 0 16px', fontSize: '14px' }}>
+              Palm Jumeirah draws the most views (6,340). Dubai Marina brings in the most leads (63). Dubai Marina turns views into leads best, at 1.5 per 100 views.
+            </p>
 
-        <h3 style={{ fontSize: '13px', fontWeight: 600, marginBottom: '10px' }}>
-          Leads by community
-        </h3>
-        <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: '10px' }}>
-          {COMMUNITIES_DATA.map((com) => (
-            <li
-              key={com.name}
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '170px minmax(0, 1fr)',
-                alignItems: 'center',
-                gap: '12px'
-              }}
-            >
-              <span style={{ fontSize: '13px', color: 'var(--cmp-text-muted)' }}>
-                {com.name}
-              </span>
-              <span className="row" style={{ gap: '8px', minWidth: 0 }}>
-                <span style={{ flex: '1 1 auto', minWidth: 0 }}>
-                  <span
-                    style={{
-                      display: 'block',
-                      height: '16px',
-                      minWidth: com.leads > 0 ? '2px' : 0,
-                      borderRadius: '0 4px 4px 0',
-                      width: `${com.pctWidth}%`,
-                      background: 'var(--cmp-brand)'
-                    }}
-                  />
-                </span>
-                <span
+            <h3 style={{ fontSize: '13px', fontWeight: 600, marginBottom: '10px' }}>
+              Leads by community
+            </h3>
+            <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: '10px' }}>
+              {COMMUNITIES_DATA.map((com) => (
+                <li
+                  key={com.name}
                   style={{
-                    flex: '0 0 76px',
-                    fontSize: '13px',
-                    fontWeight: 600,
-                    whiteSpace: 'nowrap',
-                    fontVariantNumeric: 'tabular-nums'
+                    display: 'grid',
+                    gridTemplateColumns: '170px minmax(0, 1fr)',
+                    alignItems: 'center',
+                    gap: '12px'
                   }}
                 >
-                  {com.leads}{' '}
-                  <span className="faint" style={{ fontWeight: 400 }}>
-                    · {com.share}
+                  <span style={{ fontSize: '13px', color: 'var(--cmp-text-muted)' }}>
+                    {com.name}
                   </span>
-                </span>
-              </span>
-            </li>
-          ))}
-        </ul>
-
-        <div className="table-scroll" style={{ marginTop: '20px' }}>
-          <table className="data">
-            <thead>
-              <tr>
-                <th>Location</th>
-                <th style={{ textAlign: 'end' }}>Listings</th>
-                <th style={{ textAlign: 'end' }}>Views</th>
-                <th style={{ textAlign: 'end' }}>Leads</th>
-                <th style={{ textAlign: 'end' }}>Share of leads</th>
-                <th style={{ textAlign: 'end' }}>Leads per 100 views</th>
-                <th style={{ textAlign: 'end' }}>Avg sale price per sqft</th>
-              </tr>
-            </thead>
-            <tbody>
-              {COMMUNITIES_DATA.map((row) => (
-                <tr key={row.name}>
-                  <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{row.name}</td>
-                  <td style={{ textAlign: 'end', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                    {row.live}
-                  </td>
-                  <td style={{ textAlign: 'end', fontVariantNumeric: 'tabular-nums' }}>
-                    {row.views}
-                  </td>
-                  <td style={{ textAlign: 'end', fontVariantNumeric: 'tabular-nums' }}>
-                    {row.leads}
-                  </td>
-                  <td style={{ textAlign: 'end', fontVariantNumeric: 'tabular-nums' }}>
-                    {row.share}
-                  </td>
-                  <td style={{ textAlign: 'end', fontVariantNumeric: 'tabular-nums' }}>
-                    {row.per100}
-                  </td>
-                  <td style={{ textAlign: 'end', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                    {row.avgSqft}
-                  </td>
-                </tr>
+                  <span className="row" style={{ gap: '8px', minWidth: 0 }}>
+                    <span style={{ flex: '1 1 auto', minWidth: 0 }}>
+                      <span
+                        style={{
+                          display: 'block',
+                          height: '16px',
+                          minWidth: com.leads > 0 ? '2px' : 0,
+                          borderRadius: '0 4px 4px 0',
+                          width: `${com.pctWidth}%`,
+                          background: 'var(--cmp-brand)'
+                        }}
+                      />
+                    </span>
+                    <span
+                      style={{
+                        flex: '0 0 76px',
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        whiteSpace: 'nowrap',
+                        fontVariantNumeric: 'tabular-nums'
+                      }}
+                    >
+                      {com.leads}{' '}
+                      <span className="faint" style={{ fontWeight: 400 }}>
+                        · {com.share}
+                      </span>
+                    </span>
+                  </span>
+                </li>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </ul>
+
+            <div className="table-scroll" style={{ marginTop: '20px' }}>
+              <table className="data">
+                <thead>
+                  <tr>
+                    <th>Location</th>
+                    <th style={{ textAlign: 'end' }}>Listings</th>
+                    <th style={{ textAlign: 'end' }}>Views</th>
+                    <th style={{ textAlign: 'end' }}>Leads</th>
+                    <th style={{ textAlign: 'end' }}>Share of leads</th>
+                    <th style={{ textAlign: 'end' }}>Leads per 100 views</th>
+                    <th style={{ textAlign: 'end' }}>Avg sale price per sqft</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {COMMUNITIES_DATA.map((row) => (
+                    <tr key={row.name}>
+                      <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{row.name}</td>
+                      <td style={{ textAlign: 'end', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                        {row.live}
+                      </td>
+                      <td style={{ textAlign: 'end', fontVariantNumeric: 'tabular-nums' }}>
+                        {row.views}
+                      </td>
+                      <td style={{ textAlign: 'end', fontVariantNumeric: 'tabular-nums' }}>
+                        {row.leads}
+                      </td>
+                      <td style={{ textAlign: 'end', fontVariantNumeric: 'tabular-nums' }}>
+                        {row.share}
+                      </td>
+                      <td style={{ textAlign: 'end', fontVariantNumeric: 'tabular-nums' }}>
+                        {row.per100}
+                      </td>
+                      <td style={{ textAlign: 'end', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                        {row.avgSqft}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </section>
 
       {/* Listings Ranked by Leads Table Card */}
@@ -908,28 +1033,36 @@ export default function PerformancePage() {
               </tr>
             </thead>
             <tbody>
-              {RANKED_LISTINGS.map((l) => (
-                <tr key={l.ref}>
-                  <td style={{ minWidth: '240px' }}>
-                    <span style={{ fontWeight: 600 }}>{l.title}</span>
-                    <span className="faint" style={{ display: 'block', fontSize: '12px' }}>
-                      {l.ref} · {l.location}
-                    </span>
-                  </td>
-                  <td style={{ textAlign: 'end', fontVariantNumeric: 'tabular-nums' }}>
-                    {l.views}
-                  </td>
-                  <td style={{ textAlign: 'end', fontVariantNumeric: 'tabular-nums' }}>
-                    {l.leads}
-                  </td>
-                  <td style={{ textAlign: 'end', fontVariantNumeric: 'tabular-nums' }}>
-                    {l.per100}
-                  </td>
-                  <td style={{ textAlign: 'end', fontVariantNumeric: 'tabular-nums' }}>
-                    {l.quality}
+              {isLiveData ? (
+                <tr>
+                  <td colSpan="5" style={{ textAlign: 'center', padding: '32px' }} className="muted">
+                    No live listings recorded yet.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                RANKED_LISTINGS.map((l) => (
+                  <tr key={l.ref}>
+                    <td style={{ minWidth: '240px' }}>
+                      <span style={{ fontWeight: 600 }}>{l.title}</span>
+                      <span className="faint" style={{ display: 'block', fontSize: '12px' }}>
+                        {l.ref} · {l.location}
+                      </span>
+                    </td>
+                    <td style={{ textAlign: 'end', fontVariantNumeric: 'tabular-nums' }}>
+                      {l.views}
+                    </td>
+                    <td style={{ textAlign: 'end', fontVariantNumeric: 'tabular-nums' }}>
+                      {l.leads}
+                    </td>
+                    <td style={{ textAlign: 'end', fontVariantNumeric: 'tabular-nums' }}>
+                      {l.per100}
+                    </td>
+                    <td style={{ textAlign: 'end', fontVariantNumeric: 'tabular-nums' }}>
+                      {l.quality}
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

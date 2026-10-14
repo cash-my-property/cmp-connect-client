@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { initialInvoices } from '../../data/mockData';
 import { useApp } from '../../context/AppContext';
 import {
@@ -12,10 +12,15 @@ import {
 } from 'lucide-react';
 
 export default function InvoicesPage() {
-  const { agency } = useApp();
+  const { agency, isLiveData } = useApp();
   const [activeTab, setActiveTab] = useState('to_pay'); // 'to_pay' | 'paid'
   const [searchQuery, setSearchQuery] = useState('');
-  const [invoicesData, setInvoicesData] = useState(initialInvoices);
+  const [invoicesData, setInvoicesData] = useState(() => (isLiveData ? { toPay: [], paid: [] } : initialInvoices));
+
+  // Sync with isLiveData
+  useEffect(() => {
+    setInvoicesData(isLiveData ? { toPay: [], paid: [] } : initialInvoices);
+  }, [isLiveData]);
 
   // Modals
   const [payingInvoice, setPayingInvoice] = useState(null);
@@ -166,7 +171,7 @@ export default function InvoicesPage() {
               filteredToPay.length === 0 ? (
                 <tr>
                   <td colSpan={9} style={{ textAlign: 'center', padding: '32px' }} className="muted">
-                    No pending invoices found matching "{searchQuery}"
+                    {isLiveData ? 'No pending invoices.' : searchQuery ? `No pending invoices found matching "${searchQuery}"` : 'No pending invoices.'}
                   </td>
                 </tr>
               ) : (
@@ -223,7 +228,7 @@ export default function InvoicesPage() {
             ) : filteredPaid.length === 0 ? (
               <tr>
                 <td colSpan={9} style={{ textAlign: 'center', padding: '32px' }} className="muted">
-                  No paid invoices found matching "{searchQuery}"
+                  {isLiveData ? 'No paid invoices.' : searchQuery ? `No paid invoices found matching "${searchQuery}"` : 'No paid invoices.'}
                 </td>
               </tr>
             ) : (

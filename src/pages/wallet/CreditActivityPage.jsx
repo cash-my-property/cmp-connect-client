@@ -15,7 +15,7 @@ import {
 import { Link } from 'react-router-dom';
 
 export default function CreditActivityPage() {
-  const { agency } = useApp();
+  const { agency, isLiveData } = useApp();
   const [searchRef, setSearchRef] = useState('');
   const [selectedPeriod, setSelectedPeriod] = useState('30d');
   const [isPeriodMenuOpen, setIsPeriodMenuOpen] = useState(false);
@@ -30,18 +30,20 @@ export default function CreditActivityPage() {
     return calcFeatured * 60 + calcPremium * 150 + calcRefresh * 5;
   }, [calcFeatured, calcPremium, calcRefresh]);
 
+  const activityList = isLiveData ? [] : initialWalletActivity;
+
   // Filtered Activity Rows
   const filteredActivity = useMemo(() => {
-    if (!searchRef.trim()) return initialWalletActivity;
+    if (!searchRef.trim()) return activityList;
     const q = searchRef.toLowerCase().trim();
-    return initialWalletActivity.filter(
+    return activityList.filter(
       (item) =>
         item.reference.toLowerCase().includes(q) ||
         item.originator.toLowerCase().includes(q) ||
         item.description.toLowerCase().includes(q) ||
         item.propertyType.toLowerCase().includes(q)
     );
-  }, [searchRef]);
+  }, [searchRef, activityList]);
 
   // Export to CSV
   const handleExportCSV = () => {
@@ -226,7 +228,7 @@ export default function CreditActivityPage() {
             {filteredActivity.length === 0 ? (
               <tr>
                 <td colSpan={8} style={{ textAlign: 'center', padding: '32px' }} className="muted">
-                  No transaction records found matching "{searchRef}"
+                  {isLiveData ? 'No live credit transactions.' : searchRef ? `No transaction records found matching "${searchRef}"` : 'No credit activity records.'}
                 </td>
               </tr>
             ) : (

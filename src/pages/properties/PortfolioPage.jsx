@@ -31,7 +31,7 @@ import {
 } from 'lucide-react';
 
 export default function PortfolioPage() {
-  const { listings } = useApp();
+  const { listings, isLiveData } = useApp();
   const [activeFilter, setActiveFilter] = useState('All');
   const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'table'
   const [searchQuery, setSearchQuery] = useState('');
@@ -255,7 +255,19 @@ export default function PortfolioPage() {
       </div>
 
       {/* Content Display: Grid vs Table */}
-      {viewMode === 'grid' ? (
+      {filteredListings.length === 0 ? (
+        <div className="card" style={{ padding: '48px 24px', textAlign: 'center' }}>
+          <p style={{ margin: 0, fontSize: '16px', fontWeight: 700 }}>
+            No properties found
+          </p>
+          <p className="muted" style={{ margin: '6px 0 16px', fontSize: '13.5px' }}>
+            {isLiveData ? 'No live properties yet in this agency account.' : 'No mock listings matched your filter criteria.'}
+          </p>
+          <NavLink to="/properties/add" className="btn btn-primary btn-sm">
+            Add a listing
+          </NavLink>
+        </div>
+      ) : viewMode === 'grid' ? (
         <div
           style={{
             display: 'grid',

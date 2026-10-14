@@ -50,9 +50,142 @@ const formatDateTime = (isoString) => {
   }
 };
 
-export default function MembersPage() {
-  const { account, authToken, can } = useApp();
+const toTitleCase = (str) => {
+  if (!str) return '';
+  return String(str)
+    .toLowerCase()
+    .split(' ')
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+};
 
+const mockFallbackRoles = [
+  { id: 'r-owner', key: 'OWNER', name: 'Owner' },
+  { id: 'r-dir', key: 'DIRECTOR', name: 'Director' },
+  { id: 'r-admin', key: 'OFFICE_ADMIN', name: 'Office admin' },
+  { id: 'r-coord', key: 'COORDINATOR', name: 'Coordinator' },
+  { id: 'r-agent', key: 'AGENT', name: 'Agent' },
+  { id: 'r-acc', key: 'ACCOUNTS', name: 'Accounts' },
+  { id: 'r-view', key: 'VIEWER', name: 'Viewer' }
+];
+
+const initialMockMembers = [
+  {
+    id: 'm-mock-1',
+    code: 'CCU-RCGBM1PW',
+    firstName: 'Hassan',
+    lastName: 'Ali',
+    fullName: 'Hassan Ali',
+    email: 'ihasanalyy@gmail.com',
+    mobile: '+971501234567',
+    role: { id: 'r-owner', key: 'OWNER', name: 'Owner' },
+    isOwner: true,
+    isSelf: true,
+    status: 'ACTIVE',
+    verificationStatus: 'VERIFIED',
+    compliance: { brn: '58210', brnExpiry: '2027-10-30T00:00:00.000Z' },
+    invite: null,
+    lastLoginAt: '2026-10-13T10:56:49.163Z',
+    createdAt: '2026-10-13T10:52:50.480Z'
+  },
+  {
+    id: 'm-mock-2',
+    code: 'CCU-TAL6XR2E',
+    firstName: 'Karim',
+    lastName: 'Saleh',
+    fullName: 'Karim Saleh',
+    email: 'karim@cmpprime.ae',
+    mobile: '+971504479901',
+    role: { id: 'r-agent', key: 'AGENT', name: 'Agent' },
+    isOwner: false,
+    isSelf: false,
+    status: 'ACTIVE',
+    verificationStatus: 'VERIFIED',
+    compliance: { brn: '49120', brnExpiry: '2027-04-15T00:00:00.000Z' },
+    invite: null,
+    lastLoginAt: '2026-10-12T14:20:10.000Z',
+    createdAt: '2026-10-10T08:15:00.000Z'
+  },
+  {
+    id: 'm-mock-3',
+    code: 'CCU-EC88912',
+    firstName: 'Emma',
+    lastName: 'Clarke',
+    fullName: 'Emma Clarke',
+    email: 'emma@cmpprime.ae',
+    mobile: '+971521292303',
+    role: { id: 'r-agent', key: 'AGENT', name: 'Agent' },
+    isOwner: false,
+    isSelf: false,
+    status: 'ACTIVE',
+    verificationStatus: 'PENDING',
+    compliance: { brn: '20182', brnExpiry: '2026-12-01T00:00:00.000Z' },
+    invite: null,
+    lastLoginAt: '2026-10-11T09:10:00.000Z',
+    createdAt: '2026-10-09T11:00:00.000Z'
+  },
+  {
+    id: 'm-mock-4',
+    code: 'CCU-AM33190',
+    firstName: 'Arjun',
+    lastName: 'Mehta',
+    fullName: 'Arjun Mehta',
+    email: 'arjun@cmpprime.ae',
+    mobile: '+971563302288',
+    role: { id: 'r-dir', key: 'DIRECTOR', name: 'Director' },
+    isOwner: false,
+    isSelf: false,
+    status: 'ACTIVE',
+    verificationStatus: 'VERIFIED',
+    compliance: { brn: '31902', brnExpiry: '2027-08-20T00:00:00.000Z' },
+    invite: null,
+    lastLoginAt: '2026-10-14T08:00:00.000Z',
+    createdAt: '2026-10-01T10:00:00.000Z'
+  },
+  {
+    id: 'm-mock-5',
+    code: 'CCU-SM99182',
+    firstName: 'Sara',
+    lastName: 'Al Mansoori',
+    fullName: 'Sara Al Mansoori',
+    email: 'sara@cmpprime.ae',
+    mobile: '+971559814422',
+    role: { id: 'r-coord', key: 'COORDINATOR', name: 'Coordinator' },
+    isOwner: false,
+    isSelf: false,
+    status: 'INVITED',
+    verificationStatus: 'NOT_REQUIRED',
+    compliance: { brn: null, brnExpiry: null },
+    invite: { expiresAt: '2026-10-21T10:00:00.000Z' },
+    lastLoginAt: null,
+    createdAt: '2026-10-14T09:00:00.000Z'
+  },
+  {
+    id: 'm-mock-6',
+    code: 'CCU-DM44910',
+    firstName: 'David',
+    lastName: 'Miller',
+    fullName: 'David Miller',
+    email: 'david@cmpprime.ae',
+    mobile: '+971503341199',
+    role: { id: 'r-admin', key: 'OFFICE_ADMIN', name: 'Office admin' },
+    isOwner: false,
+    isSelf: false,
+    status: 'INACTIVE',
+    verificationStatus: 'NOT_REQUIRED',
+    compliance: { brn: null, brnExpiry: null },
+    invite: null,
+    lastLoginAt: '2026-09-20T12:00:00.000Z',
+    createdAt: '2026-08-15T09:00:00.000Z'
+  }
+];
+
+export default function MembersPage() {
+  const { account, authToken, can, dataMode, isMockData } = useApp();
+  const isAgency = account?.accountType !== 'DEVELOPER';
+
+  const [mockMembers, setMockMembers] = useState(initialMockMembers);
   const [members, setMembers] = useState([]);
   const [counts, setCounts] = useState({ all: 0, ACTIVE: 0, INVITED: 0, INACTIVE: 0 });
   const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, pages: 1 });
@@ -75,7 +208,7 @@ export default function MembersPage() {
   const [activeActionMenuId, setActiveActionMenuId] = useState(null);
   const [notice, setNotice] = useState(null);
 
-  // Invite Form
+  // Invite Form & BRN Check State
   const [inviteForm, setInviteForm] = useState({
     firstName: '',
     lastName: '',
@@ -86,6 +219,97 @@ export default function MembersPage() {
   });
   const [inviteError, setInviteError] = useState(null);
   const [isInviting, setIsInviting] = useState(false);
+
+  const [brnCheckState, setBrnCheckState] = useState({
+    checking: false,
+    checked: false,
+    allowed: true,
+    message: null,
+    whitelisted: false,
+    isNew: false,
+    inUse: false,
+    inUseBy: null,
+    broker: null,
+    ornMatch: null,
+    error: null
+  });
+
+  const [emailCheckState, setEmailCheckState] = useState({
+    checking: false,
+    checked: false,
+    available: true,
+    reason: null,
+    message: null,
+    memberId: null,
+    resending: false,
+    resent: false
+  });
+
+  const [mobileCheckState, setMobileCheckState] = useState({
+    checking: false,
+    checked: false,
+    available: true,
+    reason: null,
+    message: null,
+    memberId: null
+  });
+
+  const openInviteModal = () => {
+    setInviteForm({
+      firstName: '',
+      lastName: '',
+      email: '',
+      mobile: '',
+      roleId: '',
+      brn: ''
+    });
+    setInviteError(null);
+    setBrnCheckState({
+      checking: false,
+      checked: false,
+      allowed: true,
+      message: null,
+      whitelisted: false,
+      isNew: false,
+      inUse: false,
+      inUseBy: null,
+      broker: null,
+      ornMatch: null,
+      error: null
+    });
+    setEmailCheckState({
+      checking: false,
+      checked: false,
+      available: true,
+      reason: null,
+      message: null,
+      memberId: null,
+      resending: false,
+      resent: false
+    });
+    setMobileCheckState({
+      checking: false,
+      checked: false,
+      available: true,
+      reason: null,
+      message: null,
+      memberId: null
+    });
+    setIsInviteModalOpen(true);
+  };
+
+  const handleResendFromModal = async (memberId, targetEmail) => {
+    if (!memberId) return;
+    try {
+      setEmailCheckState((prev) => ({ ...prev, resending: true }));
+      await cmpConnectApi.resendInvite(memberId, authToken);
+      setEmailCheckState((prev) => ({ ...prev, resending: false, resent: true }));
+      showNotice(`Invite resent successfully to ${targetEmail}.`);
+    } catch (err) {
+      setEmailCheckState((prev) => ({ ...prev, resending: false }));
+      showNotice(err.message || 'Failed to resend invite.', true);
+    }
+  };
 
   const actionMenuRef = useRef(null);
 
@@ -117,10 +341,17 @@ export default function MembersPage() {
     return () => clearTimeout(timer);
   }, [searchQuery, debouncedSearch]);
 
-  // Load Roles for filter and modal (fetched once per session)
+  // Load Roles for filter and modal
   useEffect(() => {
-    if (!authToken || rolesFetchedRef.current) return;
-    rolesFetchedRef.current = true;
+    if (isMockData) {
+      setAvailableRoles(mockFallbackRoles);
+      return;
+    }
+
+    if (!authToken) {
+      setAvailableRoles([]);
+      return;
+    }
 
     cmpConnectApi.listRoles(authToken)
       .then((res) => {
@@ -130,15 +361,53 @@ export default function MembersPage() {
       })
       .catch((err) => {
         console.warn('[MembersPage] Could not fetch roles list:', err.message);
+        setAvailableRoles([]);
       });
-  }, [authToken]);
+  }, [authToken, isMockData]);
 
-  // Fetch Members List from Backend
+  // Fetch / Sync Members List based on dataMode
   const fetchMembers = () => {
-    if (!authToken || isFetchingMembersRef.current) return;
-    isFetchingMembersRef.current = true;
-    setIsLoading(true);
+    if (isMockData) {
+      setIsLoading(true);
+      let filtered = [...mockMembers];
+      if (debouncedSearch) {
+        const q = debouncedSearch.toLowerCase();
+        filtered = filtered.filter(
+          (m) =>
+            (m.fullName || '').toLowerCase().includes(q) ||
+            (m.email || '').toLowerCase().includes(q) ||
+            (m.mobile || '').toLowerCase().includes(q) ||
+            (m.code || '').toLowerCase().includes(q)
+        );
+      }
+      if (roleFilter) {
+        filtered = filtered.filter((m) => m.role?.id === roleFilter || m.role?.key === roleFilter);
+      }
+      if (statusFilter !== 'all') {
+        filtered = filtered.filter((m) => m.status === statusFilter);
+      }
+      setMembers(filtered);
+      setCounts({
+        all: mockMembers.length,
+        ACTIVE: mockMembers.filter((m) => m.status === 'ACTIVE').length,
+        INVITED: mockMembers.filter((m) => m.status === 'INVITED').length,
+        INACTIVE: mockMembers.filter((m) => m.status === 'INACTIVE').length
+      });
+      setPagination({ page: 1, limit: 20, total: filtered.length, pages: 1 });
+      setIsLoading(false);
+      return;
+    }
 
+    // Live Data Mode: APIs strictly called, no mock fallback
+    if (!authToken) {
+      setMembers([]);
+      setCounts({ all: 0, ACTIVE: 0, INVITED: 0, INACTIVE: 0 });
+      setPagination({ page: 1, limit: 20, total: 0, pages: 1 });
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
     const params = {
       search: debouncedSearch,
       roleId: roleFilter,
@@ -153,20 +422,334 @@ export default function MembersPage() {
           setMembers(res.data);
           if (res.counts) setCounts(res.counts);
           if (res.pagination) setPagination(res.pagination);
+        } else {
+          setMembers([]);
         }
       })
       .catch((err) => {
-        console.warn('[MembersPage] API fetch fallback to mock:', err.message);
+        console.warn('[MembersPage] Live API fetch error:', err.message);
+        setMembers([]);
+        setCounts({ all: 0, ACTIVE: 0, INVITED: 0, INACTIVE: 0 });
+        setPagination({ page: 1, limit: 20, total: 0, pages: 1 });
       })
       .finally(() => {
-        isFetchingMembersRef.current = false;
         setIsLoading(false);
       });
   };
 
   useEffect(() => {
     fetchMembers();
-  }, [authToken, debouncedSearch, roleFilter, statusFilter, pagination.page]);
+  }, [authToken, isMockData, mockMembers, debouncedSearch, roleFilter, statusFilter, pagination.page]);
+
+  // 1. Debounced BRN existence check against DLD broker list onchange (~400ms)
+  useEffect(() => {
+    if (!isInviteModalOpen || !isAgency) return;
+
+    const cleanBrn = inviteForm.brn?.trim();
+    if (!cleanBrn) {
+      setBrnCheckState({
+        checking: false,
+        checked: false,
+        allowed: true,
+        message: null,
+        whitelisted: false,
+        isNew: false,
+        inUse: false,
+        inUseBy: null,
+        broker: null,
+        ornMatch: null,
+        error: null
+      });
+      return;
+    }
+
+    setBrnCheckState((prev) => ({ ...prev, checking: true, error: null }));
+
+    const timer = setTimeout(async () => {
+      if (isMockData) {
+        const isDemoBlocked = cleanBrn === '999999';
+        if (isDemoBlocked) {
+          setBrnCheckState({
+            checking: false,
+            checked: true,
+            allowed: false,
+            message: 'This broker is registered under another office (ORN: 90996) and cannot be invited.',
+            whitelisted: true,
+            isNew: false,
+            inUse: false,
+            inUseBy: null,
+            broker: { officeName: 'Other Real Estate LLC', orn: '90996' },
+            ornMatch: false,
+            error: null
+          });
+        } else {
+          setBrnCheckState({
+            checking: false,
+            checked: true,
+            allowed: true,
+            message: null,
+            whitelisted: true,
+            isNew: false,
+            inUse: false,
+            inUseBy: null,
+            broker: {
+              name: 'Bilal Ansari',
+              officeName: 'CMP Prime Real Estate',
+              orn: 'ORN-28841',
+              cardExpiryDate: '2027-10-30T00:00:00.000Z',
+              cardExpired: false,
+              firstName: 'Bilal',
+              lastName: 'Ansari',
+              email: 'bilal.ansari@cmpprime.ae',
+              phone: '+971501239999'
+            },
+            ornMatch: true,
+            error: null
+          });
+          setInviteForm((prev) => ({
+            ...prev,
+            firstName: prev.firstName || 'Bilal',
+            lastName: prev.lastName || 'Ansari',
+            email: prev.email || 'bilal.ansari@cmpprime.ae',
+            mobile: prev.mobile || '+971501239999'
+          }));
+        }
+        return;
+      }
+
+      try {
+        const res = await cmpConnectApi.checkTeamExistence({ brn: cleanBrn }, authToken);
+        const data = res?.data?.brn || res?.data;
+
+        if (data) {
+          const isWhitelisted = !!data.whitelisted;
+          const isNewBroker = !!data.isNew;
+          const isInUse = !!data.inUse;
+          const brokerData = data.broker || null;
+          const isOtherOffice = data.ornMatch === false;
+
+          // Server sends allowed (boolean) and message.
+          // Fallback: allowed is false if inUse or isOtherOffice.
+          const isAllowed = data.allowed !== undefined
+            ? !!data.allowed
+            : (!isInUse && !isOtherOffice);
+
+          let msg = data.message;
+          if (!msg && !isAllowed) {
+            if (isInUse) {
+              msg = `Already linked to ${data.inUseBy || 'another user'}.`;
+            } else if (isOtherOffice) {
+              msg = `This broker is registered under another office (${brokerData?.officeName || 'ORN: ' + (brokerData?.orn || '')}) and cannot be invited.`;
+            }
+          }
+
+          setBrnCheckState({
+            checking: false,
+            checked: true,
+            allowed: isAllowed,
+            message: msg,
+            whitelisted: isWhitelisted,
+            isNew: isNewBroker,
+            inUse: isInUse,
+            inUseBy: data.inUseBy || null,
+            broker: brokerData,
+            ornMatch: data.ornMatch,
+            error: null
+          });
+
+          // Autofill First Name, Last Name, Email & Phone if whitelisted broker found on DLD list
+          if (isWhitelisted && brokerData && isAllowed) {
+            let fName = brokerData.firstName || '';
+            let lName = brokerData.lastName || '';
+            if (!fName && brokerData.name) {
+              const parts = brokerData.name.trim().split(/\s+/);
+              fName = parts[0] || '';
+              lName = parts.slice(1).join(' ') || '';
+            }
+
+            const brokerEmail = brokerData.email ? String(brokerData.email).trim().toLowerCase() : '';
+            const brokerPhone = (brokerData.phone || brokerData.mobile) ? String(brokerData.phone || brokerData.mobile).trim() : '';
+
+            setInviteForm((prev) => ({
+              ...prev,
+              firstName: toTitleCase(fName) || prev.firstName,
+              lastName: toTitleCase(lName) || prev.lastName,
+              email: brokerEmail || prev.email,
+              mobile: brokerPhone || prev.mobile
+            }));
+          }
+        } else {
+          setBrnCheckState({
+            checking: false,
+            checked: true,
+            allowed: true,
+            message: null,
+            whitelisted: false,
+            isNew: true,
+            inUse: false,
+            inUseBy: null,
+            broker: null,
+            ornMatch: null,
+            error: null
+          });
+        }
+      } catch (err) {
+        console.warn('[MembersPage] BRN check error:', err);
+        const isConflict = err.status === 409 || err.message?.toLowerCase().includes('already linked');
+        const isOtherOffice = err.status === 403 || err.message?.toLowerCase().includes('another office');
+        const notAllowed = isConflict || isOtherOffice;
+        setBrnCheckState({
+          checking: false,
+          checked: true,
+          allowed: !notAllowed,
+          message: err.message,
+          whitelisted: false,
+          isNew: !notAllowed,
+          inUse: isConflict,
+          inUseBy: null,
+          broker: null,
+          ornMatch: isOtherOffice ? false : null,
+          error: err.message
+        });
+      }
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [inviteForm.brn, isInviteModalOpen, isAgency, authToken, isMockData]);
+
+  // 2. Debounced Email existence check (~400ms)
+  useEffect(() => {
+    if (!isInviteModalOpen) return;
+
+    const cleanEmail = inviteForm.email?.trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@') || cleanEmail.length < 5) {
+      setEmailCheckState({
+        checking: false,
+        checked: false,
+        available: true,
+        reason: null,
+        message: null,
+        memberId: null,
+        resending: false,
+        resent: false
+      });
+      return;
+    }
+
+    setEmailCheckState((prev) => ({ ...prev, checking: true, resent: false }));
+
+    const timer = setTimeout(async () => {
+      if (isMockData) {
+        setEmailCheckState({
+          checking: false,
+          checked: true,
+          available: true,
+          reason: null,
+          message: null,
+          memberId: null,
+          resending: false,
+          resent: false
+        });
+        return;
+      }
+
+      try {
+        const res = await cmpConnectApi.checkTeamExistence({ email: cleanEmail }, authToken);
+        const data = res?.data?.email;
+        if (data) {
+          setEmailCheckState({
+            checking: false,
+            checked: true,
+            available: data.available !== false,
+            reason: data.reason || null,
+            message: data.message || null,
+            memberId: data.memberId || null,
+            resending: false,
+            resent: false
+          });
+        } else {
+          setEmailCheckState({
+            checking: false,
+            checked: true,
+            available: true,
+            reason: null,
+            message: null,
+            memberId: null,
+            resending: false,
+            resent: false
+          });
+        }
+      } catch (err) {
+        console.warn('[MembersPage] Email existence check error:', err);
+        setEmailCheckState((prev) => ({ ...prev, checking: false, checked: true }));
+      }
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [inviteForm.email, isInviteModalOpen, authToken, isMockData]);
+
+  // 3. Debounced Mobile existence check (~400ms)
+  useEffect(() => {
+    if (!isInviteModalOpen) return;
+
+    const cleanMobile = inviteForm.mobile?.trim();
+    if (!cleanMobile || cleanMobile.length < 7) {
+      setMobileCheckState({
+        checking: false,
+        checked: false,
+        available: true,
+        reason: null,
+        message: null,
+        memberId: null
+      });
+      return;
+    }
+
+    setMobileCheckState((prev) => ({ ...prev, checking: true }));
+
+    const timer = setTimeout(async () => {
+      if (isMockData) {
+        setMobileCheckState({
+          checking: false,
+          checked: true,
+          available: true,
+          reason: null,
+          message: null,
+          memberId: null
+        });
+        return;
+      }
+
+      try {
+        const res = await cmpConnectApi.checkTeamExistence({ mobile: cleanMobile }, authToken);
+        const data = res?.data?.mobile;
+        if (data) {
+          setMobileCheckState({
+            checking: false,
+            checked: true,
+            available: data.available !== false,
+            reason: data.reason || null,
+            message: data.message || null,
+            memberId: data.memberId || null
+          });
+        } else {
+          setMobileCheckState({
+            checking: false,
+            checked: true,
+            available: true,
+            reason: null,
+            message: null,
+            memberId: null
+          });
+        }
+      } catch (err) {
+        console.warn('[MembersPage] Mobile existence check error:', err);
+        setMobileCheckState((prev) => ({ ...prev, checking: false, checked: true }));
+      }
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [inviteForm.mobile, isInviteModalOpen, authToken, isMockData]);
 
   // Handle Invite Submission
   const handleInviteSubmit = async (e) => {
@@ -175,6 +758,52 @@ export default function MembersPage() {
 
     if (!inviteForm.firstName.trim() || !inviteForm.email.trim() || !inviteForm.mobile.trim() || !inviteForm.roleId) {
       setInviteError('Please fill in First name, Email, Mobile and Role.');
+      return;
+    }
+
+    if (isAgency && !inviteForm.brn.trim()) {
+      setInviteError('BRN (broker licence number) is required for agency team members.');
+      return;
+    }
+
+    if (isAgency && (brnCheckState.allowed === false || brnCheckState.inUse || brnCheckState.ornMatch === false)) {
+      setInviteError(brnCheckState.message || 'This broker cannot be invited because they are registered under another office or already linked.');
+      return;
+    }
+
+    if (emailCheckState.checked && !emailCheckState.available) {
+      setInviteError(emailCheckState.message || 'This email is already registered or invited.');
+      return;
+    }
+
+    if (mobileCheckState.checked && !mobileCheckState.available) {
+      setInviteError(mobileCheckState.message || 'This phone number is already registered.');
+      return;
+    }
+
+    if (isMockData) {
+      const foundRole = availableRoles.find((r) => r.id === inviteForm.roleId || r.key === inviteForm.roleId) || { name: 'Agent' };
+      const newMember = {
+        id: 'm-mock-' + Date.now(),
+        code: 'CCU-' + Math.random().toString(36).substring(2, 10).toUpperCase(),
+        firstName: inviteForm.firstName.trim(),
+        lastName: inviteForm.lastName.trim(),
+        fullName: `${inviteForm.firstName.trim()} ${inviteForm.lastName.trim()}`.trim(),
+        email: inviteForm.email.trim(),
+        mobile: inviteForm.mobile.trim(),
+        role: foundRole,
+        isOwner: false,
+        isSelf: false,
+        status: 'INVITED',
+        verificationStatus: isAgency && inviteForm.brn ? 'VERIFIED' : 'NOT_REQUIRED',
+        compliance: { brn: inviteForm.brn?.trim() || null },
+        invite: { expiresAt: new Date(Date.now() + 7 * 86400000).toISOString() },
+        createdAt: new Date().toISOString()
+      };
+      setMockMembers((prev) => [newMember, ...prev]);
+      setIsInviteModalOpen(false);
+      setInviteForm({ firstName: '', lastName: '', email: '', mobile: '', roleId: '', brn: '' });
+      showNotice(`Invite sent successfully to ${inviteForm.email}.`);
       return;
     }
 
@@ -187,13 +816,44 @@ export default function MembersPage() {
           email: inviteForm.email.trim(),
           mobile: inviteForm.mobile.trim(),
           roleId: inviteForm.roleId,
-          brn: inviteForm.brn.trim() || undefined
+          ...(isAgency && inviteForm.brn.trim() ? { brn: inviteForm.brn.trim() } : {})
         },
         authToken
       );
 
       setIsInviteModalOpen(false);
       setInviteForm({ firstName: '', lastName: '', email: '', mobile: '', roleId: '', brn: '' });
+      setBrnCheckState({
+        checking: false,
+        checked: false,
+        allowed: true,
+        message: null,
+        whitelisted: false,
+        isNew: false,
+        inUse: false,
+        inUseBy: null,
+        broker: null,
+        ornMatch: null,
+        error: null
+      });
+      setEmailCheckState({
+        checking: false,
+        checked: false,
+        available: true,
+        reason: null,
+        message: null,
+        memberId: null,
+        resending: false,
+        resent: false
+      });
+      setMobileCheckState({
+        checking: false,
+        checked: false,
+        available: true,
+        reason: null,
+        message: null,
+        memberId: null
+      });
 
       if (res?.data) {
         setMembers((prev) => [res.data, ...prev]);
@@ -217,6 +877,10 @@ export default function MembersPage() {
   // Handle Resend Invite
   const handleResendInvite = async (member) => {
     setActiveActionMenuId(null);
+    if (isMockData) {
+      showNotice(`Invite resent to ${member.email}.`);
+      return;
+    }
     try {
       await cmpConnectApi.resendInvite(member.id, authToken);
       showNotice(`Invite resent to ${member.email}.`);
@@ -237,6 +901,16 @@ export default function MembersPage() {
     e.preventDefault();
     if (!activeMemberForRole || !selectedNewRoleId) return;
 
+    if (isMockData) {
+      const foundRole = availableRoles.find((r) => r.id === selectedNewRoleId || r.key === selectedNewRoleId);
+      setMockMembers((prev) =>
+        prev.map((m) => (m.id === activeMemberForRole.id ? { ...m, role: foundRole || m.role } : m))
+      );
+      setIsChangeRoleModalOpen(false);
+      showNotice(`Role updated for ${activeMemberForRole.fullName || activeMemberForRole.name}.`);
+      return;
+    }
+
     try {
       const res = await cmpConnectApi.changeMemberRole(activeMemberForRole.id, selectedNewRoleId, authToken);
       const updated = res?.data;
@@ -255,6 +929,13 @@ export default function MembersPage() {
   // Handle Status Toggle (Deactivate / Reactivate)
   const handleToggleStatus = async (member, targetStatus) => {
     setActiveActionMenuId(null);
+    if (isMockData) {
+      setMockMembers((prev) =>
+        prev.map((m) => (m.id === member.id ? { ...m, status: targetStatus } : m))
+      );
+      showNotice(`${member.fullName || member.name} has been set to ${targetStatus.toLowerCase()}.`);
+      return;
+    }
     try {
       const res = await cmpConnectApi.setMemberStatus(member.id, targetStatus, authToken);
       const updated = res?.data;
@@ -300,7 +981,7 @@ export default function MembersPage() {
           <button
             type="button"
             className="btn btn-accent btn-sm"
-            onClick={() => setIsInviteModalOpen(true)}
+            onClick={openInviteModal}
             style={{ gap: '6px' }}
           >
             <Plus size={16} />
@@ -524,7 +1205,9 @@ export default function MembersPage() {
                     </td>
 
                     <td>
-                      {m.verificationStatus === 'VERIFIED' ? (
+                      {!isAgency ? (
+                        <span className="muted" style={{ fontSize: '13px' }}>Not required</span>
+                      ) : m.verificationStatus === 'VERIFIED' ? (
                         <span className="row" style={{ gap: '4px', color: 'var(--cmp-success)', fontWeight: 600, fontSize: '13px' }}>
                           Verified <Check size={14} />
                         </span>
@@ -546,13 +1229,33 @@ export default function MembersPage() {
                     </td>
 
                     <td>
-                      {m.compliance?.brn ? (
+                      {!isAgency ? (
+                        <span className="muted" style={{ fontSize: '13px' }}>Not required</span>
+                      ) : m.compliance?.brn ? (
                         <div>
-                          <span style={{ color: 'var(--cmp-brand)', fontWeight: 600, fontSize: '13px' }}>
-                            BRN#{m.compliance.brn}
-                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                            <span style={{ color: 'var(--cmp-brand)', fontWeight: 600, fontSize: '13px' }}>
+                              BRN#{m.compliance.brn}
+                            </span>
+                            {m.compliance.whitelisted && (
+                              <span
+                                className="badge"
+                                style={{ background: 'rgba(30,123,89,0.12)', color: 'var(--cmp-primary)', fontSize: '10.5px', padding: '1px 6px', fontWeight: 600 }}
+                              >
+                                On DLD list
+                              </span>
+                            )}
+                            {m.compliance.isNew && (
+                              <span
+                                className="badge"
+                                style={{ background: 'rgba(178,107,0,0.12)', color: '#b26b00', fontSize: '10.5px', padding: '1px 6px', fontWeight: 600 }}
+                              >
+                                New BRN
+                              </span>
+                            )}
+                          </div>
                           {m.compliance.brnExpiry && (
-                            <span className="faint" style={{ display: 'block', fontSize: '11px' }}>
+                            <span className="faint" style={{ display: 'block', fontSize: '11px', marginTop: '2px' }}>
                               Exp: {formatDate(m.compliance.brnExpiry)}
                             </span>
                           )}
@@ -852,6 +1555,84 @@ export default function MembersPage() {
 
             <form onSubmit={handleInviteSubmit}>
               <div style={{ display: 'grid', gap: '14px' }}>
+                {/* Dubai Broker Licence (BRN) - Agencies Only */}
+                {isAgency && (
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                      <label style={{ margin: 0, fontWeight: 600 }}>Dubai broker licence (BRN)*</label>
+                      <span style={{ fontSize: '11px', color: 'var(--cmp-text-muted)' }}>Checks DLD broker registry</span>
+                    </div>
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        type="text"
+                        placeholder="e.g. 50318"
+                        value={inviteForm.brn}
+                        onChange={(e) => setInviteForm({ ...inviteForm, brn: e.target.value })}
+                        required={isAgency}
+                        style={{
+                          width: '100%',
+                          borderColor: (brnCheckState.allowed === false || brnCheckState.inUse)
+                            ? 'var(--cmp-danger)'
+                            : brnCheckState.whitelisted
+                            ? 'var(--cmp-primary)'
+                            : undefined
+                        }}
+                      />
+                      {brnCheckState.checking && (
+                        <div style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
+                          <Clock size={15} style={{ color: 'var(--cmp-text-muted)', animation: 'spin 1s linear infinite' }} />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* BRN Status Feedback */}
+                    {brnCheckState.checking && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px', fontSize: '12px', color: 'var(--cmp-text-muted)' }}>
+                        <Clock size={13} />
+                        <span>Checking broker licence on DLD...</span>
+                      </div>
+                    )}
+
+                    {!brnCheckState.checking && brnCheckState.checked && inviteForm.brn.trim() && (
+                      <div style={{ marginTop: '6px', display: 'grid', gap: '4px' }}>
+                        {brnCheckState.allowed === false ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--cmp-danger)', fontWeight: 600 }}>
+                            <X size={14} style={{ flexShrink: 0 }} />
+                            <span>{brnCheckState.message || (brnCheckState.inUse ? `Already linked to ${brnCheckState.inUseBy || 'another user'}.` : 'This broker is registered under another office and cannot be invited.')}</span>
+                          </div>
+                        ) : (
+                          <>
+                            {brnCheckState.whitelisted && (
+                              <>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--cmp-primary)', fontWeight: 600 }}>
+                                  <Check size={14} style={{ flexShrink: 0 }} />
+                                  <span>
+                                    ✓ Found on DLD list: {brnCheckState.broker?.name}
+                                    {brnCheckState.broker?.officeName ? `, ${brnCheckState.broker.officeName}` : ''}
+                                  </span>
+                                </div>
+                                {brnCheckState.broker?.cardExpired && (
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#b26b00' }}>
+                                    <AlertTriangle size={13} style={{ flexShrink: 0 }} />
+                                    <span>⚠ Broker card expired{brnCheckState.broker?.cardExpiryDate ? ` on ${formatDate(brnCheckState.broker.cardExpiryDate)}` : ''}</span>
+                                  </div>
+                                )}
+                              </>
+                            )}
+
+                            {brnCheckState.isNew && (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#b26b00' }}>
+                                <AlertTriangle size={13} style={{ flexShrink: 0 }} />
+                                <span>⚠ Not on the DLD list. CMP will check it manually.</span>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                   <div>
                     <label>First name*</label>
@@ -876,24 +1657,142 @@ export default function MembersPage() {
 
                 <div>
                   <label>Login email* (becomes their username)</label>
-                  <input
-                    type="email"
-                    placeholder="user@agency.ae"
-                    value={inviteForm.email}
-                    onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
-                    required
-                  />
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type="email"
+                      placeholder="user@agency.ae"
+                      value={inviteForm.email}
+                      onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
+                      required
+                      style={{
+                        width: '100%',
+                        borderColor: !emailCheckState.available
+                          ? emailCheckState.reason === 'ALREADY_INVITED' ? '#b26b00' : 'var(--cmp-danger)'
+                          : emailCheckState.checked && inviteForm.email.includes('@')
+                          ? 'var(--cmp-primary)'
+                          : undefined
+                      }}
+                    />
+                    {emailCheckState.checking && (
+                      <div style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
+                        <Clock size={15} style={{ color: 'var(--cmp-text-muted)', animation: 'spin 1s linear infinite' }} />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Email Feedback Indicators */}
+                  {emailCheckState.checking && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px', fontSize: '12px', color: 'var(--cmp-text-muted)' }}>
+                      <Clock size={13} />
+                      <span>Checking email...</span>
+                    </div>
+                  )}
+
+                  {!emailCheckState.checking && emailCheckState.checked && inviteForm.email.trim() && (
+                    <div style={{ marginTop: '6px' }}>
+                      {emailCheckState.reason === 'ALREADY_INVITED' ? (
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: '8px',
+                            padding: '6px 10px',
+                            background: 'rgba(178,107,0,0.08)',
+                            borderRadius: '6px',
+                            fontSize: '12px',
+                            color: '#b26b00'
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <AlertTriangle size={14} style={{ flexShrink: 0 }} />
+                            <span>{emailCheckState.message || 'This person has already been invited.'}</span>
+                          </div>
+                          {emailCheckState.memberId && (
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-xs"
+                              style={{
+                                color: emailCheckState.resent ? 'var(--cmp-success)' : 'var(--cmp-brand)',
+                                fontWeight: 700,
+                                padding: '2px 8px',
+                                textDecoration: emailCheckState.resent ? 'none' : 'underline',
+                                flexShrink: 0
+                              }}
+                              disabled={emailCheckState.resending || emailCheckState.resent}
+                              onClick={() => handleResendFromModal(emailCheckState.memberId, inviteForm.email)}
+                            >
+                              {emailCheckState.resending
+                                ? 'Resending...'
+                                : emailCheckState.resent
+                                ? '✓ Resent'
+                                : 'Resend invite'}
+                            </button>
+                          )}
+                        </div>
+                      ) : !emailCheckState.available ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--cmp-danger)', fontWeight: 500 }}>
+                          <X size={14} style={{ flexShrink: 0 }} />
+                          <span>{emailCheckState.message || 'This email is already used by another CMP Connect account.'}</span>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--cmp-primary)', fontWeight: 500 }}>
+                          <Check size={13} />
+                          <span>Email is available</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div>
                   <label>Mobile phone* (UAE number)</label>
-                  <input
-                    type="tel"
-                    placeholder="0553182240 or +971553182240"
-                    value={inviteForm.mobile}
-                    onChange={(e) => setInviteForm({ ...inviteForm, mobile: e.target.value })}
-                    required
-                  />
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type="tel"
+                      placeholder="0553182240 or +971553182240"
+                      value={inviteForm.mobile}
+                      onChange={(e) => setInviteForm({ ...inviteForm, mobile: e.target.value })}
+                      required
+                      style={{
+                        width: '100%',
+                        borderColor: !mobileCheckState.available
+                          ? 'var(--cmp-danger)'
+                          : mobileCheckState.checked && inviteForm.mobile.trim().length >= 7
+                          ? 'var(--cmp-primary)'
+                          : undefined
+                      }}
+                    />
+                    {mobileCheckState.checking && (
+                      <div style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
+                        <Clock size={15} style={{ color: 'var(--cmp-text-muted)', animation: 'spin 1s linear infinite' }} />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Mobile Feedback Indicators */}
+                  {mobileCheckState.checking && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px', fontSize: '12px', color: 'var(--cmp-text-muted)' }}>
+                      <Clock size={13} />
+                      <span>Checking mobile number...</span>
+                    </div>
+                  )}
+
+                  {!mobileCheckState.checking && mobileCheckState.checked && inviteForm.mobile.trim().length >= 7 && (
+                    <div style={{ marginTop: '6px' }}>
+                      {!mobileCheckState.available ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--cmp-danger)', fontWeight: 500 }}>
+                          <X size={14} style={{ flexShrink: 0 }} />
+                          <span>{mobileCheckState.message || 'This mobile number is already used by another account.'}</span>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--cmp-primary)', fontWeight: 500 }}>
+                          <Check size={13} />
+                          <span>Mobile number is available</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -922,16 +1821,6 @@ export default function MembersPage() {
                     )}
                   </select>
                 </div>
-
-                <div>
-                  <label>Dubai broker licence (BRN) (optional)</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. 50318"
-                    value={inviteForm.brn}
-                    onChange={(e) => setInviteForm({ ...inviteForm, brn: e.target.value })}
-                  />
-                </div>
               </div>
 
               <div className="row" style={{ justifyContent: 'flex-end', gap: '8px', marginTop: '20px' }}>
@@ -942,7 +1831,19 @@ export default function MembersPage() {
                 >
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-primary btn-sm" disabled={isInviting}>
+                <button
+                  type="submit"
+                  className="btn btn-primary btn-sm"
+                  disabled={
+                    isInviting ||
+                    brnCheckState.checking ||
+                    (isAgency && (brnCheckState.allowed === false || brnCheckState.inUse || brnCheckState.ornMatch === false)) ||
+                    emailCheckState.checking ||
+                    (!emailCheckState.available && emailCheckState.checked) ||
+                    mobileCheckState.checking ||
+                    (!mobileCheckState.available && mobileCheckState.checked)
+                  }
+                >
                   {isInviting ? 'Sending invite...' : 'Send invite'}
                 </button>
               </div>

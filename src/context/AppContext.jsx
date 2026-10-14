@@ -28,14 +28,103 @@ export function AppProvider({ children }) {
   const [mustChangePassword, setMustChangePassword] = useState(false);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
 
-  const [agency, setAgency] = useState(initialAgency);
-  const [listings, setListings] = useState(initialListings);
-  const [clients, setClients] = useState(initialClients);
-  const [rtoLots, setRtoLots] = useState(initialRtoLots);
-  const [followUps, setFollowUps] = useState(initialFollowUps);
-  const [team, setTeam] = useState(teamMembers);
-  const [needsYou, setNeedsYou] = useState(needsYouItems);
-  const [transactions, setTransactions] = useState(initialTransactions);
+  // Data Mode State: 'live' (default, strictly real APIs, zero static data) vs 'mock' (rich demo data, APIs off)
+  const [dataMode, setDataModeState] = useState(() => {
+    return localStorage.getItem('cmp_connect_data_mode') || 'live';
+  });
+
+  const setDataMode = (mode) => {
+    setDataModeState(mode);
+    localStorage.setItem('cmp_connect_data_mode', mode);
+  };
+
+  const isLiveData = dataMode === 'live';
+  const isMockData = dataMode === 'mock';
+
+  // Initial datasets based on initial dataMode
+  const [agency, setAgency] = useState(() => (dataMode === 'mock' ? initialAgency : {
+    name: 'My Agency',
+    orn: '—',
+    tradeLicense: '—',
+    ded: '—',
+    email: '—',
+    phone: '—',
+    whatsapp: '—',
+    address: '—',
+    website: '—',
+    credits: 0,
+    creditsExpiryDays: 0,
+    currentUser: {
+      name: 'User',
+      initials: 'U',
+      role: 'User',
+      email: '—'
+    }
+  }));
+  const [listings, setListings] = useState(() => (dataMode === 'mock' ? initialListings : []));
+  const [clients, setClients] = useState(() => (dataMode === 'mock' ? initialClients : []));
+  const [rtoLots, setRtoLots] = useState(() => (dataMode === 'mock' ? initialRtoLots : []));
+  const [followUps, setFollowUps] = useState(() => (dataMode === 'mock' ? initialFollowUps : []));
+  const [team, setTeam] = useState(() => (dataMode === 'mock' ? teamMembers : []));
+  const [needsYou, setNeedsYou] = useState(() => (dataMode === 'mock' ? needsYouItems : []));
+  const [transactions, setTransactions] = useState(() => (dataMode === 'mock' ? initialTransactions : []));
+
+  // Sync datasets whenever dataMode changes
+  useEffect(() => {
+    if (dataMode === 'mock') {
+      setListings(initialListings);
+      setClients(initialClients);
+      setRtoLots(initialRtoLots);
+      setFollowUps(initialFollowUps);
+      setTeam(teamMembers);
+      setNeedsYou(needsYouItems);
+      setTransactions(initialTransactions);
+      setAgency({
+        ...initialAgency,
+        currentUser: account
+          ? {
+              ...initialAgency.currentUser,
+              name: account.fullName || initialAgency.currentUser.name,
+              email: account.email || initialAgency.currentUser.email,
+              role: account.role?.name || account.role || initialAgency.currentUser.role,
+              initials: account.fullName
+                ? account.fullName.split(' ').map((n) => n[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
+                : initialAgency.currentUser.initials
+            }
+          : initialAgency.currentUser
+      });
+    } else {
+      // Live Data Mode: Clear all static demo data!
+      setListings([]);
+      setClients([]);
+      setRtoLots([]);
+      setFollowUps([]);
+      setTeam([]);
+      setNeedsYou([]);
+      setTransactions([]);
+      setAgency({
+        name: account?.organization?.companyName || 'My Agency',
+        orn: account?.organization?.orn || '—',
+        tradeLicense: '—',
+        ded: '—',
+        email: account?.email || '—',
+        phone: account?.mobile || '—',
+        whatsapp: '—',
+        address: '—',
+        website: '—',
+        credits: 0,
+        creditsExpiryDays: 0,
+        currentUser: {
+          name: account?.fullName || 'User',
+          initials: account?.fullName
+            ? account.fullName.split(' ').map((n) => n[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
+            : 'U',
+          role: account?.role?.name || account?.role || 'User',
+          email: account?.email || '—'
+        }
+      });
+    }
+  }, [dataMode, account]);
 
   // Validate session on app mount
   useEffect(() => {
@@ -118,7 +207,7 @@ export function AppProvider({ children }) {
     setMustChangePassword(false);
   };
 
-  const isAuthenticated = Boolean(authToken && account && !mustChangePassword);
+  const isAuthenticated = Boolean(authToken && account && !mustChangePassword) || dataMode === 'mock';
 
   // Sync data attributes to HTML root element
   useEffect(() => {
@@ -220,14 +309,18 @@ export function AppProvider({ children }) {
   return (
     <AppContext.Provider
       value={{
+        dataMode,
+        setDataMode,
+        isLiveData,
+        isMockData,
         isAuthenticated,
         authToken,
         account,
         mustChangePassword,
         isAuthLoading,
-        can: (...keys) => checkPermission(account, ...keys),
+        can: (...keys) => (dataMode === 'mock' ? true : checkPermission(account, ...keys)),
         userPermissions: account?.permissions || [],
-        userRole: account?.role || null,
+        userRole: account?.role || (dataMode === 'mock' ? { key: 'OWNER', name: 'Owner' } : null),
         loginUser,
         updateToken,
         logout,

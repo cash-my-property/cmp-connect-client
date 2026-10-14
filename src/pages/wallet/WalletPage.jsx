@@ -4,8 +4,52 @@ import { useApp } from '../../context/AppContext';
 import { Check, Mail, Send, X, AlertTriangle } from 'lucide-react';
 
 export default function WalletPage() {
-  const { agency, setAgency } = useApp();
-  const [planData, setPlanData] = useState(initialWalletPlan);
+  const { agency, isLiveData } = useApp();
+
+  const liveWalletPlan = useMemo(() => ({
+    planName: "Standard Account",
+    renewalDate: "—",
+    balance: agency.credits || 0,
+    monthlyAllowance: 0,
+    accountManager: {
+      name: "Support Desk",
+      email: "support@cashmyproperty.com"
+    },
+    meters: [
+      {
+        id: "live_slots",
+        label: "Live listing slots",
+        used: 0,
+        total: 0,
+        pct: 0,
+        left: 0,
+        unit: "slots left"
+      },
+      {
+        id: "featured_slots",
+        label: "Featured placements",
+        used: 0,
+        total: 0,
+        pct: 0,
+        left: 0,
+        unit: "slots left"
+      },
+      {
+        id: "premium_slots",
+        label: "Premium placements",
+        used: 0,
+        total: 0,
+        pct: 0,
+        left: 0,
+        unit: "slots left"
+      }
+    ],
+    pricingCatalog: initialWalletPlan.pricingCatalog,
+    topUpPackages: initialWalletPlan.topUpPackages,
+    creditHistory: []
+  }), [agency.credits]);
+
+  const planData = isLiveData ? liveWalletPlan : initialWalletPlan;
   const [requestModal, setRequestModal] = useState(null); // package object when opened
   const [requestSuccess, setRequestSuccess] = useState(false);
   const [customCredits, setCustomCredits] = useState('');
@@ -105,7 +149,7 @@ export default function WalletPage() {
             {planData.accountManager.name}
           </p>
           <a
-            href={`mailto:${planData.accountManager.email}?subject=Plan%20change%20for%20CMP%20Prime%20Real%20Estate`}
+            href={`mailto:${planData.accountManager.email}?subject=Plan%20change%20for%20${encodeURIComponent(agency.name || 'My Agency')}`}
             className="btn btn-outline btn-sm"
             style={{ marginTop: '8px' }}
           >
@@ -281,7 +325,14 @@ export default function WalletPage() {
               </tr>
             </thead>
             <tbody>
-              {planData.creditHistory.map((item) => (
+              {planData.creditHistory.length === 0 ? (
+                <tr>
+                  <td colSpan={5} style={{ textAlign: 'center', padding: '36px', color: 'var(--cmp-text-muted)' }}>
+                    No credit transactions recorded yet.
+                  </td>
+                </tr>
+              ) : (
+                planData.creditHistory.map((item) => (
                 <tr key={item.id}>
                   <td className="muted" style={{ whiteSpace: 'nowrap' }}>
                     {item.date}
@@ -304,7 +355,7 @@ export default function WalletPage() {
                     <span className="badge badge-neutral">{item.status}</span>
                   </td>
                 </tr>
-              ))}
+              )))}
             </tbody>
           </table>
         </div>
@@ -360,7 +411,7 @@ export default function WalletPage() {
                 </div>
                 <h3 style={{ fontSize: '18px', marginBottom: '6px' }}>Request Dispatched</h3>
                 <p className="muted" style={{ fontSize: '13.5px', margin: 0 }}>
-                  Rashid Al Amiri has been notified. An invoice for {requestModal.priceDisplay} will be added to your Invoices tab.
+                  {planData.accountManager.name} has been notified. An invoice for {requestModal.priceDisplay} will be added to your Invoices tab.
                 </p>
               </div>
             ) : (

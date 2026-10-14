@@ -4,20 +4,101 @@ import { Award, Star, Search, Check, X, Shield, Clock } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { cmpConnectApi } from '../../services/cmpConnectApi';
 
+const mockLeaderboardAgents = [
+  {
+    id: 'lb-1',
+    name: 'Layla Haddad',
+    initials: 'LH',
+    isElite: true,
+    criteriaMet: '4/4',
+    verified: true,
+    liveProperties: 14,
+    avgRating: 4.9,
+    ratingsCount: 32,
+    agentScore: 96,
+    waResponseTime: '< 2 mins',
+    waScore: 98,
+    responseRate: 99,
+    responseScore: 99,
+    listingQuality: 95,
+    qualityScore: 95
+  },
+  {
+    id: 'lb-2',
+    name: 'Karim Saleh',
+    initials: 'KS',
+    isElite: true,
+    criteriaMet: '4/4',
+    verified: true,
+    liveProperties: 9,
+    avgRating: 4.8,
+    ratingsCount: 24,
+    agentScore: 92,
+    waResponseTime: '< 5 mins',
+    waScore: 94,
+    responseRate: 96,
+    responseScore: 96,
+    listingQuality: 92,
+    qualityScore: 92
+  },
+  {
+    id: 'lb-3',
+    name: 'Emma Clarke',
+    initials: 'EC',
+    isElite: false,
+    criteriaMet: '3/4',
+    verified: false,
+    liveProperties: 7,
+    avgRating: 4.6,
+    ratingsCount: 18,
+    agentScore: 84,
+    waResponseTime: '< 8 mins',
+    waScore: 86,
+    responseRate: 91,
+    responseScore: 91,
+    listingQuality: 88,
+    qualityScore: 88
+  },
+  {
+    id: 'lb-4',
+    name: 'Arjun Mehta',
+    initials: 'AM',
+    isElite: true,
+    criteriaMet: '4/4',
+    verified: true,
+    liveProperties: 11,
+    avgRating: 4.9,
+    ratingsCount: 29,
+    agentScore: 94,
+    waResponseTime: '< 3 mins',
+    waScore: 95,
+    responseRate: 97,
+    responseScore: 97,
+    listingQuality: 93,
+    qualityScore: 93
+  }
+];
+
 export default function TeamPage() {
-  const { authToken } = useApp();
+  const { authToken, dataMode, isMockData } = useApp();
   const [agents, setAgents] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const hasFetchedRef = useRef(false);
 
   useEffect(() => {
-    if (!authToken || hasFetchedRef.current) {
-      if (!authToken) setIsLoading(false);
+    if (isMockData) {
+      setAgents(mockLeaderboardAgents);
+      setIsLoading(false);
       return;
     }
-    hasFetchedRef.current = true;
 
+    if (!authToken) {
+      setAgents([]);
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
     cmpConnectApi.listMembers({ limit: 100 }, authToken)
       .then((res) => {
         if (res?.data) {
@@ -53,15 +134,18 @@ export default function TeamPage() {
             };
           });
           setAgents(mapped);
+        } else {
+          setAgents([]);
         }
       })
       .catch((err) => {
         console.warn('[TeamPage] Failed to fetch members for leaderboard:', err.message);
+        setAgents([]);
       })
       .finally(() => {
         setIsLoading(false);
       });
-  }, [authToken]);
+  }, [authToken, isMockData]);
 
   const filteredAgents = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();

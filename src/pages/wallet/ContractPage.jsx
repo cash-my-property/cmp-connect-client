@@ -4,19 +4,21 @@ import { useApp } from '../../context/AppContext';
 import { Search, X, FileText, CheckCircle } from 'lucide-react';
 
 export default function ContractPage() {
-  const { agency } = useApp();
+  const { agency, isLiveData } = useApp();
   const [searchQuery, setSearchQuery] = useState('');
   const [viewingContract, setViewingContract] = useState(null);
 
+  const contractList = isLiveData ? [] : initialContracts;
+
   const filteredContracts = useMemo(() => {
-    if (!searchQuery.trim()) return initialContracts;
+    if (!searchQuery.trim()) return contractList;
     const q = searchQuery.toLowerCase().trim();
-    return initialContracts.filter(
+    return contractList.filter(
       (c) =>
         c.contractNumber.toLowerCase().includes(q) ||
         c.products.some((p) => p.toLowerCase().includes(q))
     );
-  }, [searchQuery]);
+  }, [searchQuery, contractList]);
 
   return (
     <div>
@@ -87,7 +89,14 @@ export default function ContractPage() {
             </tr>
           </thead>
           <tbody>
-            {filteredContracts.map((c) => (
+            {filteredContracts.length === 0 ? (
+              <tr>
+                <td colSpan={7} style={{ textAlign: 'center', padding: '36px', color: 'var(--cmp-text-muted)' }}>
+                  {isLiveData ? 'No live contracts found.' : 'No contracts matched your search.'}
+                </td>
+              </tr>
+            ) : (
+              filteredContracts.map((c) => (
               <tr key={c.contractNumber}>
                 <td style={{ minWidth: '180px' }}>
                   <span className="muted" style={{ fontSize: '13px' }}>
@@ -167,7 +176,7 @@ export default function ContractPage() {
                   </button>
                 </td>
               </tr>
-            ))}
+            )))}
           </tbody>
         </table>
       </div>

@@ -93,51 +93,55 @@ const defaultFallbackRoles = [
 ];
 
 export default function RolesPage() {
-  const { account, authToken, can } = useApp();
+  const { account, authToken, can, dataMode, isMockData } = useApp();
 
   const [groups, setGroups] = useState([]);
   const [roles, setRoles] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [notice, setNotice] = useState(null);
 
-
-
   const showNotice = (msg, isError = false) => {
     setNotice({ text: msg, isError });
     setTimeout(() => setNotice(null), 4000);
   };
 
-  const hasFetchedRef = useRef(false);
-  const isFetchingRef = useRef(false);
+  // Sync roles & groups based on dataMode
+  useEffect(() => {
+    if (isMockData) {
+      setGroups(defaultFallbackGroups);
+      setRoles(defaultFallbackRoles);
+      setIsLoading(false);
+      return;
+    }
 
-  // Fetch roles from backend
-  const fetchRoles = () => {
-    if (!authToken || isFetchingRef.current) return;
-    isFetchingRef.current = true;
+    // Live Data Mode: API strictly called, no mock fallback
+    if (!authToken) {
+      setGroups([]);
+      setRoles([]);
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
     cmpConnectApi.listRoles(authToken)
       .then((res) => {
         if (res?.data?.groups && res?.data?.roles) {
           setGroups(res.data.groups);
           setRoles(res.data.roles);
+        } else {
+          setGroups([]);
+          setRoles([]);
         }
       })
       .catch((err) => {
-        console.warn('[RolesPage] Roles API fetch fallback:', err.message);
-        setGroups(defaultFallbackGroups);
-        setRoles(defaultFallbackRoles);
+        console.warn('[RolesPage] Live API fetch error:', err.message);
+        setGroups([]);
+        setRoles([]);
       })
       .finally(() => {
-        isFetchingRef.current = false;
         setIsLoading(false);
       });
-  };
-
-  useEffect(() => {
-    if (!authToken || hasFetchedRef.current) return;
-    hasFetchedRef.current = true;
-    fetchRoles();
-  }, [authToken]);
+  }, [authToken, isMockData]);
 
 
 

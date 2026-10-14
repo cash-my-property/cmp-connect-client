@@ -267,7 +267,43 @@ export const cmpConnectApi = {
   },
 
   /**
-   * 12. Invite New Team Member
+   * 12. Check Team Invite Field Existence (Email, Mobile, BRN)
+   * GET /api/cmpConnect/team/check-existence?email=&mobile=&brn=
+   */
+  async checkTeamExistence({ email, mobile, brn } = {}, token) {
+    const params = new URLSearchParams();
+    if (email && String(email).trim()) {
+      params.append('email', String(email).trim().toLowerCase());
+    }
+    if (mobile && String(mobile).trim()) {
+      params.append('mobile', String(mobile).trim());
+    }
+    if (brn && String(brn).trim()) {
+      params.append('brn', String(brn).trim());
+    }
+
+    const queryString = params.toString();
+    const endpoint = `/api/cmpConnect/team/check-existence${queryString ? `?${queryString}` : ''}`;
+    return apiRequest(endpoint, {
+      method: 'GET',
+      token
+    });
+  },
+
+  /**
+   * Check BRN existence against DLD broker list (legacy)
+   * GET /api/cmpConnect/team/check-brn?brn=50318
+   */
+  async checkBrn(brn, token) {
+    const cleanBrn = encodeURIComponent(String(brn || '').trim());
+    return apiRequest(`/api/cmpConnect/team/check-brn?brn=${cleanBrn}`, {
+      method: 'GET',
+      token
+    });
+  },
+
+  /**
+   * 13. Invite New Team Member
    * POST /api/cmpConnect/team/invite
    */
   async inviteMember(data, token) {

@@ -1,36 +1,40 @@
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { Sparkles, Copy, Check, ArrowRight, Building, Award, ExternalLink } from 'lucide-react';
+import { useApp } from '../../context/AppContext';
+
+const mockEligibleListings = [
+  {
+    id: 'CMP-S-001001',
+    title: 'Full marina view 2 bed in Marina Gate',
+    community: 'Dubai Marina',
+    agent: 'Karim Saleh',
+    price: 'AED 2.85M',
+    quality: 94
+  },
+  {
+    id: 'CMP-S-001002',
+    title: 'Burj Khalifa facing one bed in The Address',
+    community: 'Downtown Dubai',
+    agent: 'Layla Haddad',
+    price: 'AED 2.35M',
+    quality: 88
+  },
+  {
+    id: 'CMP-S-001004',
+    title: 'Duplex penthouse on the Palm',
+    community: 'Palm Jumeirah',
+    agent: 'Layla Haddad',
+    price: 'AED 14.5M',
+    quality: 97
+  }
+];
 
 export default function SpotlightedPage() {
+  const { isLiveData } = useApp();
   const [copiedId, setCopiedId] = useState(null);
 
-  const eligibleListings = [
-    {
-      id: 'CMP-S-001001',
-      title: 'Full marina view 2 bed in Marina Gate',
-      community: 'Dubai Marina',
-      agent: 'Karim Saleh',
-      price: 'AED 2.85M',
-      quality: 94
-    },
-    {
-      id: 'CMP-S-001002',
-      title: 'Burj Khalifa facing one bed in The Address',
-      community: 'Downtown Dubai',
-      agent: 'Layla Haddad',
-      price: 'AED 2.35M',
-      quality: 88
-    },
-    {
-      id: 'CMP-S-001004',
-      title: 'Duplex penthouse on the Palm',
-      community: 'Palm Jumeirah',
-      agent: 'Layla Haddad',
-      price: 'AED 14.5M',
-      quality: 97
-    }
-  ];
+  const eligibleListings = isLiveData ? [] : mockEligibleListings;
 
   const handleCopy = (id, e) => {
     e.stopPropagation();
@@ -142,8 +146,15 @@ export default function SpotlightedPage() {
               </tr>
             </thead>
             <tbody>
-              {eligibleListings.map((listing) => (
-                <tr key={listing.id}>
+              {eligibleListings.length === 0 ? (
+                <tr>
+                  <td colSpan={6} style={{ textAlign: 'center', padding: '36px' }} className="muted">
+                    No eligible listings found. Published listings with a quality score of 80+ will appear here.
+                  </td>
+                </tr>
+              ) : (
+                eligibleListings.map((listing) => (
+                  <tr key={listing.id}>
                   <td>
                     <span className="row" style={{ gap: '6px', display: 'inline-flex', alignItems: 'center' }}>
                       <button
@@ -239,8 +250,9 @@ export default function SpotlightedPage() {
                     </NavLink>
                   </td>
                 </tr>
-              ))}
-            </tbody>
+              ))
+            )}
+          </tbody>
           </table>
         </div>
       </div>

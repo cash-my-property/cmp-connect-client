@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Coins, Star, Clock, X, Check } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
@@ -76,8 +76,13 @@ const initialSpotlightLots = [
 ];
 
 export default function CommunitySpotlightPage() {
-  const { agency } = useApp();
-  const [lots, setLots] = useState(initialSpotlightLots);
+  const { agency, isLiveData } = useApp();
+  const [lots, setLots] = useState(() => (isLiveData ? [] : initialSpotlightLots));
+
+  useEffect(() => {
+    setLots(isLiveData ? [] : initialSpotlightLots);
+  }, [isLiveData]);
+
   const [biddingLot, setBiddingLot] = useState(null);
   const [bidAmount, setBidAmount] = useState('');
   const [notice, setNotice] = useState(null);
@@ -160,10 +165,10 @@ export default function CommunitySpotlightPage() {
             <Star size={16} /> Your active bids
           </p>
           <p style={{ margin: '8px 0 0', fontSize: '26px', fontWeight: 800 }}>
-            {activeBidsCount}
+            {isLiveData ? 0 : activeBidsCount}
           </p>
           <p className="faint" style={{ margin: '2px 0 0', fontSize: '12px' }}>
-            {creditsHeld} credits held
+            {isLiveData ? 0 : creditsHeld} credits held
           </p>
         </div>
 
@@ -172,7 +177,7 @@ export default function CommunitySpotlightPage() {
             <Clock size={16} /> Next window closes
           </p>
           <p style={{ margin: '8px 0 0', fontSize: '26px', fontWeight: 800 }}>
-            2 days
+            {isLiveData ? '—' : '2 days'}
           </p>
         </div>
       </div>
@@ -192,56 +197,64 @@ export default function CommunitySpotlightPage() {
             </tr>
           </thead>
           <tbody>
-            {lots.map((lot) => (
-              <tr key={lot.id}>
-                <td>
-                  <strong>{lot.community}</strong>
-                </td>
-                <td>{lot.offering}</td>
-                <td style={{ fontVariantNumeric: 'tabular-nums' }}>
-                  {lot.monthlySearches}
-                </td>
-                <td>
-                  {lot.leadingBid ? (
-                    <>
-                      <span>{lot.leadingBid} credits</span>
-                      <span className="faint" style={{ display: 'block', fontSize: '12px' }}>
-                        Minimum {lot.minBid}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="muted">No bids yet</span>
-                      <span className="faint" style={{ display: 'block', fontSize: '12px' }}>
-                        Minimum {lot.minBid}
-                      </span>
-                    </>
-                  )}
-                </td>
-                <td>
-                  {lot.yourBid ? (
-                    <span style={{ fontWeight: 700, color: 'var(--cmp-brand)' }}>
-                      {lot.yourBid} credits
-                    </span>
-                  ) : (
-                    <span className="muted">—</span>
-                  )}
-                </td>
-                <td className="row" style={{ gap: '6px' }}>
-                  <Clock size={14} className="faint" />
-                  <span>{lot.closingIn}</span>
-                </td>
-                <td style={{ textAlign: 'end' }}>
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-sm"
-                    onClick={() => handleOpenBidModal(lot)}
-                  >
-                    {lot.yourBid ? 'Increase bid' : 'Place bid'}
-                  </button>
+            {lots.length === 0 ? (
+              <tr>
+                <td colSpan="7" style={{ textAlign: 'center', padding: '36px' }} className="muted">
+                  No active community spotlight auctions available at this time.
                 </td>
               </tr>
-            ))}
+            ) : (
+              lots.map((lot) => (
+                <tr key={lot.id}>
+                  <td>
+                    <strong>{lot.community}</strong>
+                  </td>
+                  <td>{lot.offering}</td>
+                  <td style={{ fontVariantNumeric: 'tabular-nums' }}>
+                    {lot.monthlySearches}
+                  </td>
+                  <td>
+                    {lot.leadingBid ? (
+                      <>
+                        <span>{lot.leadingBid} credits</span>
+                        <span className="faint" style={{ display: 'block', fontSize: '12px' }}>
+                          Minimum {lot.minBid}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="muted">No bids yet</span>
+                        <span className="faint" style={{ display: 'block', fontSize: '12px' }}>
+                          Minimum {lot.minBid}
+                        </span>
+                      </>
+                    )}
+                  </td>
+                  <td>
+                    {lot.yourBid ? (
+                      <span style={{ fontWeight: 700, color: 'var(--cmp-brand)' }}>
+                        {lot.yourBid} credits
+                      </span>
+                    ) : (
+                      <span className="muted">—</span>
+                    )}
+                  </td>
+                  <td className="row" style={{ gap: '6px' }}>
+                    <Clock size={14} className="faint" />
+                    <span>{lot.closingIn}</span>
+                  </td>
+                  <td style={{ textAlign: 'end' }}>
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      onClick={() => handleOpenBidModal(lot)}
+                    >
+                      {lot.yourBid ? 'Increase bid' : 'Place bid'}
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
