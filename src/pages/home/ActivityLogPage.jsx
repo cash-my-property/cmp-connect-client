@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useCallback, memo } from 'react';
 import { Link } from 'react-router-dom';
 import { Download, Inbox } from 'lucide-react';
+import { useApp } from '../../context/AppContext';
 import {
   Avatar,
   Chip,
@@ -128,9 +129,12 @@ const ActivityItemRow = memo(function ActivityItemRow({ item }) {
 });
 
 export default function ActivityLogPage() {
+  const { isLiveData } = useApp();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedArea, setSelectedArea] = useState('Everything');
   const [selectedAgent, setSelectedAgent] = useState('Anyone');
+
+  const baseActivities = isLiveData ? [] : INITIAL_ACTIVITIES;
 
   // Debounce search input to optimize performance during typing
   const debouncedQuery = useDebounce(searchQuery, 200);
@@ -139,7 +143,7 @@ export default function ActivityLogPage() {
   const filteredActivities = useMemo(() => {
     const query = debouncedQuery.trim().toLowerCase();
 
-    return INITIAL_ACTIVITIES.filter((item) => {
+    return baseActivities.filter((item) => {
       // Area filter
       if (selectedArea !== 'Everything' && item.area !== selectedArea) {
         return false;
@@ -305,7 +309,7 @@ export default function ActivityLogPage() {
       ) : (
         <EmptyState
           icon={<Inbox size={32} />}
-          message="No activity matches your filters."
+          message={isLiveData ? "No activity recorded yet." : "No activity matches your filters."}
         />
       )}
     </div>

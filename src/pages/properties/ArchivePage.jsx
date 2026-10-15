@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import {
@@ -16,8 +16,35 @@ import {
   ChevronDown
 } from 'lucide-react';
 
+const defaultMockArchived = [
+  {
+    id: 'CMP-A-000991',
+    title: 'Luxury 3 Bed Duplex with Private Pool',
+    location: 'Palm Jumeirah',
+    type: 'Penthouse',
+    purpose: 'Sale',
+    price: 'AED 12,800,000',
+    archivedDate: '12 Sep 2026',
+    reason: 'Sold via external network',
+    agent: 'Layla Haddad',
+    quality: 92
+  },
+  {
+    id: 'CMP-A-000985',
+    title: 'Studio Apartment with Canal View',
+    location: 'Business Bay',
+    type: 'Apartment',
+    purpose: 'Rent',
+    price: 'AED 65,000 / yr',
+    archivedDate: '01 Sep 2026',
+    reason: 'Owner withdrawn listing',
+    agent: 'Karim Saleh',
+    quality: 84
+  }
+];
+
 export default function ArchivePage() {
-  const { listings } = useApp();
+  const { listings, isLiveData } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'grid'
   const [sortBy, setSortBy] = useState('newest');
@@ -26,32 +53,11 @@ export default function ArchivePage() {
   const [isSelectMode, setIsSelectMode] = useState(false);
 
   // Mock archived listings
-  const [archivedListings, setArchivedListings] = useState([
-    {
-      id: 'CMP-A-000991',
-      title: 'Luxury 3 Bed Duplex with Private Pool',
-      location: 'Palm Jumeirah',
-      type: 'Penthouse',
-      purpose: 'Sale',
-      price: 'AED 12,800,000',
-      archivedDate: '12 Sep 2026',
-      reason: 'Sold via external network',
-      agent: 'Layla Haddad',
-      quality: 92
-    },
-    {
-      id: 'CMP-A-000985',
-      title: 'Studio Apartment with Canal View',
-      location: 'Business Bay',
-      type: 'Apartment',
-      purpose: 'Rent',
-      price: 'AED 65,000 / yr',
-      archivedDate: '01 Sep 2026',
-      reason: 'Owner withdrawn listing',
-      agent: 'Karim Saleh',
-      quality: 84
-    }
-  ]);
+  const [archivedListings, setArchivedListings] = useState(() => (isLiveData ? [] : defaultMockArchived));
+
+  useEffect(() => {
+    setArchivedListings(isLiveData ? [] : defaultMockArchived);
+  }, [isLiveData]);
 
   const handleCopy = (id, e) => {
     e.stopPropagation();

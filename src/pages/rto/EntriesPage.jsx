@@ -1,5 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
+import { useApp } from '../../context/AppContext';
 import { Plus, Search, CheckCircle, Clock, AlertCircle, ArrowUpRight } from 'lucide-react';
 
 const initialEntries = [
@@ -146,10 +147,15 @@ const initialEntries = [
 ];
 
 export default function EntriesPage() {
-  const [entries, setEntries] = useState(initialEntries);
+  const { isLiveData } = useApp();
+  const [entries, setEntries] = useState(() => (isLiveData ? [] : initialEntries));
   const [filter, setFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [notice, setNotice] = useState(null);
+
+  useEffect(() => {
+    setEntries(isLiveData ? [] : initialEntries);
+  }, [isLiveData]);
 
   const showNotice = (msg) => {
     setNotice(msg);

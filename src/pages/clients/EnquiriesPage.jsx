@@ -20,10 +20,13 @@ import {
 } from 'lucide-react';
 
 export default function EnquiriesPage() {
-  const { clients } = useApp();
+  const { clients, isLiveData } = useApp();
   const [search, setSearch] = useState('');
   const [sourceFilter, setSourceFilter] = useState('Everything'); // 'Everything' | 'Owner Selling' | 'Via agents'
   const [copiedId, setCopiedId] = useState(null);
+
+  const ownerSellingCount = useMemo(() => clients.filter((c) => c.source === 'owner_selling').length, [clients]);
+  const viaAgentsCount = useMemo(() => clients.filter((c) => c.source === 'via_agents').length, [clients]);
 
   const debouncedSearch = useDebounce(search, 200);
 
@@ -191,7 +194,7 @@ export default function EnquiriesPage() {
             aria-selected={sourceFilter === 'Everything'}
             onClick={() => setSourceFilter('Everything')}
           >
-            Everything 11
+            Everything {clients.length}
           </button>
           <button
             type="button"
@@ -199,7 +202,7 @@ export default function EnquiriesPage() {
             aria-selected={sourceFilter === 'Owner Selling'}
             onClick={() => setSourceFilter('Owner Selling')}
           >
-            Owner Selling 1
+            Owner Selling {ownerSellingCount}
           </button>
           <button
             type="button"
@@ -207,7 +210,7 @@ export default function EnquiriesPage() {
             aria-selected={sourceFilter === 'Via agents'}
             onClick={() => setSourceFilter('Via agents')}
           >
-            Via agents 1
+            Via agents {viaAgentsCount}
           </button>
         </div>
       </div>
@@ -228,8 +231,22 @@ export default function EnquiriesPage() {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((item) => (
-              <tr key={item.id}>
+            {filtered.length === 0 ? (
+              <tr>
+                <td colSpan={6} style={{ textAlign: 'center', padding: '48px 20px' }}>
+                  <p style={{ margin: 0, fontWeight: 600, fontSize: '14px' }} className="muted">
+                    No client enquiries found
+                  </p>
+                  <p className="faint" style={{ margin: '4px 0 0', fontSize: '12px' }}>
+                    {isLiveData
+                      ? 'No live client enquiries recorded yet. Once clients enquire about your listings, they will appear here.'
+                      : 'Try adjusting your search query or filters to find what you are looking for.'}
+                  </p>
+                </td>
+              </tr>
+            ) : (
+              filtered.map((item) => (
+                <tr key={item.id}>
                 {/* 1. Lead details */}
                 <td style={{ minWidth: '190px' }}>
                   {renderChannelIcon(item.channel)}
@@ -413,7 +430,7 @@ export default function EnquiriesPage() {
                   </div>
                 </td>
               </tr>
-            ))}
+            )))}
           </tbody>
         </table>
       </div>

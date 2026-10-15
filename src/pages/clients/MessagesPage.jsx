@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useApp } from '../../context/AppContext';
 import { Phone, MessageSquare, Send, CheckCheck, Search } from 'lucide-react';
 
 const initialConversations = [
@@ -82,12 +83,18 @@ const initialConversations = [
 ];
 
 export default function MessagesPage() {
-  const [conversations, setConversations] = useState(initialConversations);
-  const [selectedId, setSelectedId] = useState(initialConversations[0].id);
+  const { isLiveData } = useApp();
+  const [conversations, setConversations] = useState(isLiveData ? [] : initialConversations);
+  const [selectedId, setSelectedId] = useState(isLiveData ? null : initialConversations[0]?.id);
   const [inputText, setInputText] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
 
-  const activeConv = conversations.find((c) => c.id === selectedId) || conversations[0];
+  useEffect(() => {
+    setConversations(isLiveData ? [] : initialConversations);
+    setSelectedId(isLiveData ? null : initialConversations[0]?.id);
+  }, [isLiveData]);
+
+  const activeConv = conversations.find((c) => c.id === selectedId) || conversations[0] || null;
 
   const handleSelectConv = (id) => {
     setSelectedId(id);
@@ -179,187 +186,231 @@ export default function MessagesPage() {
             </p>
           </div>
 
-          <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-            {filteredConversations.map((c) => {
-              const isSelected = c.id === activeConv.id;
-              return (
-                <li key={c.id}>
-                  <button
-                    type="button"
-                    onClick={() => handleSelectConv(c.id)}
-                    aria-current={isSelected}
-                    style={{
-                      width: '100%',
-                      textAlign: 'start',
-                      border: 'none',
-                      cursor: 'pointer',
-                      font: 'inherit',
-                      padding: '12px 14px',
-                      display: 'grid',
-                      gap: '3px',
-                      borderBottom: '1px solid var(--cmp-border)',
-                      background: isSelected ? 'var(--cmp-brand-subtle)' : 'transparent',
-                      color: 'var(--cmp-text)'
-                    }}
-                  >
-                    <span className="row" style={{ justifyContent: 'space-between', gap: '8px' }}>
-                      <span style={{ fontWeight: c.unreadCount > 0 ? 800 : 600, fontSize: '14px' }}>
-                        {c.name}
-                      </span>
-                      <span className="faint" style={{ fontSize: '12px', whiteSpace: 'nowrap' }}>
-                        {c.time}
-                      </span>
-                    </span>
-                    <span className="faint" style={{ fontSize: '12px' }}>
-                      {c.propertyRef}
-                    </span>
-                    <span className="row" style={{ justifyContent: 'space-between', gap: '8px' }}>
-                      <span
-                        className="muted"
-                        style={{
-                          fontSize: '13px',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                          fontWeight: c.unreadCount > 0 ? 700 : 400
-                        }}
-                      >
-                        {c.lastMessage}
-                      </span>
-                      {c.unreadCount > 0 && (
-                        <span className="badge badge-accent" style={{ minWidth: '20px', justifyContent: 'center' }}>
-                          {c.unreadCount}
+          {filteredConversations.length === 0 ? (
+            <div style={{ padding: '36px 16px', textAlign: 'center' }}>
+              <p className="muted" style={{ margin: 0, fontSize: '13.5px', fontWeight: 600 }}>No conversations</p>
+              <p className="faint" style={{ margin: '4px 0 0', fontSize: '12px' }}>
+                {isLiveData ? 'No live chats yet.' : 'No chats matching search.'}
+              </p>
+            </div>
+          ) : (
+            <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+              {filteredConversations.map((c) => {
+                const isSelected = activeConv && c.id === activeConv.id;
+                return (
+                  <li key={c.id}>
+                    <button
+                      type="button"
+                      onClick={() => handleSelectConv(c.id)}
+                      aria-current={isSelected}
+                      style={{
+                        width: '100%',
+                        textAlign: 'start',
+                        border: 'none',
+                        cursor: 'pointer',
+                        font: 'inherit',
+                        padding: '12px 14px',
+                        display: 'grid',
+                        gap: '3px',
+                        borderBottom: '1px solid var(--cmp-border)',
+                        background: isSelected ? 'var(--cmp-brand-subtle)' : 'transparent',
+                        color: 'var(--cmp-text)'
+                      }}
+                    >
+                      <span className="row" style={{ justifyContent: 'space-between', gap: '8px' }}>
+                        <span style={{ fontWeight: c.unreadCount > 0 ? 800 : 600, fontSize: '14px' }}>
+                          {c.name}
                         </span>
-                      )}
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
+                        <span className="faint" style={{ fontSize: '12px', whiteSpace: 'nowrap' }}>
+                          {c.time}
+                        </span>
+                      </span>
+                      <span className="faint" style={{ fontSize: '12px' }}>
+                        {c.propertyRef}
+                      </span>
+                      <span className="row" style={{ justifyContent: 'space-between', gap: '8px' }}>
+                        <span
+                          className="muted"
+                          style={{
+                            fontSize: '13px',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            fontWeight: c.unreadCount > 0 ? 700 : 400
+                          }}
+                        >
+                          {c.lastMessage}
+                        </span>
+                        {c.unreadCount > 0 && (
+                          <span className="badge badge-accent" style={{ minWidth: '20px', justifyContent: 'center' }}>
+                            {c.unreadCount}
+                          </span>
+                        )}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </div>
 
         {/* Right Column: Chat Thread */}
-        <div className="inbox-thread" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-          {/* Thread Header */}
-          <div
-            className="row"
-            style={{
-              justifyContent: 'space-between',
-              gap: '12px',
-              padding: '14px 18px',
-              borderBottom: '1px solid var(--cmp-border)',
-              flexWrap: 'wrap'
-            }}
-          >
-            <div style={{ minWidth: 0 }}>
-              <p style={{ margin: 0, fontWeight: 700, fontSize: '15px' }}>
-                {activeConv.name}{' '}
-                <span className="badge badge-neutral" style={{ marginInlineStart: '6px' }}>
-                  {activeConv.role}
-                </span>
-              </p>
-              <p className="muted" style={{ margin: '3px 0 0', fontSize: '13px' }}>
-                {activeConv.propertyRef} · {activeConv.propertyTitle}
-              </p>
-            </div>
-            <div className="row" style={{ gap: '6px' }}>
-              <a href={`tel:${activeConv.phone}`} className="btn btn-outline btn-sm">
-                <Phone size={14} />
-                <span>Call</span>
-              </a>
-              <a
-                href={`https://wa.me/${activeConv.phone.replace(/[^0-9]/g, '')}?text=Hi%20${encodeURIComponent(activeConv.name)}%2C%20about%20${activeConv.propertyRef}`}
-                target="_blank"
-                rel="noreferrer"
-                className="btn btn-outline btn-sm"
-              >
-                <MessageSquare size={14} />
-                <span>WhatsApp</span>
-              </a>
-            </div>
-          </div>
-
-          {/* Messages Area */}
+        {!activeConv ? (
           <div
             style={{
-              flex: 1,
-              overflowY: 'auto',
-              padding: '18px',
               display: 'grid',
-              gap: '10px',
-              alignContent: 'start',
-              maxHeight: '440px'
+              placeItems: 'center',
+              padding: '60px 24px',
+              textAlign: 'center',
+              height: '100%'
             }}
           >
-            {activeConv.messages.map((m) => {
-              const isAgent = m.sender === 'agent';
-              return (
-                <div
-                  key={m.id}
-                  style={{
-                    justifySelf: isAgent ? 'end' : 'start',
-                    maxWidth: '78%',
-                    padding: '10px 14px',
-                    borderRadius: 'var(--cmp-radius-lg)',
-                    background: isAgent ? 'var(--cmp-brand)' : 'var(--cmp-surface-sunken)',
-                    color: isAgent ? 'var(--cmp-text-on-brand)' : 'var(--cmp-text)',
-                    border: isAgent ? 'none' : '1px solid var(--cmp-border)'
-                  }}
-                >
-                  <p style={{ margin: 0, fontSize: '14px', lineHeight: 1.5 }}>
-                    {m.text}
-                  </p>
-                  <p style={{ margin: '4px 0 0', fontSize: '11px', opacity: 0.8, textAlign: isAgent ? 'end' : 'start' }}>
-                    {m.time}
-                  </p>
-                </div>
-              );
-            })}
+            <div>
+              <div
+                style={{
+                  width: '56px',
+                  height: '56px',
+                  borderRadius: '50%',
+                  background: 'var(--cmp-surface-sunken)',
+                  display: 'grid',
+                  placeItems: 'center',
+                  margin: '0 auto 16px',
+                  color: 'var(--cmp-text-faint)'
+                }}
+              >
+                <MessageSquare size={26} />
+              </div>
+              <h3 style={{ margin: 0, fontSize: '17px' }}>No conversation selected</h3>
+              <p className="muted" style={{ margin: '8px 0 0', fontSize: '13.5px', maxWidth: '340px' }}>
+                {isLiveData
+                  ? 'Direct buyer messages for your active listings will appear here.'
+                  : 'Select a conversation from the left to read messages.'}
+              </p>
+            </div>
           </div>
-
-          {/* Quick Replies & Reply Form */}
-          <div style={{ padding: '14px', borderTop: '1px solid var(--cmp-border)' }}>
-            <div className="row" style={{ gap: '6px', flexWrap: 'wrap', marginBottom: '10px' }}>
-              {quickChips.map((chip, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  className="chip"
-                  onClick={() => handleSendMessage(chip)}
+        ) : (
+          <div className="inbox-thread" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+            {/* Thread Header */}
+            <div
+              className="row"
+              style={{
+                justifyContent: 'space-between',
+                gap: '12px',
+                padding: '14px 18px',
+                borderBottom: '1px solid var(--cmp-border)',
+                flexWrap: 'wrap'
+              }}
+            >
+              <div style={{ minWidth: 0 }}>
+                <p style={{ margin: 0, fontWeight: 700, fontSize: '15px' }}>
+                  {activeConv.name}{' '}
+                  <span className="badge badge-neutral" style={{ marginInlineStart: '6px' }}>
+                    {activeConv.role}
+                  </span>
+                </p>
+                <p className="muted" style={{ margin: '3px 0 0', fontSize: '13px' }}>
+                  {activeConv.propertyRef} · {activeConv.propertyTitle}
+                </p>
+              </div>
+              <div className="row" style={{ gap: '6px' }}>
+                <a href={`tel:${activeConv.phone}`} className="btn btn-outline btn-sm">
+                  <Phone size={14} />
+                  <span>Call</span>
+                </a>
+                <a
+                  href={`https://wa.me/${activeConv.phone.replace(/[^0-9]/g, '')}?text=Hi%20${encodeURIComponent(activeConv.name)}%2C%20about%20${activeConv.propertyRef}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="btn btn-outline btn-sm"
                 >
-                  {chip}
-                </button>
-              ))}
+                  <MessageSquare size={14} />
+                  <span>WhatsApp</span>
+                </a>
+              </div>
             </div>
 
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                handleSendMessage();
+            {/* Messages Area */}
+            <div
+              style={{
+                flex: 1,
+                overflowY: 'auto',
+                padding: '18px',
+                display: 'grid',
+                gap: '10px',
+                alignContent: 'start',
+                maxHeight: '440px'
               }}
-              className="row"
-              style={{ gap: '8px' }}
             >
-              <input
-                placeholder={`Reply to ${activeConv.name}…`}
-                aria-label="Message"
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                style={{ height: '40px', flex: 1, fontSize: '13.5px' }}
-              />
-              <button
-                type="submit"
-                className="btn btn-primary"
-                disabled={!inputText.trim()}
-                style={{ opacity: inputText.trim() ? 1 : 0.6 }}
+              {activeConv.messages.map((m) => {
+                const isAgent = m.sender === 'agent';
+                return (
+                  <div
+                    key={m.id}
+                    style={{
+                      justifySelf: isAgent ? 'end' : 'start',
+                      maxWidth: '78%',
+                      padding: '10px 14px',
+                      borderRadius: 'var(--cmp-radius-lg)',
+                      background: isAgent ? 'var(--cmp-brand)' : 'var(--cmp-surface-sunken)',
+                      color: isAgent ? 'var(--cmp-text-on-brand)' : 'var(--cmp-text)',
+                      border: isAgent ? 'none' : '1px solid var(--cmp-border)'
+                    }}
+                  >
+                    <p style={{ margin: 0, fontSize: '14px', lineHeight: 1.5 }}>
+                      {m.text}
+                    </p>
+                    <p style={{ margin: '4px 0 0', fontSize: '11px', opacity: 0.8, textAlign: isAgent ? 'end' : 'start' }}>
+                      {m.time}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Quick Replies & Reply Form */}
+            <div style={{ padding: '14px', borderTop: '1px solid var(--cmp-border)' }}>
+              <div className="row" style={{ gap: '6px', flexWrap: 'wrap', marginBottom: '10px' }}>
+                {quickChips.map((chip, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    className="chip"
+                    onClick={() => handleSendMessage(chip)}
+                  >
+                    {chip}
+                  </button>
+                ))}
+              </div>
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleSendMessage();
+                }}
+                className="row"
+                style={{ gap: '8px' }}
               >
-                <Send size={15} />
-                <span>Send</span>
-              </button>
-            </form>
+                <input
+                  placeholder={`Reply to ${activeConv.name}…`}
+                  aria-label="Message"
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  style={{ height: '40px', flex: 1, fontSize: '13.5px' }}
+                />
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={!inputText.trim()}
+                  style={{ opacity: inputText.trim() ? 1 : 0.6 }}
+                >
+                  <Send size={15} />
+                  <span>Send</span>
+                </button>
+              </form>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

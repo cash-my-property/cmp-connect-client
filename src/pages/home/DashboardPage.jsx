@@ -19,6 +19,7 @@ import {
 
 export default function DashboardPage() {
   const {
+    isLiveData,
     agency,
     listings,
     clients,
@@ -31,6 +32,14 @@ export default function DashboardPage() {
 
   const [newFollowUpText, setNewFollowUpText] = useState('');
   const [setupHidden, setSetupHidden] = useState(false);
+
+  const todayFormatted = new Date().toLocaleDateString('en-GB', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long'
+  });
+  const currentHour = new Date().getHours();
+  const timeGreeting = currentHour < 12 ? 'Good morning' : currentHour < 18 ? 'Good afternoon' : 'Good evening';
 
   const liveListingsCount = listings.filter((l) => l.status === 'Live').length;
   const qualifiedClientsCount = clients.filter((c) => c.stage === 'Qualified').length;
@@ -80,9 +89,9 @@ export default function DashboardPage() {
         }}
       >
         <div>
-          <h1 style={{ fontSize: '26px' }}>Good evening, {agency.currentUser.name.split(' ')[0]}</h1>
+          <h1 style={{ fontSize: '26px' }}>{timeGreeting}, {agency.currentUser.name.split(' ')[0]}</h1>
           <p className="muted" style={{ margin: '4px 0 0' }}>
-            Thursday, 17 September · {needsYou.length} things need your attention today
+            {todayFormatted} · {needsYou.length} {needsYou.length === 1 ? 'thing needs' : 'things need'} your attention today
           </p>
         </div>
 
@@ -223,9 +232,11 @@ export default function DashboardPage() {
           </span>
           <span style={{ display: 'grid', gap: '2px' }}>
             <span className="muted" style={{ fontSize: '12.5px', fontWeight: 600 }}>Enquiries, 30 days</span>
-            <span style={{ fontSize: '26px', fontWeight: 800, color: 'var(--cmp-text)' }}>196</span>
-            <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--cmp-danger)' }}>
-              ▼ 5% vs last 30 days
+            <span style={{ fontSize: '26px', fontWeight: 800, color: 'var(--cmp-text)' }}>
+              {isLiveData ? clients.length : 196}
+            </span>
+            <span style={{ fontSize: '12px', fontWeight: 700, color: isLiveData ? 'var(--cmp-text-faint)' : 'var(--cmp-danger)' }}>
+              {isLiveData ? 'No earlier period' : '▼ 5% vs last 30 days'}
             </span>
           </span>
         </NavLink>
@@ -248,7 +259,9 @@ export default function DashboardPage() {
           <span style={{ display: 'grid', gap: '2px' }}>
             <span className="muted" style={{ fontSize: '12.5px', fontWeight: 600 }}>Qualified clients</span>
             <span style={{ fontSize: '26px', fontWeight: 800, color: 'var(--cmp-text)' }}>{qualifiedClientsCount}</span>
-            <span className="faint" style={{ fontSize: '12px' }}>5 new enquiries waiting</span>
+            <span className="faint" style={{ fontSize: '12px' }}>
+              {isLiveData ? `${clients.length} new enquiries waiting` : '5 new enquiries waiting'}
+            </span>
           </span>
         </NavLink>
 
@@ -272,7 +285,9 @@ export default function DashboardPage() {
             <span style={{ fontSize: '26px', fontWeight: 800, color: 'var(--cmp-text)' }}>
               {agency.credits.toLocaleString()}
             </span>
-            <span className="faint" style={{ fontSize: '12px' }}>Expire in {agency.creditsExpiryDays} days</span>
+            <span className="faint" style={{ fontSize: '12px' }}>
+              {agency.credits > 0 ? `Expire in ${agency.creditsExpiryDays} days` : '0 credits available'}
+            </span>
           </span>
         </NavLink>
       </div>
@@ -288,74 +303,80 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-            {needsYou.slice(0, 7).map((item) => (
-              <li
-                key={item.id}
-                className="row"
-                style={{
-                  gap: '12px',
-                  padding: '12px 20px',
-                  borderBottom: '1px solid var(--cmp-border)'
-                }}
-              >
-                <span
+          {needsYou.length === 0 ? (
+            <div style={{ padding: '36px 20px', textAlign: 'center' }} className="muted">
+              Nothing needs your attention right now.
+            </div>
+          ) : (
+            <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+              {needsYou.slice(0, 7).map((item) => (
+                <li
+                  key={item.id}
+                  className="row"
                   style={{
-                    width: '34px',
-                    height: '34px',
-                    borderRadius: '10px',
-                    display: 'grid',
-                    placeItems: 'center',
-                    flexShrink: 0,
-                    color:
-                      item.severity === 'Now'
-                        ? 'var(--cmp-danger)'
-                        : item.severity === 'Soon'
-                        ? 'var(--cmp-warning)'
-                        : 'var(--cmp-brand)',
-                    background:
-                      item.severity === 'Now'
-                        ? 'rgba(179, 38, 30, 0.12)'
-                        : item.severity === 'Soon'
-                        ? 'rgba(180, 116, 12, 0.12)'
-                        : 'var(--cmp-brand-subtle)'
+                    gap: '12px',
+                    padding: '12px 20px',
+                    borderBottom: '1px solid var(--cmp-border)'
                   }}
                 >
-                  <AlertTriangle size={16} />
-                </span>
-
-                <span style={{ flex: 1, minWidth: 0 }}>
-                  <span style={{ display: 'block', fontWeight: 600, fontSize: '13.5px' }}>
-                    {item.title}
+                  <span
+                    style={{
+                      width: '34px',
+                      height: '34px',
+                      borderRadius: '10px',
+                      display: 'grid',
+                      placeItems: 'center',
+                      flexShrink: 0,
+                      color:
+                        item.severity === 'Now'
+                          ? 'var(--cmp-danger)'
+                          : item.severity === 'Soon'
+                          ? 'var(--cmp-warning)'
+                          : 'var(--cmp-brand)',
+                      background:
+                        item.severity === 'Now'
+                          ? 'rgba(179, 38, 30, 0.12)'
+                          : item.severity === 'Soon'
+                          ? 'rgba(180, 116, 12, 0.12)'
+                          : 'var(--cmp-brand-subtle)'
+                    }}
+                  >
+                    <AlertTriangle size={16} />
                   </span>
-                  <span className="muted" style={{ display: 'block', fontSize: '12.5px' }}>
-                    {item.subtitle}
+
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ display: 'block', fontWeight: 600, fontSize: '13.5px' }}>
+                      {item.title}
+                    </span>
+                    <span className="muted" style={{ display: 'block', fontSize: '12.5px' }}>
+                      {item.subtitle}
+                    </span>
                   </span>
-                </span>
 
-                <span
-                  style={{
-                    fontSize: '11px',
-                    fontWeight: 800,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.06em',
-                    color:
-                      item.severity === 'Now'
-                        ? 'var(--cmp-danger)'
-                        : item.severity === 'Soon'
-                        ? 'var(--cmp-warning)'
-                        : 'var(--cmp-brand)'
-                  }}
-                >
-                  {item.severity}
-                </span>
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      fontWeight: 800,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.06em',
+                      color:
+                        item.severity === 'Now'
+                          ? 'var(--cmp-danger)'
+                          : item.severity === 'Soon'
+                          ? 'var(--cmp-warning)'
+                          : 'var(--cmp-brand)'
+                    }}
+                  >
+                    {item.severity}
+                  </span>
 
-                <NavLink to={item.actionUrl} className="btn btn-outline btn-sm">
-                  {item.actionLabel}
-                </NavLink>
-              </li>
-            ))}
-          </ul>
+                  <NavLink to={item.actionUrl} className="btn btn-outline btn-sm">
+                    {item.actionLabel}
+                  </NavLink>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
 
         {/* My Follow-ups Card */}
@@ -387,55 +408,61 @@ export default function DashboardPage() {
               </button>
             </form>
 
-            <ul style={{ listStyle: 'none', margin: 0, padding: '4px 10px 12px' }}>
-              {followUps.map((task) => (
-                <li
-                  key={task.id}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: '10px',
-                    padding: '8px 10px',
-                    borderRadius: '8px',
-                    transition: 'background var(--cmp-duration-fast) var(--cmp-ease)'
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={task.done}
-                    onChange={() => toggleFollowUp(task.id)}
+            {followUps.length === 0 ? (
+              <div style={{ padding: '24px 20px', textAlign: 'center', fontSize: '13px' }} className="muted">
+                No follow-ups scheduled.
+              </div>
+            ) : (
+              <ul style={{ listStyle: 'none', margin: 0, padding: '4px 10px 12px' }}>
+                {followUps.map((task) => (
+                  <li
+                    key={task.id}
                     style={{
-                      width: '18px',
-                      height: '18px',
-                      marginTop: '3px',
-                      accentColor: 'var(--cmp-brand)',
-                      cursor: 'pointer'
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '10px',
+                      padding: '8px 10px',
+                      borderRadius: '8px',
+                      transition: 'background var(--cmp-duration-fast) var(--cmp-ease)'
                     }}
-                  />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <span
+                  >
+                    <input
+                      type="checkbox"
+                      checked={task.done}
+                      onChange={() => toggleFollowUp(task.id)}
                       style={{
-                        display: 'block',
-                        fontSize: '13.5px',
-                        textDecoration: task.done ? 'line-through' : 'none',
-                        color: task.done ? 'var(--cmp-text-faint)' : 'var(--cmp-text)'
+                        width: '18px',
+                        height: '18px',
+                        marginTop: '3px',
+                        accentColor: 'var(--cmp-brand)',
+                        cursor: 'pointer'
                       }}
-                    >
-                      {task.text}
-                    </span>
-                    <span
-                      style={{
-                        fontSize: '11.5px',
-                        fontWeight: 600,
-                        color: task.status.includes('Overdue') ? 'var(--cmp-danger)' : 'var(--cmp-text-faint)'
-                      }}
-                    >
-                      {task.status} · {task.agent}
-                    </span>
-                  </div>
-                </li>
-              ))}
-            </ul>
+                    />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <span
+                        style={{
+                          display: 'block',
+                          fontSize: '13.5px',
+                          textDecoration: task.done ? 'line-through' : 'none',
+                          color: task.done ? 'var(--cmp-text-faint)' : 'var(--cmp-text)'
+                        }}
+                      >
+                        {task.text}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: '11.5px',
+                          fontWeight: 600,
+                          color: task.status.includes('Overdue') ? 'var(--cmp-danger)' : 'var(--cmp-text-faint)'
+                        }}
+                      >
+                        {task.status} · {task.agent}
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
         </div>
       </div>
@@ -450,73 +477,84 @@ export default function DashboardPage() {
           </NavLink>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '14px' }}>
-          {topProperties.map((prop, idx) => (
-            <NavLink
-              key={prop.id}
-              to="/properties"
-              className="card"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                padding: '12px',
-                position: 'relative'
-              }}
-            >
-              <span
+        {topProperties.length === 0 ? (
+          <div className="card" style={{ padding: '36px 20px', textAlign: 'center' }}>
+            <p style={{ margin: 0, fontWeight: 600, fontSize: '14px' }} className="muted">
+              No live properties recorded yet
+            </p>
+            <p className="faint" style={{ margin: '4px 0 0', fontSize: '12px' }}>
+              Once you add and publish listings, their views and leads will appear here.
+            </p>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '14px' }}>
+            {topProperties.map((prop, idx) => (
+              <NavLink
+                key={prop.id}
+                to="/properties"
+                className="card"
                 style={{
-                  position: 'absolute',
-                  top: '8px',
-                  left: '8px',
-                  width: '22px',
-                  height: '22px',
-                  borderRadius: '50%',
-                  background: 'var(--cmp-accent)',
-                  color: 'var(--cmp-text-on-accent)',
-                  fontSize: '12px',
-                  fontWeight: 800,
-                  display: 'grid',
-                  placeItems: 'center',
-                  zIndex: 2
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  padding: '12px',
+                  position: 'relative'
                 }}
               >
-                {idx + 1}
-              </span>
-
-              <img
-                src={prop.image}
-                alt={prop.title}
-                style={{
-                  width: '78px',
-                  height: '66px',
-                  borderRadius: '10px',
-                  objectFit: 'cover',
-                  flexShrink: 0
-                }}
-              />
-
-              <div style={{ display: 'grid', gap: '3px', minWidth: 0, flex: 1 }}>
-                <strong
+                <span
                   style={{
-                    fontSize: '13.5px',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis'
+                    position: 'absolute',
+                    top: '8px',
+                    left: '8px',
+                    width: '22px',
+                    height: '22px',
+                    borderRadius: '50%',
+                    background: 'var(--cmp-accent)',
+                    color: 'var(--cmp-text-on-accent)',
+                    fontSize: '12px',
+                    fontWeight: 800,
+                    display: 'grid',
+                    placeItems: 'center',
+                    zIndex: 2
                   }}
                 >
-                  {prop.title}
-                </strong>
-                <span className="muted" style={{ fontSize: '12.5px' }}>
-                  {prop.community.split(',')[0]} · {prop.priceLabel}
+                  {idx + 1}
                 </span>
-                <span style={{ fontSize: '12px' }}>
-                  <strong>{prop.leads}</strong> enquiries · <strong>{prop.views.toLocaleString()}</strong> views
-                </span>
-              </div>
-            </NavLink>
-          ))}
-        </div>
+
+                <img
+                  src={prop.image}
+                  alt={prop.title}
+                  style={{
+                    width: '78px',
+                    height: '66px',
+                    borderRadius: '10px',
+                    objectFit: 'cover',
+                    flexShrink: 0
+                  }}
+                />
+
+                <div style={{ display: 'grid', gap: '3px', minWidth: 0, flex: 1 }}>
+                  <strong
+                    style={{
+                      fontSize: '13.5px',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis'
+                    }}
+                  >
+                    {prop.title}
+                  </strong>
+                  <span className="muted" style={{ fontSize: '12.5px' }}>
+                    {prop.community.split(',')[0]} · {prop.priceLabel}
+                  </span>
+                  <span style={{ fontSize: '12px' }}>
+                    <strong>{prop.leads}</strong> enquiries · <strong>{prop.views.toLocaleString()}</strong> views
+                  </span>
+                </div>
+              </NavLink>
+            ))}
+          </div>
+        )}
       </section>
     </div>
   );

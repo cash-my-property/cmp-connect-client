@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useApp } from '../../context/AppContext';
 import { DollarSign, CheckCircle2, RotateCcw, AlertTriangle, Building } from 'lucide-react';
 
 const initialCheques = [
@@ -242,9 +243,14 @@ const initialCheques = [
 ];
 
 export default function ChequesPage() {
-  const [cheques, setCheques] = useState(initialCheques);
+  const { isLiveData } = useApp();
+  const [cheques, setCheques] = useState(() => (isLiveData ? [] : initialCheques));
   const [filter, setFilter] = useState('all');
   const [notice, setNotice] = useState(null);
+
+  useEffect(() => {
+    setCheques(isLiveData ? [] : initialCheques);
+  }, [isLiveData]);
 
   const showNotice = (msg) => {
     setNotice(msg);

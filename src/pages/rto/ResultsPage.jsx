@@ -1,5 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
+import { useApp } from '../../context/AppContext';
 import { ArrowUpRight, CheckCircle, RefreshCw, MessageSquare } from 'lucide-react';
 
 const initialResults = [
@@ -67,9 +68,14 @@ const initialResults = [
 ];
 
 export default function ResultsPage() {
-  const [results, setResults] = useState(initialResults);
+  const { isLiveData } = useApp();
+  const [results, setResults] = useState(() => (isLiveData ? [] : initialResults));
   const [filter, setFilter] = useState('all');
   const [notice, setNotice] = useState(null);
+
+  useEffect(() => {
+    setResults(isLiveData ? [] : initialResults);
+  }, [isLiveData]);
 
   const showNotice = (msg) => {
     setNotice(msg);

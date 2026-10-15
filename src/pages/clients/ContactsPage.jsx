@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useApp } from '../../context/AppContext';
 import { Plus, Search, User, Phone, Mail, Building, X, Check } from 'lucide-react';
 
 const initialContacts = [
@@ -35,7 +36,12 @@ const initialContacts = [
 ];
 
 export default function ContactsPage() {
-  const [contacts, setContacts] = useState(initialContacts);
+  const { isLiveData } = useApp();
+  const [contacts, setContacts] = useState(isLiveData ? [] : initialContacts);
+
+  useEffect(() => {
+    setContacts(isLiveData ? [] : initialContacts);
+  }, [isLiveData]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedAgent, setSelectedAgent] = useState('All');
   const [isModalOpen, setIsModalOpen] = useState(false);

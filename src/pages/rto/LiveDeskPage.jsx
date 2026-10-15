@@ -15,11 +15,11 @@ import {
 } from 'lucide-react';
 
 export default function LiveDeskPage() {
-  const { rtoLots, extendRtoClock, placeRtoOffer } = useApp();
-  const [selectedLotId, setSelectedLotId] = useState(rtoLots[0]?.id || 'CMP-L-004121');
+  const { rtoLots, extendRtoClock, placeRtoOffer, isLiveData } = useApp();
+  const [selectedLotId, setSelectedLotId] = useState(rtoLots[0]?.id || null);
   const [customBidAmount, setCustomBidAmount] = useState('');
 
-  const selectedLot = rtoLots.find((l) => l.id === selectedLotId) || rtoLots[0];
+  const selectedLot = rtoLots.find((l) => l.id === selectedLotId) || rtoLots[0] || null;
 
   const handleBidSubmit = (e) => {
     e.preventDefault();
@@ -65,9 +65,11 @@ export default function LiveDeskPage() {
             Taking offers now
           </p>
           <p style={{ margin: '6px 0 0', fontSize: '28px', fontWeight: 800, color: 'var(--cmp-brand)' }}>
-            3
+            {rtoLots.filter((l) => l.status === 'Offers open' || l.status === 'Closing now').length}
           </p>
-          <p className="faint" style={{ margin: '2px 0 0', fontSize: '12px' }}>4 on desk in total</p>
+          <p className="faint" style={{ margin: '2px 0 0', fontSize: '12px' }}>
+            {rtoLots.length} on desk in total
+          </p>
         </div>
 
         <div className="card" style={{ padding: '16px' }}>
@@ -75,7 +77,7 @@ export default function LiveDeskPage() {
             Offers placed
           </p>
           <p style={{ margin: '6px 0 0', fontSize: '28px', fontWeight: 800, color: 'var(--cmp-brand)' }}>
-            {rtoLots.reduce((acc, curr) => acc + curr.offersCount, 0)}
+            {rtoLots.reduce((acc, curr) => acc + (curr.offersCount || 0), 0)}
           </p>
           <p className="faint" style={{ margin: '2px 0 0', fontSize: '12px' }}>across the desk</p>
         </div>
@@ -95,7 +97,7 @@ export default function LiveDeskPage() {
             Registrations to review
           </p>
           <p style={{ margin: '6px 0 0', fontSize: '28px', fontWeight: 800, color: 'var(--cmp-brand)' }}>
-            4
+            {isLiveData ? 0 : 4}
           </p>
           <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'var(--cmp-brand)', fontWeight: 600 }}>
             Review buyers →
@@ -126,66 +128,88 @@ export default function LiveDeskPage() {
               </tr>
             </thead>
             <tbody>
-              {rtoLots.map((lot) => {
-                const isSelected = lot.id === selectedLotId;
-                return (
-                  <tr
-                    key={lot.id}
-                    onClick={() => setSelectedLotId(lot.id)}
-                    style={{
-                      cursor: 'pointer',
-                      background: isSelected ? 'var(--cmp-brand-subtle)' : 'transparent'
-                    }}
-                  >
-                    <td style={{ minWidth: '180px' }}>
-                      <div style={{ fontWeight: 600, color: isSelected ? 'var(--cmp-brand)' : 'inherit' }}>
-                        {lot.title}
-                      </div>
-                      <span className="faint" style={{ fontSize: '12px' }}>
-                        {lot.id} · {lot.community}
-                      </span>
-                    </td>
-                    <td>
-                      <span className="row" style={{ gap: '6px', fontSize: '12.5px', whiteSpace: 'nowrap' }}>
+              {rtoLots.length === 0 ? (
+                <tr>
+                  <td colSpan={6} style={{ textAlign: 'center', padding: '48px 16px' }}>
+                    <p style={{ margin: 0, fontWeight: 600, fontSize: '14px' }} className="muted">
+                      No active lots on the desk
+                    </p>
+                    <p className="faint" style={{ margin: '4px 0 0', fontSize: '12px' }}>
+                      {isLiveData
+                        ? 'No live properties entered into Real Time Offer right now.'
+                        : 'Properties will appear here once entered.'}
+                    </p>
+                  </td>
+                </tr>
+              ) : (
+                rtoLots.map((lot) => {
+                  const isSelected = lot.id === selectedLotId;
+                  return (
+                    <tr
+                      key={lot.id}
+                      onClick={() => setSelectedLotId(lot.id)}
+                      style={{
+                        cursor: 'pointer',
+                        background: isSelected ? 'var(--cmp-brand-subtle)' : 'transparent'
+                      }}
+                    >
+                      <td style={{ minWidth: '180px' }}>
+                        <div style={{ fontWeight: 600, color: isSelected ? 'var(--cmp-brand)' : 'inherit' }}>
+                          {lot.title}
+                        </div>
+                        <span className="faint" style={{ fontSize: '12px' }}>
+                          {lot.id} · {lot.community}
+                        </span>
+                      </td>
+                      <td>
+                        <span className="row" style={{ gap: '6px', fontSize: '12.5px', whiteSpace: 'nowrap' }}>
+                          <span
+                            style={{
+                              width: '7px',
+                              height: '7px',
+                              borderRadius: '50%',
+                              background:
+                                lot.status === 'Closing now'
+                                  ? 'var(--cmp-danger)'
+                                  : lot.status === 'Offers open'
+                                  ? 'var(--cmp-success)'
+                                  : 'var(--cmp-text-faint)'
+                            }}
+                          />
+                          {lot.status}
+                        </span>
+                      </td>
+                      <td style={{ fontWeight: 700 }}>
+                        {lot.highestOffer ? `AED ${(lot.highestOffer / 1000000).toFixed(2)}M` : '—'}
+                      </td>
+                      <td>
                         <span
-                          style={{
-                            width: '7px',
-                            height: '7px',
-                            borderRadius: '50%',
-                            background:
-                              lot.status === 'Closing now'
-                                ? 'var(--cmp-danger)'
-                                : lot.status === 'Offers open'
-                                ? 'var(--cmp-success)'
-                                : 'var(--cmp-text-faint)'
-                          }}
-                        />
-                        {lot.status}
-                      </span>
-                    </td>
-                    <td style={{ fontWeight: 700 }}>
-                      {lot.highestOffer ? `AED ${(lot.highestOffer / 1000000).toFixed(2)}M` : '—'}
-                    </td>
-                    <td>
-                      <span
-                        className={`badge ${lot.reserveMet ? 'badge-accent' : 'badge-neutral'}`}
-                      >
-                        {lot.reserveMet ? 'Met' : 'Not met'}
-                      </span>
-                    </td>
-                    <td>{lot.offersCount}</td>
-                    <td className="muted" style={{ whiteSpace: 'nowrap', fontWeight: 600 }}>
-                      {lot.clock}
-                    </td>
-                  </tr>
-                );
-              })}
+                          className={`badge ${lot.reserveMet ? 'badge-accent' : 'badge-neutral'}`}
+                        >
+                          {lot.reserveMet ? 'Met' : 'Not met'}
+                        </span>
+                      </td>
+                      <td>{lot.offersCount}</td>
+                      <td className="muted" style={{ whiteSpace: 'nowrap', fontWeight: 600 }}>
+                        {lot.clock}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
 
         {/* Live Lot Inspection Panel */}
-        {selectedLot && (
+        {!selectedLot ? (
+          <aside className="card" style={{ padding: '48px 20px', textAlign: 'center' }}>
+            <p className="muted" style={{ margin: 0, fontWeight: 600, fontSize: '14px' }}>No property selected</p>
+            <p className="faint" style={{ margin: '4px 0 0', fontSize: '12px' }}>
+              {isLiveData ? 'Properties entered into Real Time Offer will appear here.' : 'Select a lot from the table.'}
+            </p>
+          </aside>
+        ) : (
           <aside className="card" style={{ padding: '20px' }}>
             <span className="faint" style={{ fontSize: '11px', letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 700 }}>
               {selectedLot.id}

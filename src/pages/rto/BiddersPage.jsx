@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useApp } from '../../context/AppContext';
 import { Check, X, Clock, ShieldCheck, AlertCircle } from 'lucide-react';
 
 const initialBidders = [
@@ -133,9 +134,14 @@ const initialBidders = [
 ];
 
 export default function BiddersPage() {
-  const [bidders, setBidders] = useState(initialBidders);
+  const { isLiveData } = useApp();
+  const [bidders, setBidders] = useState(() => (isLiveData ? [] : initialBidders));
   const [filter, setFilter] = useState('pending');
   const [notice, setNotice] = useState(null);
+
+  useEffect(() => {
+    setBidders(isLiveData ? [] : initialBidders);
+  }, [isLiveData]);
 
   const showNotice = (msg) => {
     setNotice(msg);

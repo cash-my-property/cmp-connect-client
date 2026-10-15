@@ -11,9 +11,9 @@ import {
 } from 'lucide-react';
 
 export default function CompliancePage() {
-  const { listings } = useApp();
+  const { isLiveData } = useApp();
 
-  const complianceItems = [
+  const complianceItems = isLiveData ? [] : [
     {
       id: 'CMP-S-001004',
       title: 'Duplex penthouse on the Palm',
@@ -82,24 +82,30 @@ export default function CompliancePage() {
       <div className="stat-grid" style={{ marginBottom: '24px' }}>
         <div className="card" style={{ padding: '16px' }}>
           <span className="muted" style={{ fontSize: '12.5px' }}>Permit Health</span>
-          <p style={{ margin: '6px 0 0', fontSize: '26px', fontWeight: 800, color: 'var(--cmp-warning)' }}>
-            75%
+          <p style={{ margin: '6px 0 0', fontSize: '26px', fontWeight: 800, color: isLiveData ? 'var(--cmp-text)' : 'var(--cmp-warning)' }}>
+            {isLiveData ? '0%' : '75%'}
           </p>
-          <span className="faint" style={{ fontSize: '12px' }}>2 permits need attention</span>
+          <span className="faint" style={{ fontSize: '12px' }}>
+            {isLiveData ? '0 permits need attention' : '2 permits need attention'}
+          </span>
         </div>
         <div className="card" style={{ padding: '16px' }}>
           <span className="muted" style={{ fontSize: '12.5px' }}>Active Form A</span>
           <p style={{ margin: '6px 0 0', fontSize: '26px', fontWeight: 800, color: 'var(--cmp-brand)' }}>
-            7 / 8
+            {isLiveData ? '0 / 0' : '7 / 8'}
           </p>
-          <span className="faint" style={{ fontSize: '12px' }}>Signed seller agreements</span>
+          <span className="faint" style={{ fontSize: '12px' }}>
+            {isLiveData ? 'No signed seller agreements' : 'Signed seller agreements'}
+          </span>
         </div>
         <div className="card" style={{ padding: '16px' }}>
           <span className="muted" style={{ fontSize: '12.5px' }}>Registered BRNs</span>
           <p style={{ margin: '6px 0 0', fontSize: '26px', fontWeight: 800, color: 'var(--cmp-brand)' }}>
-            4 / 4
+            {isLiveData ? '0 / 0' : '4 / 4'}
           </p>
-          <span className="faint" style={{ fontSize: '12px' }}>All agents verified</span>
+          <span className="faint" style={{ fontSize: '12px' }}>
+            {isLiveData ? 'No agents registered yet' : 'All agents verified'}
+          </span>
         </div>
       </div>
 
@@ -117,41 +123,56 @@ export default function CompliancePage() {
             </tr>
           </thead>
           <tbody>
-            {complianceItems.map((item) => (
-              <tr key={item.id}>
-                <td>
-                  <strong style={{ color: 'var(--cmp-brand)' }}>{item.id}</strong>
-                </td>
-                <td style={{ fontWeight: 600 }}>{item.title}</td>
-                <td>
-                  <span className="badge badge-neutral">{item.type}</span>
-                </td>
-                <td>
-                  <span
-                    className={`badge ${
-                      item.severity === 'danger'
-                        ? 'badge-danger'
-                        : item.severity === 'warning'
-                        ? 'badge-warning'
-                        : 'badge-success'
-                    }`}
-                  >
-                    {item.status} · {item.statusText}
-                  </span>
-                </td>
-                <td>{item.agent}</td>
-                <td style={{ textAlign: 'end' }}>
-                  <button
-                    type="button"
-                    className={`btn btn-sm ${item.severity === 'danger' ? 'btn-primary' : 'btn-outline'}`}
-                    onClick={() => alert(`Document submission dialog for ${item.id}`)}
-                  >
-                    <Upload size={13} />
-                    <span>Upload</span>
-                  </button>
+            {complianceItems.length === 0 ? (
+              <tr>
+                <td colSpan={6} style={{ textAlign: 'center', padding: '48px 20px' }}>
+                  <p style={{ margin: 0, fontWeight: 600, fontSize: '14px' }} className="muted">
+                    No compliance records found
+                  </p>
+                  <p className="faint" style={{ margin: '4px 0 0', fontSize: '12px' }}>
+                    {isLiveData
+                      ? 'No live regulatory or permit documents required at this time.'
+                      : 'All properties and agents are currently compliant.'}
+                  </p>
                 </td>
               </tr>
-            ))}
+            ) : (
+              complianceItems.map((item) => (
+                <tr key={item.id}>
+                  <td>
+                    <strong style={{ color: 'var(--cmp-brand)' }}>{item.id}</strong>
+                  </td>
+                  <td style={{ fontWeight: 600 }}>{item.title}</td>
+                  <td>
+                    <span className="badge badge-neutral">{item.type}</span>
+                  </td>
+                  <td>
+                    <span
+                      className={`badge ${
+                        item.severity === 'danger'
+                          ? 'badge-danger'
+                          : item.severity === 'warning'
+                          ? 'badge-warning'
+                          : 'badge-success'
+                      }`}
+                    >
+                      {item.status} · {item.statusText}
+                    </span>
+                  </td>
+                  <td>{item.agent}</td>
+                  <td style={{ textAlign: 'end' }}>
+                    <button
+                      type="button"
+                      className={`btn btn-sm ${item.severity === 'danger' ? 'btn-primary' : 'btn-outline'}`}
+                      onClick={() => alert(`Document submission dialog for ${item.id}`)}
+                    >
+                      <Upload size={13} />
+                      <span>Upload</span>
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
