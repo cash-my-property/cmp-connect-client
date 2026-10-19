@@ -29,6 +29,8 @@ import {
   Tag,
   Maximize2,
   Bed,
+  Bath,
+  MapPin,
   Edit2,
   MoreVertical,
   Loader2,
@@ -107,6 +109,17 @@ export default function PortfolioPage() {
     const t = setTimeout(() => setFeedbackMessage(null), 4000);
     return () => clearTimeout(t);
   }, [feedbackMessage]);
+
+  // Close action dropdown on click outside
+  useEffect(() => {
+    if (!openActionMenuId) return;
+    const handleClickOutside = (e) => {
+      if (e.target.closest('[data-action-menu]')) return;
+      setOpenActionMenuId(null);
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [openActionMenuId]);
 
   // Load team members for assign dropdown if user has listings.assign permission
   useEffect(() => {
@@ -854,7 +867,8 @@ export default function PortfolioPage() {
 
             const title = isLiveProp ? (listing.title || 'Untitled Property') : listing.title;
             const location = isLiveProp ? (listing.location || 'Dubai, UAE') : listing.community;
-            const beds = isLiveProp ? listing.bedrooms : listing.beds;
+            const beds = isLiveProp ? (listing.bedrooms ?? listing.propertyBedrooms) : listing.beds;
+            const baths = isLiveProp ? (listing.bathrooms ?? listing.propertyBathrooms ?? listing.baths) : listing.baths;
             const area = isLiveProp ? listing.area : listing.areaSqft;
             const price = isLiveProp ? formatPrice(listing.price, listing.rentalPeriod) : listing.priceLabel;
             const qualityScore = listing.qualityScore || 0;
@@ -879,11 +893,15 @@ export default function PortfolioPage() {
                 key={listing.id}
                 className="card"
                 style={{
-                  overflow: 'hidden',
+                  overflow: isMenuOpen ? 'visible' : 'hidden',
+                  position: 'relative',
+                  zIndex: isMenuOpen ? 50 : 1,
                   display: 'flex',
                   flexDirection: 'column',
                   borderRadius: '14px',
-                  border: onHold ? '2px solid var(--cmp-danger)' : undefined
+                  border: onHold ? '2px solid var(--cmp-danger)' : undefined,
+                  minWidth: 0,
+                  transition: 'box-shadow var(--cmp-duration-fast) var(--cmp-ease), border-color var(--cmp-duration-fast) var(--cmp-ease)'
                 }}
               >
                 {/* Image Header */}
@@ -891,16 +909,37 @@ export default function PortfolioPage() {
                   style={{
                     position: 'relative',
                     aspectRatio: '16 / 9',
-                    overflow: 'hidden',
-                    background: 'var(--cmp-surface-sunken)'
+                    background: 'var(--cmp-surface-sunken)',
+                    borderRadius: '14px 14px 0 0'
                   }}
                 >
-                  <img
-                    src={coverImg}
-                    alt={title}
-                    loading="lazy"
-                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                  />
+                  {/* Clipped photo wrapper */}
+                  <NavLink
+                    to={`/properties/${listing.id}/edit`}
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      overflow: 'hidden',
+                      borderRadius: '14px 14px 0 0',
+                      display: 'block'
+                    }}
+                    title="Edit property details"
+                  >
+                    <img
+                      src={coverImg}
+                      alt={title}
+                      loading="lazy"
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                        display: 'block',
+                        transition: 'transform 0.3s ease'
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.05)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+                    />
+                  </NavLink>
 
                   {/* Bulk Select Checkbox */}
                   {isBulkMode && (
@@ -1011,7 +1050,8 @@ export default function PortfolioPage() {
                   {/* Top-Right Edit & Action Buttons */}
                   <div
                     className="row"
-                    style={{ position: 'absolute', top: '10px', right: '10px', gap: '6px' }}
+                    data-action-menu="true"
+                    style={{ position: 'absolute', top: '10px', right: '10px', gap: '6px', zIndex: 40 }}
                   >
                     {!onHold && can('listings.update') && (
                       <NavLink
@@ -1039,7 +1079,10 @@ export default function PortfolioPage() {
                         <button
                           type="button"
                           disabled={isActionBusy}
-                          onClick={() => setOpenActionMenuId(isMenuOpen ? null : listing.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenActionMenuId(isMenuOpen ? null : listing.id);
+                          }}
                           style={{
                             width: '32px',
                             height: '32px',
@@ -1065,19 +1108,21 @@ export default function PortfolioPage() {
                               top: '38px',
                               right: 0,
                               zIndex: 100,
-                              minWidth: '200px',
+                              minWidth: '205px',
                               background: 'var(--cmp-surface)',
                               border: '1px solid var(--cmp-border)',
-                              borderRadius: '8px',
-                              boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+                              borderRadius: '10px',
+                              boxShadow: '0 12px 32px rgba(0,0,0,0.25)',
                               padding: '6px 0',
                               display: 'grid'
                             }}
+                            onClick={(e) => e.stopPropagation()}
                           >
                             <NavLink
                               to={`/properties/${listing.id}/edit`}
                               className="btn btn-ghost btn-sm"
                               style={{ justifyContent: 'flex-start', borderRadius: 0, width: '100%', padding: '8px 14px' }}
+                              onClick={() => setOpenActionMenuId(null)}
                             >
                               <Edit2 size={14} />
                               <span>Edit Details</span>
@@ -1269,7 +1314,17 @@ export default function PortfolioPage() {
                 </div>
 
                 {/* Card Body */}
-                <div style={{ padding: '14px', display: 'grid', gap: '8px', flex: 1 }}>
+                <div
+                  style={{
+                    padding: '16px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '10px',
+                    flex: 1,
+                    minWidth: 0,
+                    background: 'var(--cmp-surface)'
+                  }}
+                >
                   {/* Rejection Banner */}
                   {status === 'REJECTED' && rejectionReason && (
                     <div
@@ -1280,103 +1335,226 @@ export default function PortfolioPage() {
                         border: '1px solid var(--cmp-danger)',
                         color: 'var(--cmp-danger)',
                         fontSize: '12px',
-                        fontWeight: 600
+                        fontWeight: 600,
+                        minWidth: 0
                       }}
                     >
                       <strong>Rejection note:</strong> {rejectionReason}
                     </div>
                   )}
 
-                  {/* Title */}
-                  <p
-                    className="row"
+                  {/* Price & Purpose Row */}
+                  <div
                     style={{
-                      margin: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
                       gap: '8px',
-                      fontWeight: 700,
-                      fontSize: '15px'
+                      minWidth: 0
                     }}
                   >
-                    <span
-                      aria-hidden="true"
-                      style={{
-                        width: '9px',
-                        height: '9px',
-                        borderRadius: '50%',
-                        flexShrink: 0,
-                        background:
-                          status === 'LIVE'
-                            ? 'var(--cmp-success)'
-                            : status === 'REJECTED'
-                            ? 'var(--cmp-danger)'
-                            : status === 'PENDING_APPROVAL'
-                            ? 'var(--cmp-warning)'
-                            : 'var(--cmp-text-faint)'
-                      }}
-                    />
-                    <span
-                      title={title}
-                      style={{
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap'
-                      }}
-                    >
-                      {title}
-                    </span>
-                  </p>
-
-                  {/* Location */}
-                  <p className="row muted" style={{ margin: 0, gap: '6px', fontSize: '13px' }}>
-                    <Home size={14} style={{ flexShrink: 0 }} />
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {location}
-                    </span>
-                  </p>
-
-                  {/* Specs */}
-                  <p className="row" style={{ margin: 0, gap: '12px', fontSize: '13px', flexWrap: 'wrap' }}>
-                    {beds && (
-                      <span className="row" style={{ gap: '4px' }}>
-                        <Bed size={15} style={{ flexShrink: 0 }} />
-                        <span>{beds === '0' ? 'Studio' : `${beds} beds`}</span>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', minWidth: 0 }}>
+                      <span
+                        style={{
+                          fontSize: '18px',
+                          fontWeight: 800,
+                          color: 'var(--cmp-text)',
+                          letterSpacing: '-0.02em',
+                          lineHeight: 1.2,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        {price}
                       </span>
-                    )}
-                    {area && (
-                      <span className="row" style={{ gap: '4px' }}>
-                        <Maximize2 size={15} style={{ flexShrink: 0 }} />
-                        <span>{Number(area).toLocaleString()} sqft</span>
-                      </span>
-                    )}
-                    <span className="row" style={{ gap: '4px', fontWeight: 700, color: 'var(--cmp-brand)' }}>
-                      <Tag size={15} style={{ flexShrink: 0 }} />
-                      <span>{price}</span>
-                    </span>
-                  </p>
+                    </div>
 
-                  {/* Chips */}
-                  <div className="row" style={{ gap: '6px', flexWrap: 'wrap' }}>
                     {listing.purpose && (
-                      <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', background: 'var(--cmp-surface-sunken)', fontWeight: 600 }}>
+                      <span
+                        style={{
+                          fontSize: '10.5px',
+                          fontWeight: 700,
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.04em',
+                          padding: '2.5px 8px',
+                          borderRadius: '5px',
+                          background:
+                            String(listing.purpose).toUpperCase() === 'SALE'
+                              ? 'rgba(4, 21, 14, 0.08)'
+                              : 'rgba(217, 119, 6, 0.1)',
+                          color:
+                            String(listing.purpose).toUpperCase() === 'SALE'
+                              ? 'var(--cmp-brand)'
+                              : '#b45309',
+                          border: `1px solid ${
+                            String(listing.purpose).toUpperCase() === 'SALE'
+                              ? 'rgba(4, 21, 14, 0.16)'
+                              : 'rgba(217, 119, 6, 0.22)'
+                          }`,
+                          flexShrink: 0
+                        }}
+                      >
                         {listing.purpose}
-                      </span>
-                    )}
-                    {listing.typeLabel && (
-                      <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', background: 'var(--cmp-surface-sunken)', fontWeight: 600 }}>
-                        {listing.typeLabel}
-                      </span>
-                    )}
-                    {listing.category && (
-                      <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', background: 'var(--cmp-surface-sunken)', fontWeight: 600 }}>
-                        {listing.category}
                       </span>
                     )}
                   </div>
 
+                  {/* Title */}
+                  <h3
+                    style={{
+                      margin: 0,
+                      fontSize: '15px',
+                      fontWeight: 700,
+                      lineHeight: 1.35,
+                      minWidth: 0
+                    }}
+                  >
+                    <NavLink
+                      to={`/properties/${listing.id}/edit`}
+                      title={title}
+                      style={{
+                        color: 'var(--cmp-text)',
+                        textDecoration: 'none',
+                        display: 'block',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        transition: 'color var(--cmp-duration-fast) var(--cmp-ease)'
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--cmp-brand)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--cmp-text)'; }}
+                    >
+                      {title}
+                    </NavLink>
+                  </h3>
+
+                  {/* Location with MapPin icon and clean truncation */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      fontSize: '12.5px',
+                      color: 'var(--cmp-text-muted)',
+                      minWidth: 0
+                    }}
+                  >
+                    <MapPin size={13} style={{ flexShrink: 0, color: 'var(--cmp-text-faint)' }} />
+                    <span
+                      title={location}
+                      style={{
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        minWidth: 0
+                      }}
+                    >
+                      {location}
+                    </span>
+                  </div>
+
+                  {/* Specs Row (Beds, Baths, Area, Type) */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      fontSize: '12.5px',
+                      color: 'var(--cmp-text-muted)',
+                      padding: '7px 0',
+                      borderTop: '1px solid var(--cmp-border)',
+                      borderBottom: '1px solid var(--cmp-border)',
+                      minWidth: 0,
+                      flexWrap: 'wrap'
+                    }}
+                  >
+                    {beds !== undefined && beds !== null && beds !== '' && (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: 500, flexShrink: 0 }}>
+                        <Bed size={14} style={{ color: 'var(--cmp-text-faint)' }} />
+                        <span>{beds === '0' || beds === 0 ? 'Studio' : `${beds} beds`}</span>
+                      </span>
+                    )}
+
+                    {baths !== undefined && baths !== null && baths !== '' && (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: 500, flexShrink: 0 }}>
+                        <Bath size={14} style={{ color: 'var(--cmp-text-faint)' }} />
+                        <span>{baths} {Number(baths) === 1 ? 'bath' : 'baths'}</span>
+                      </span>
+                    )}
+
+                    {area && (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: 500, flexShrink: 0 }}>
+                        <Maximize2 size={13} style={{ color: 'var(--cmp-text-faint)' }} />
+                        <span>{Number(area).toLocaleString()} sqft</span>
+                      </span>
+                    )}
+
+                    {listing.typeLabel && (
+                      <span
+                        style={{
+                          marginLeft: 'auto',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          color: 'var(--cmp-text-muted)',
+                          background: 'var(--cmp-surface-sunken)',
+                          padding: '2px 7px',
+                          borderRadius: '4px',
+                          flexShrink: 0
+                        }}
+                      >
+                        {listing.typeLabel}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Chips (Category, DLD Permit) */}
+                  {(listing.category || listing.dldPermitNumber || listing.permitNumber) && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', minWidth: 0 }}>
+                      {listing.category && (
+                        <span
+                          style={{
+                            fontSize: '11px',
+                            padding: '2px 7px',
+                            borderRadius: '4px',
+                            background: 'var(--cmp-surface-sunken)',
+                            color: 'var(--cmp-text-muted)',
+                            fontWeight: 600
+                          }}
+                        >
+                          {listing.category}
+                        </span>
+                      )}
+                      {(listing.dldPermitNumber || listing.permitNumber) && (
+                        <span
+                          style={{
+                            fontSize: '10.5px',
+                            padding: '2px 7px',
+                            borderRadius: '4px',
+                            background: 'rgba(46, 204, 113, 0.1)',
+                            color: '#27ae60',
+                            fontWeight: 700
+                          }}
+                        >
+                          DLD: {listing.dldPermitNumber || listing.permitNumber}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
                   {/* Reference Number Row */}
-                  <div className="row" style={{ justifyContent: 'space-between', fontSize: '12.5px', marginTop: '2px' }}>
-                    <span className="muted">Ref:</span>
-                    <span className="row" style={{ gap: '6px' }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      fontSize: '12px',
+                      minWidth: 0,
+                      gap: '8px'
+                    }}
+                  >
+                    <span style={{ color: 'var(--cmp-text-faint)', flexShrink: 0 }}>Ref:</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
                       <button
                         type="button"
                         aria-label={`Copy ${refText}`}
@@ -1387,72 +1565,129 @@ export default function PortfolioPage() {
                           background: 'transparent',
                           padding: 0,
                           cursor: 'pointer',
-                          color: 'var(--cmp-text-faint)',
-                          display: 'inline-flex'
+                          color: copiedId === refText ? 'var(--cmp-brand)' : 'var(--cmp-text-faint)',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          flexShrink: 0
                         }}
                       >
                         {copiedId === refText ? (
-                          <Check size={14} style={{ color: 'var(--cmp-brand)' }} />
+                          <Check size={13} style={{ color: 'var(--cmp-brand)' }} />
                         ) : (
-                          <Copy size={14} />
+                          <Copy size={13} />
                         )}
                       </button>
                       <NavLink
                         to={`/properties/${listing.id}/edit`}
+                        title="Edit property"
                         style={{
                           color: 'var(--cmp-brand)',
                           fontWeight: 700,
-                          fontSize: '12.5px'
+                          fontFamily: 'monospace',
+                          fontSize: '12px',
+                          textDecoration: 'none',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          minWidth: 0
                         }}
                       >
                         {refText}
                       </NavLink>
-                    </span>
+                    </div>
                   </div>
 
                   {/* Quality Score Bar */}
                   <div
-                    className="row"
                     style={{
+                      display: 'flex',
+                      alignItems: 'center',
                       justifyContent: 'space-between',
-                      padding: '8px 10px',
+                      padding: '7px 10px',
                       borderRadius: '8px',
                       background: 'var(--cmp-surface-sunken)',
-                      fontSize: '13px'
+                      fontSize: '12.5px',
+                      minWidth: 0
                     }}
                   >
-                    <span>Quality Score</span>
-                    <span className="row" style={{ gap: '6px' }}>
-                      <QualityScoreCircle score={qualityScore} size={20} strokeWidth={3} />
-                      <strong>{qualityScore}</strong>
-                    </span>
+                    <span style={{ color: 'var(--cmp-text)', fontWeight: 500 }}>Quality Score</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                      <QualityScoreCircle score={qualityScore} size={18} strokeWidth={2.5} />
+                      <strong
+                        style={{
+                          fontSize: '12.5px',
+                          color:
+                            qualityScore >= 80
+                              ? 'var(--cmp-success)'
+                              : qualityScore >= 60
+                              ? 'var(--cmp-warning)'
+                              : 'var(--cmp-danger)'
+                        }}
+                      >
+                        {qualityScore}
+                      </strong>
+                    </div>
                   </div>
 
-                  {/* Agent Info */}
-                  <div className="row" style={{ justifyContent: 'space-between', gap: '8px', fontSize: '12px' }}>
-                    <span className="row" style={{ gap: '6px', fontWeight: 600 }}>
+                  {/* Agent Info Footer */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '8px',
+                      paddingTop: '8px',
+                      borderTop: '1px solid var(--cmp-border)',
+                      fontSize: '12px',
+                      minWidth: 0,
+                      marginTop: 'auto'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '7px', minWidth: 0 }}>
                       <span
                         style={{
-                          width: '22px',
-                          height: '22px',
+                          width: '24px',
+                          height: '24px',
                           borderRadius: '50%',
                           display: 'grid',
                           placeItems: 'center',
                           background: 'var(--cmp-brand-subtle)',
                           color: 'var(--cmp-brand)',
                           fontWeight: 700,
-                          fontSize: '9px'
+                          fontSize: '9.5px',
+                          flexShrink: 0
                         }}
                       >
                         {agentInitials}
                       </span>
-                      <span>{agentName}</span>
-                      {listing.listedBy?.brn && (
-                        <span className="faint" style={{ fontSize: '11px' }}>
-                          (BRN: {listing.listedBy.brn})
-                        </span>
-                      )}
-                    </span>
+                      <span
+                        title={agentName}
+                        style={{
+                          fontWeight: 600,
+                          color: 'var(--cmp-text)',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          minWidth: 0
+                        }}
+                      >
+                        {agentName}
+                      </span>
+                    </div>
+                    {listing.listedBy?.brn && (
+                      <span
+                        style={{
+                          fontSize: '10.5px',
+                          color: 'var(--cmp-text-faint)',
+                          background: 'var(--cmp-surface-sunken)',
+                          padding: '1px 6px',
+                          borderRadius: '4px',
+                          flexShrink: 0
+                        }}
+                      >
+                        BRN: {listing.listedBy.brn}
+                      </span>
+                    )}
                   </div>
                 </div>
               </article>

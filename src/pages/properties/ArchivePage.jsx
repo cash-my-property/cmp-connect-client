@@ -793,7 +793,7 @@ export default function ArchivePage() {
             const isItemActionLoading = actionLoadingId === item.id;
 
             return (
-              <article key={item.id} className="card" style={{ padding: '0', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+              <article key={item.id} className="card" style={{ padding: '0', overflow: 'hidden', display: 'flex', flexDirection: 'column', minWidth: 0 }}>
                 {/* Thumbnail / Header */}
                 <div style={{ position: 'relative', height: '160px', background: 'var(--cmp-surface-sunken)' }}>
                   {cover ? (
@@ -842,21 +842,43 @@ export default function ArchivePage() {
                 </div>
 
                 {/* Content */}
-                <div style={{ padding: '16px', display: 'grid', gap: '10px', flex: 1 }}>
-                  <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span className="badge" style={{ background: 'var(--cmp-surface-sunken)', fontSize: '11.5px' }}>
+                <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px', flex: 1, minWidth: 0 }}>
+                  <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', minWidth: 0 }}>
+                    <span className="badge" style={{ background: 'var(--cmp-surface-sunken)', fontSize: '11.5px', flexShrink: 0 }}>
                       {ref}
                     </span>
-                    <span className="faint" style={{ fontSize: '12px' }}>
+                    <span className="faint" style={{ fontSize: '12px', flexShrink: 0 }}>
                       Archived: {formatArchivedDate(item)}
                     </span>
                   </div>
 
-                  <div>
-                    <strong style={{ fontSize: '15px', color: 'var(--cmp-text)', display: 'block', lineHeight: 1.3 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <strong
+                      title={item.title || item.propertyTitle || 'Untitled Property'}
+                      style={{
+                        fontSize: '15px',
+                        color: 'var(--cmp-text)',
+                        display: 'block',
+                        lineHeight: 1.3,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
                       {item.title || item.propertyTitle || 'Untitled Property'}
                     </strong>
-                    <span className="faint" style={{ fontSize: '12.5px', marginTop: '2px', display: 'block' }}>
+                    <span
+                      className="faint"
+                      title={item.location || item.propertyLocation || '—'}
+                      style={{
+                        fontSize: '12.5px',
+                        marginTop: '2px',
+                        display: 'block',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
                       {item.location || item.propertyLocation || '—'}
                     </span>
                   </div>
