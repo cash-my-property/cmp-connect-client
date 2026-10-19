@@ -1,181 +1,845 @@
-import React from 'react';
-import { NavLink } from 'react-router-dom';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
+import { cmpConnectApi } from '../../services/cmpConnectApi';
 import {
   ShieldAlert,
+  ShieldCheck,
   CheckCircle2,
   AlertTriangle,
   FileCheck,
   Upload,
-  ArrowRight
+  ArrowRight,
+  Search,
+  Filter,
+  Loader2,
+  Building,
+  User,
+  ExternalLink,
+  RefreshCw
 } from 'lucide-react';
 
 export default function CompliancePage() {
-  const { isLiveData } = useApp();
+  const { isLiveData, authToken } = useApp();
+  const navigate = useNavigate();
 
-  const complianceItems = isLiveData ? [] : [
+  const [activeTab, setActiveTab] = useState('properties'); // 'properties' | 'agents'
+  const [searchTerm, setSearchTerm] = useState('');
+  const [onlyProblems, setOnlyProblems] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [apiError, setApiError] = useState(null);
+
+  // Live state
+  const [rawListings, setRawListings] = useState([]);
+  const [rawMembers, setRawMembers] = useState([]);
+
+  // Fetch live listings & members
+  const fetchComplianceData = useCallback(async () => {
+    if (!isLiveData) return;
+    if (!authToken) return;
+
+    setIsLoading(true);
+    setApiError(null);
+
+    try {
+      const [listingsRes, membersRes] = await Promise.allSettled([
+        cmpConnectApi.listListings({ limit: 100 }, authToken),
+        cmpConnectApi.listMembers({ limit: 100 }, authToken)
+      ]);
+
+      if (listingsRes.status === 'fulfilled' && Array.isArray(listingsRes.value?.data)) {
+        setRawListings(listingsRes.value.data);
+      } else {
+        setRawListings([]);
+      }
+
+      if (membersRes.status === 'fulfilled' && Array.isArray(membersRes.value?.data)) {
+        setRawMembers(membersRes.value.data);
+      } else {
+        setRawMembers([]);
+      }
+    } catch (err) {
+      console.error('[CompliancePage] Error fetching compliance data:', err);
+      setApiError(err.message || 'Failed to load compliance data.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [isLiveData, authToken]);
+
+  useEffect(() => {
+    fetchComplianceData();
+  }, [fetchComplianceData]);
+
+  // Demo fallback when in mock mode
+  const mockProperties = useMemo(() => [
     {
-      id: 'CMP-S-001004',
-      title: 'Duplex penthouse on the Palm',
-      type: 'Trakheesi DLD Permit',
-      status: 'Expired',
-      statusText: 'Expired 3 days ago',
-      severity: 'danger',
-      agent: 'Layla Haddad'
-    },
-    {
-      id: 'CMP-R-002004',
-      title: 'Corner shop on retail podium',
-      type: 'Form A (Owner Agreement)',
-      status: 'Overdue',
-      statusText: 'Overdue since 16 Sep',
-      severity: 'danger',
-      agent: 'Emma Clarke'
+      id: 'CMP-S-001001',
+      title: 'Full marina view 2 bed in Marina Gate',
+      location: 'Dubai Marina',
+      status: 'LIVE',
+      permitNumber: 'DLD-7128394',
+      permitStatus: 'Valid · 64 days left',
+      permitSeverity: 'success',
+      formAFileName: 'form-a-marina-gate.pdf',
+      formAStatus: 'Valid · 210 days left',
+      formASeverity: 'success',
+      agent: 'Karim Saleh',
+      hasProblem: false
     },
     {
       id: 'CMP-S-001002',
       title: 'Burj Khalifa facing one bed',
-      type: 'Trakheesi DLD Permit',
-      status: 'Renew Soon',
-      statusText: 'Expires in 22 days',
-      severity: 'warning',
-      agent: 'Layla Haddad'
+      location: 'Downtown Dubai',
+      status: 'LIVE',
+      permitNumber: 'DLD-7284410',
+      permitStatus: 'Expires in 22 days',
+      permitSeverity: 'warning',
+      formAFileName: 'form-a-the-address.pdf',
+      formAStatus: 'Valid · 95 days left',
+      formASeverity: 'success',
+      agent: 'Layla Haddad',
+      hasProblem: true
     },
     {
-      id: 'BRN-Saleh',
-      title: 'Karim Saleh (Broker License)',
-      type: 'RERA BRN License',
-      status: 'Renew Soon',
-      statusText: 'Expires in 46 days',
-      severity: 'warning',
-      agent: 'Karim Saleh'
-    },
-    {
-      id: 'CMP-S-001001',
-      title: 'Full marina view 2 bed in Marina Gate',
-      type: 'Trakheesi DLD Permit',
-      status: 'Verified',
-      statusText: 'Valid until 12 Mar 2027',
-      severity: 'success',
-      agent: 'Karim Saleh'
+      id: 'CMP-S-001004',
+      title: 'Duplex penthouse on the Palm',
+      location: 'Palm Jumeirah',
+      status: 'LIVE',
+      permitNumber: 'DLD-6880412',
+      permitStatus: 'Expired 3 days ago',
+      permitSeverity: 'danger',
+      formAFileName: 'form-a-palm-penthouse.pdf',
+      formAStatus: 'Expires in 12 days',
+      formASeverity: 'warning',
+      agent: 'Layla Haddad',
+      hasProblem: true
     },
     {
       id: 'CMP-S-001005',
       title: 'Three bed townhouse near the park',
-      type: 'Form A & DLD Permit',
-      status: 'Verified',
-      statusText: 'Valid until 28 Nov 2026',
-      severity: 'success',
-      agent: 'Arjun Mehta'
+      location: 'Dubai Hills Estate',
+      status: 'LIVE',
+      permitNumber: 'DLD-7388120',
+      permitStatus: 'Valid · 140 days left',
+      permitSeverity: 'success',
+      formAFileName: null,
+      formAStatus: 'Expired / Missing',
+      formASeverity: 'danger',
+      agent: 'Arjun Mehta',
+      hasProblem: true
+    },
+    {
+      id: 'CMP-R-002003',
+      title: 'High floor corner apartment',
+      location: 'Jumeirah Lake Towers',
+      status: 'PENDING_APPROVAL',
+      permitNumber: 'DLD-7455901',
+      permitStatus: 'Valid · 170 days left',
+      permitSeverity: 'success',
+      formAFileName: 'form-a-jlt.pdf',
+      formAStatus: 'Valid · 300 days left',
+      formASeverity: 'success',
+      agent: 'Emma Clarke',
+      hasProblem: false
+    },
+    {
+      id: 'CMP-R-002004',
+      title: 'Corner shop on retail podium',
+      location: 'Business Bay',
+      status: 'DRAFT',
+      permitNumber: null,
+      permitStatus: 'Not on file',
+      permitSeverity: 'muted',
+      formAFileName: null,
+      formAStatus: 'Overdue since 16 Sep',
+      formASeverity: 'danger',
+      agent: 'Emma Clarke',
+      hasProblem: true
     }
-  ];
+  ], []);
+
+  const mockAgents = useMemo(() => [
+    {
+      id: '1',
+      name: 'Layla Haddad',
+      email: 'layla@agency.ae',
+      role: 'Director',
+      brn: '58210',
+      brnExpiry: '2027-10-30',
+      verificationStatus: 'VERIFIED',
+      whitelisted: true,
+      statusText: 'Verified · Valid until Oct 2027',
+      severity: 'success',
+      hasProblem: false
+    },
+    {
+      id: '2',
+      name: 'Karim Saleh',
+      email: 'karim@agency.ae',
+      role: 'Senior Agent',
+      brn: '49120',
+      brnExpiry: '2026-11-10',
+      verificationStatus: 'VERIFIED',
+      whitelisted: true,
+      statusText: 'Expires in 22 days',
+      severity: 'warning',
+      hasProblem: true
+    },
+    {
+      id: '3',
+      name: 'Arjun Mehta',
+      email: 'arjun@agency.ae',
+      role: 'Property Consultant',
+      brn: '20182',
+      brnExpiry: '2026-10-01',
+      verificationStatus: 'VERIFIED',
+      whitelisted: false,
+      statusText: 'Expired 18 days ago',
+      severity: 'danger',
+      hasProblem: true
+    },
+    {
+      id: '4',
+      name: 'Emma Clarke',
+      email: 'emma@agency.ae',
+      role: 'Listing Coordinator',
+      brn: null,
+      brnExpiry: null,
+      verificationStatus: 'UNVERIFIED',
+      whitelisted: false,
+      statusText: 'No BRN registered',
+      severity: 'muted',
+      hasProblem: false
+    }
+  ], []);
+
+  // Process live properties
+  const processedProperties = useMemo(() => {
+    if (!isLiveData) return mockProperties;
+
+    return rawListings.map((l) => {
+      const ref = l.listingRef || l.id;
+      const title = l.title || l.propertyTitle || 'Untitled Property';
+      const location = l.location || l.propertyLocation || '—';
+      const status = l.status || 'DRAFT';
+      const permitNumber = l.permitNumber || null;
+
+      // Extract Form A document if available
+      const docs = Array.isArray(l.documents) ? l.documents : [];
+      const formADoc = docs.find((d) => d.key === 'propertyFormA' || d.key === 'formA' || (d.label && d.label.toLowerCase().includes('form a')));
+      const trakheesiDoc = docs.find((d) => d.key === 'propertyTrakheesi' || (d.label && d.label.toLowerCase().includes('trakheesi')));
+
+      // Permit status logic
+      let permitStatus = 'Not on file';
+      let permitSeverity = 'muted';
+      if (permitNumber || trakheesiDoc?.url) {
+        permitStatus = permitNumber || 'Uploaded';
+        permitSeverity = 'success';
+      } else if (status === 'LIVE') {
+        permitStatus = 'Missing (Live listing!)';
+        permitSeverity = 'danger';
+      }
+
+      // Form A status logic
+      let formAFileName = formADoc?.fileName || (formADoc?.url ? 'form-a-agreement.pdf' : null);
+      let formAStatus = formAFileName ? 'Valid on file' : 'Not on file';
+      let formASeverity = formAFileName ? 'success' : (status === 'LIVE' || status === 'PENDING_APPROVAL' ? 'warning' : 'muted');
+
+      const hasProblem = permitSeverity === 'danger' || permitSeverity === 'warning' || formASeverity === 'danger' || formASeverity === 'warning' || status === 'REJECTED';
+
+      return {
+        id: l.id,
+        ref,
+        title,
+        location,
+        status,
+        permitNumber,
+        permitStatus,
+        permitSeverity,
+        formAFileName,
+        formAStatus,
+        formASeverity,
+        agent: l.listedBy?.fullName || '—',
+        hasProblem
+      };
+    });
+  }, [isLiveData, rawListings, mockProperties]);
+
+  // Process live agents
+  const processedAgents = useMemo(() => {
+    if (!isLiveData) return mockAgents;
+
+    const now = Date.now();
+    return rawMembers.map((m) => {
+      const brn = m.compliance?.brn || null;
+      const brnExpiry = m.compliance?.brnExpiry || null;
+      const verificationStatus = m.verificationStatus || 'UNVERIFIED';
+      const whitelisted = !!m.compliance?.whitelisted;
+
+      let statusText = 'No BRN registered';
+      let severity = 'muted';
+      let hasProblem = false;
+
+      if (brn) {
+        if (brnExpiry) {
+          const expTime = new Date(brnExpiry).getTime();
+          const daysLeft = Math.ceil((expTime - now) / (1000 * 60 * 60 * 24));
+          if (daysLeft < 0) {
+            statusText = `Expired ${Math.abs(daysLeft)} days ago`;
+            severity = 'danger';
+            hasProblem = true;
+          } else if (daysLeft <= 30) {
+            statusText = `Expires in ${daysLeft} days`;
+            severity = 'warning';
+            hasProblem = true;
+          } else {
+            statusText = `Valid · ${daysLeft} days left`;
+            severity = 'success';
+          }
+        } else if (verificationStatus === 'VERIFIED') {
+          statusText = 'Verified DLD Broker';
+          severity = 'success';
+        } else if (verificationStatus === 'PENDING') {
+          statusText = 'Pending DLD review';
+          severity = 'warning';
+          hasProblem = true;
+        } else {
+          statusText = 'Unverified BRN';
+          severity = 'warning';
+          hasProblem = true;
+        }
+      }
+
+      return {
+        id: m.id || m._id,
+        name: m.fullName || `${m.firstName || ''} ${m.lastName || ''}`.trim() || 'Team Member',
+        email: m.email || '—',
+        role: m.role?.name || m.role || 'Member',
+        brn,
+        brnExpiry,
+        verificationStatus,
+        whitelisted,
+        statusText,
+        severity,
+        hasProblem
+      };
+    });
+  }, [isLiveData, rawMembers, mockAgents]);
+
+  // KPIs
+  const kpis = useMemo(() => {
+    const totalProps = processedProperties.length;
+    const compliantProps = processedProperties.filter((p) => !p.hasProblem).length;
+    const compliancePercent = totalProps > 0 ? Math.round((compliantProps / totalProps) * 100) : 100;
+
+    const liveWithoutPermit = processedProperties.filter((p) => p.status === 'LIVE' && p.permitSeverity === 'danger').length;
+    const expiringIn30Days = processedProperties.filter((p) => p.permitSeverity === 'warning' || p.formASeverity === 'warning').length +
+      processedAgents.filter((a) => a.severity === 'warning').length;
+
+    const formAExpiredOrMissing = processedProperties.filter((p) => (p.status === 'LIVE' || p.status === 'PENDING_APPROVAL') && !p.formAFileName).length;
+
+    return {
+      compliancePercent,
+      liveWithoutPermit,
+      expiringIn30Days,
+      formAExpiredOrMissing
+    };
+  }, [processedProperties, processedAgents]);
+
+  // Filtered views
+  const filteredProperties = useMemo(() => {
+    const q = searchTerm.toLowerCase();
+    return processedProperties.filter((p) => {
+      if (onlyProblems && !p.hasProblem) return false;
+      if (!q) return true;
+      return (
+        (p.ref || '').toLowerCase().includes(q) ||
+        (p.title || '').toLowerCase().includes(q) ||
+        (p.location || '').toLowerCase().includes(q) ||
+        (p.agent || '').toLowerCase().includes(q)
+      );
+    });
+  }, [processedProperties, searchTerm, onlyProblems]);
+
+  const filteredAgents = useMemo(() => {
+    const q = searchTerm.toLowerCase();
+    return processedAgents.filter((a) => {
+      if (onlyProblems && !a.hasProblem) return false;
+      if (!q) return true;
+      return (
+        (a.name || '').toLowerCase().includes(q) ||
+        (a.email || '').toLowerCase().includes(q) ||
+        (a.brn || '').toLowerCase().includes(q) ||
+        (a.role || '').toLowerCase().includes(q)
+      );
+    });
+  }, [processedAgents, searchTerm, onlyProblems]);
 
   return (
     <div>
-      <div style={{ marginBottom: '22px' }}>
-        <h1 style={{ fontSize: '24px' }}>Compliance & Regulatory Tracking</h1>
-        <p className="muted" style={{ margin: '4px 0 0', fontSize: '13.5px' }}>
-          Dubai Land Department (DLD) permits, RERA Form A agreements and agent BRN license health.
-        </p>
+      {/* Top Header */}
+      <div
+        className="row"
+        style={{
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          gap: '16px',
+          flexWrap: 'wrap',
+          marginBottom: '20px'
+        }}
+      >
+        <div>
+          <h1
+            style={{
+              fontSize: '22px',
+              display: 'flex',
+              alignItems: 'baseline',
+              gap: '10px',
+              letterSpacing: '-0.02em',
+              margin: 0
+            }}
+          >
+            Compliance & Regulatory Tracking
+          </h1>
+          <p className="muted" style={{ margin: '4px 0 0', fontSize: '13.5px', maxWidth: '820px' }}>
+            Keep every DLD permit, Form A seller agreement, and agent RERA BRN in date. Real-time validation against Dubai regulations.
+          </p>
+        </div>
+
+        <div className="row" style={{ gap: '8px' }}>
+          <button
+            type="button"
+            className="btn btn-sm btn-outline"
+            onClick={fetchComplianceData}
+            disabled={isLoading}
+            title="Refresh compliance"
+          >
+            <RefreshCw size={13} className={isLoading ? 'spin' : ''} />
+            <span>Refresh</span>
+          </button>
+          <NavLink to="/properties" className="btn btn-sm btn-outline">
+            Active portfolio
+          </NavLink>
+        </div>
       </div>
 
-      <div className="stat-grid" style={{ marginBottom: '24px' }}>
-        <div className="card" style={{ padding: '16px' }}>
-          <span className="muted" style={{ fontSize: '12.5px' }}>Permit Health</span>
-          <p style={{ margin: '6px 0 0', fontSize: '26px', fontWeight: 800, color: isLiveData ? 'var(--cmp-text)' : 'var(--cmp-warning)' }}>
-            {isLiveData ? '0%' : '75%'}
-          </p>
-          <span className="faint" style={{ fontSize: '12px' }}>
-            {isLiveData ? '0 permits need attention' : '2 permits need attention'}
+      {/* API Error Banner */}
+      {apiError && (
+        <div
+          className="card row card-danger"
+          style={{
+            padding: '12px 16px',
+            marginBottom: '16px',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            background: 'rgba(239, 68, 68, 0.08)',
+            borderColor: 'var(--cmp-danger)',
+            color: 'var(--cmp-danger)'
+          }}
+        >
+          <div className="row" style={{ gap: '10px', alignItems: 'center' }}>
+            <AlertTriangle size={18} />
+            <span style={{ fontSize: '13.5px', fontWeight: 600 }}>{apiError}</span>
+          </div>
+          <button type="button" className="btn btn-sm btn-outline" onClick={fetchComplianceData}>
+            Retry
+          </button>
+        </div>
+      )}
+
+      {/* 4 KPI Cards (as in compliance.html concept) */}
+      <div className="kpi-grid" style={{ marginBottom: '20px' }}>
+        <div className="card kpi-tile" style={{ padding: '16px' }}>
+          <span className="kpi-icon" style={{ color: 'var(--cmp-brand)' }}>
+            <ShieldCheck size={20} />
+          </span>
+          <span style={{ display: 'grid', gap: '2px' }}>
+            <span className="muted" style={{ fontSize: '13px', fontWeight: 600 }}>
+              Fully compliant
+            </span>
+            <span style={{ fontSize: '26px', fontWeight: 800, color: 'var(--cmp-text)' }}>
+              {isLoading ? '...' : `${kpis.compliancePercent}%`}
+            </span>
+            <span className="faint" style={{ fontSize: '12px' }}>
+              {processedProperties.length} active listings tracked
+            </span>
           </span>
         </div>
-        <div className="card" style={{ padding: '16px' }}>
-          <span className="muted" style={{ fontSize: '12.5px' }}>Active Form A</span>
-          <p style={{ margin: '6px 0 0', fontSize: '26px', fontWeight: 800, color: 'var(--cmp-brand)' }}>
-            {isLiveData ? '0 / 0' : '7 / 8'}
-          </p>
-          <span className="faint" style={{ fontSize: '12px' }}>
-            {isLiveData ? 'No signed seller agreements' : 'Signed seller agreements'}
+
+        <div className="card kpi-tile" style={{ padding: '16px' }}>
+          <span className="kpi-icon" style={{ color: kpis.liveWithoutPermit > 0 ? 'var(--cmp-danger)' : 'var(--cmp-text-faint)' }}>
+            <ShieldAlert size={20} />
+          </span>
+          <span style={{ display: 'grid', gap: '2px' }}>
+            <span className="muted" style={{ fontSize: '13px', fontWeight: 600 }}>
+              Live without valid permit
+            </span>
+            <span style={{ fontSize: '26px', fontWeight: 800, color: kpis.liveWithoutPermit > 0 ? 'var(--cmp-danger)' : 'var(--cmp-text)' }}>
+              {isLoading ? '...' : kpis.liveWithoutPermit}
+            </span>
+            <span className="faint" style={{ fontSize: '12px' }}>
+              {kpis.liveWithoutPermit > 0 ? 'Immediate DLD penalty risk' : 'Zero compliance penalties'}
+            </span>
           </span>
         </div>
-        <div className="card" style={{ padding: '16px' }}>
-          <span className="muted" style={{ fontSize: '12.5px' }}>Registered BRNs</span>
-          <p style={{ margin: '6px 0 0', fontSize: '26px', fontWeight: 800, color: 'var(--cmp-brand)' }}>
-            {isLiveData ? '0 / 0' : '4 / 4'}
-          </p>
-          <span className="faint" style={{ fontSize: '12px' }}>
-            {isLiveData ? 'No agents registered yet' : 'All agents verified'}
+
+        <div className="card kpi-tile" style={{ padding: '16px' }}>
+          <span className="kpi-icon" style={{ color: kpis.expiringIn30Days > 0 ? 'var(--cmp-warning)' : 'var(--cmp-text-faint)' }}>
+            <AlertTriangle size={20} />
+          </span>
+          <span style={{ display: 'grid', gap: '2px' }}>
+            <span className="muted" style={{ fontSize: '13px', fontWeight: 600 }}>
+              Expiring in 30 days
+            </span>
+            <span style={{ fontSize: '26px', fontWeight: 800, color: kpis.expiringIn30Days > 0 ? 'var(--cmp-warning)' : 'var(--cmp-text)' }}>
+              {isLoading ? '...' : kpis.expiringIn30Days}
+            </span>
+            <span className="faint" style={{ fontSize: '12px' }}>
+              Permits or agent BRNs needing renewal
+            </span>
+          </span>
+        </div>
+
+        <div className="card kpi-tile" style={{ padding: '16px' }}>
+          <span className="kpi-icon" style={{ color: kpis.formAExpiredOrMissing > 0 ? 'var(--cmp-danger)' : 'var(--cmp-text-faint)' }}>
+            <FileCheck size={20} />
+          </span>
+          <span style={{ display: 'grid', gap: '2px' }}>
+            <span className="muted" style={{ fontSize: '13px', fontWeight: 600 }}>
+              Form A expired / missing
+            </span>
+            <span style={{ fontSize: '26px', fontWeight: 800, color: kpis.formAExpiredOrMissing > 0 ? 'var(--cmp-danger)' : 'var(--cmp-text)' }}>
+              {isLoading ? '...' : kpis.formAExpiredOrMissing}
+            </span>
+            <span className="faint" style={{ fontSize: '12px' }}>
+              Signed seller representation contracts
+            </span>
           </span>
         </div>
       </div>
 
-      {/* Compliance Table */}
-      <div className="card table-scroll">
-        <table className="data">
-          <thead>
-            <tr>
-              <th>Entity / Reference</th>
-              <th>Property / Subject</th>
-              <th>Requirement</th>
-              <th>Status</th>
-              <th>Responsible Agent</th>
-              <th style={{ textAlign: 'end' }}>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {complianceItems.length === 0 ? (
-              <tr>
-                <td colSpan={6} style={{ textAlign: 'center', padding: '48px 20px' }}>
-                  <p style={{ margin: 0, fontWeight: 600, fontSize: '14px' }} className="muted">
-                    No compliance records found
-                  </p>
-                  <p className="faint" style={{ margin: '4px 0 0', fontSize: '12px' }}>
-                    {isLiveData
-                      ? 'No live regulatory or permit documents required at this time.'
-                      : 'All properties and agents are currently compliant.'}
-                  </p>
-                </td>
-              </tr>
-            ) : (
-              complianceItems.map((item) => (
-                <tr key={item.id}>
-                  <td>
-                    <strong style={{ color: 'var(--cmp-brand)' }}>{item.id}</strong>
-                  </td>
-                  <td style={{ fontWeight: 600 }}>{item.title}</td>
-                  <td>
-                    <span className="badge badge-neutral">{item.type}</span>
-                  </td>
-                  <td>
-                    <span
-                      className={`badge ${
-                        item.severity === 'danger'
-                          ? 'badge-danger'
-                          : item.severity === 'warning'
-                          ? 'badge-warning'
-                          : 'badge-success'
-                      }`}
-                    >
-                      {item.status} · {item.statusText}
-                    </span>
-                  </td>
-                  <td>{item.agent}</td>
-                  <td style={{ textAlign: 'end' }}>
-                    <button
-                      type="button"
-                      className={`btn btn-sm ${item.severity === 'danger' ? 'btn-primary' : 'btn-outline'}`}
-                      onClick={() => alert(`Document submission dialog for ${item.id}`)}
-                    >
-                      <Upload size={13} />
-                      <span>Upload</span>
-                    </button>
-                  </td>
+      {/* Segmented Area Tabs */}
+      <div
+        className="segmented"
+        style={{
+          marginBottom: '16px',
+          height: '42px',
+          padding: '3px'
+        }}
+      >
+        <button
+          type="button"
+          aria-selected={activeTab === 'properties'}
+          onClick={() => setActiveTab('properties')}
+          style={{ gap: '6px' }}
+        >
+          <Building size={14} />
+          <span>Properties ({processedProperties.length})</span>
+        </button>
+        <button
+          type="button"
+          aria-selected={activeTab === 'agents'}
+          onClick={() => setActiveTab('agents')}
+          style={{ gap: '6px' }}
+        >
+          <User size={14} />
+          <span>Agents ({processedAgents.length})</span>
+        </button>
+      </div>
+
+      {/* Filter and Control Bar */}
+      <div
+        className="row"
+        style={{
+          gap: '12px',
+          flexWrap: 'wrap',
+          marginBottom: '14px',
+          alignItems: 'center'
+        }}
+      >
+        <div style={{ position: 'relative', flex: '1 1 320px', maxWidth: '360px' }}>
+          <Search
+            size={16}
+            style={{
+              position: 'absolute',
+              left: '12px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              color: 'var(--cmp-text-faint)',
+              pointerEvents: 'none'
+            }}
+          />
+          <input
+            id="compliance-search"
+            type="search"
+            placeholder={activeTab === 'properties' ? 'Search reference, title or location' : 'Search agent name, email or BRN'}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            style={{ paddingLeft: '36px', height: '40px', width: '100%' }}
+          />
+        </div>
+
+        <label
+          className="row"
+          style={{
+            gap: '8px',
+            fontSize: '13.5px',
+            fontWeight: 600,
+            cursor: 'pointer',
+            marginLeft: 'auto'
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={onlyProblems}
+            onChange={(e) => setOnlyProblems(e.target.checked)}
+            style={{ width: '18px', height: '18px', accentColor: 'var(--cmp-brand)' }}
+          />
+          <span>Only show problems</span>
+        </label>
+      </div>
+
+      {/* Content Section */}
+      {isLoading ? (
+        <div className="card muted" style={{ padding: '60px 24px', textAlign: 'center' }}>
+          <div style={{ display: 'grid', placeItems: 'center', gap: '12px' }}>
+            <Loader2 size={28} className="spin" style={{ color: 'var(--cmp-brand)' }} />
+            <strong style={{ fontSize: '15px', color: 'var(--cmp-text)' }}>
+              Verifying live regulatory status...
+            </strong>
+          </div>
+        </div>
+      ) : activeTab === 'properties' ? (
+        filteredProperties.length === 0 ? (
+          <div className="card muted" style={{ padding: '60px 24px', textAlign: 'center' }}>
+            <div style={{ display: 'grid', placeItems: 'center', gap: '12px' }}>
+              <CheckCircle2 size={32} style={{ color: 'var(--cmp-success)' }} />
+              <strong style={{ fontSize: '16px', color: 'var(--cmp-text)' }}>
+                {onlyProblems ? 'No property compliance issues found!' : 'No properties matched your search'}
+              </strong>
+              <p className="muted" style={{ margin: 0, fontSize: '13.5px', maxWidth: '420px' }}>
+                {onlyProblems
+                  ? 'All active property listings satisfy Dubai Land Department regulations and permits.'
+                  : 'Try clearing your search filters to view your entire portfolio.'}
+              </p>
+              {(searchTerm || onlyProblems) && (
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline"
+                  onClick={() => {
+                    setSearchTerm('');
+                    setOnlyProblems(false);
+                  }}
+                >
+                  Clear filters
+                </button>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="card table-scroll">
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Status</th>
+                  <th>DLD Permit</th>
+                  <th>Form A (Agreement)</th>
+                  <th>Responsible Agent</th>
+                  <th style={{ textAlign: 'right' }}>Actions</th>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+              </thead>
+              <tbody>
+                {filteredProperties.map((p) => (
+                  <tr key={p.id}>
+                    <td>
+                      <NavLink
+                        to={`/properties/${p.id}/edit`}
+                        style={{ fontWeight: 700, color: 'var(--cmp-brand)', textDecoration: 'none' }}
+                      >
+                        {p.ref}
+                      </NavLink>
+                      <span style={{ fontWeight: 600, color: 'var(--cmp-text)', display: 'block', fontSize: '13px' }}>
+                        {p.title}
+                      </span>
+                      <span className="faint" style={{ display: 'block', fontSize: '12px' }}>
+                        {p.location}
+                      </span>
+                    </td>
+                    <td>
+                      <span
+                        className="badge"
+                        style={{
+                          background:
+                            p.status === 'LIVE'
+                              ? 'var(--cmp-brand)'
+                              : p.status === 'PENDING_APPROVAL'
+                              ? 'var(--cmp-warning)'
+                              : p.status === 'REJECTED'
+                              ? 'var(--cmp-danger)'
+                              : 'var(--cmp-surface-sunken)',
+                          color:
+                            p.status === 'LIVE' || p.status === 'REJECTED' ? '#fff' : undefined,
+                          fontSize: '11.5px',
+                          textTransform: 'uppercase'
+                        }}
+                      >
+                        {p.status}
+                      </span>
+                    </td>
+                    <td>
+                      <span style={{ fontSize: '13px', fontWeight: 600, display: 'block' }}>
+                        {p.permitNumber || '—'}
+                      </span>
+                      <span
+                        className={`badge ${
+                          p.permitSeverity === 'danger'
+                            ? 'badge-danger'
+                            : p.permitSeverity === 'warning'
+                            ? 'badge-warning'
+                            : p.permitSeverity === 'success'
+                            ? 'badge-success'
+                            : 'badge-neutral'
+                        }`}
+                        style={{ marginTop: '2px', fontSize: '11px' }}
+                      >
+                        {p.permitStatus}
+                      </span>
+                    </td>
+                    <td>
+                      <span style={{ fontSize: '13px', fontWeight: 600, display: 'block' }}>
+                        {p.formAFileName || 'No file'}
+                      </span>
+                      <span
+                        className={`badge ${
+                          p.formASeverity === 'danger'
+                            ? 'badge-danger'
+                            : p.formASeverity === 'warning'
+                            ? 'badge-warning'
+                            : p.formASeverity === 'success'
+                            ? 'badge-success'
+                            : 'badge-neutral'
+                        }`}
+                        style={{ marginTop: '2px', fontSize: '11px' }}
+                      >
+                        {p.formAStatus}
+                      </span>
+                    </td>
+                    <td>
+                      <span style={{ fontSize: '13px' }}>{p.agent}</span>
+                    </td>
+                    <td style={{ textAlign: 'right' }}>
+                      <NavLink
+                        to={`/properties/${p.id}/edit`}
+                        className={`btn btn-sm ${p.hasProblem ? 'btn-primary' : 'btn-outline'}`}
+                        style={{ height: '32px', padding: '0 10px', gap: '4px' }}
+                      >
+                        <span>Update</span>
+                        <ArrowRight size={13} />
+                      </NavLink>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+      ) : (
+        filteredAgents.length === 0 ? (
+          <div className="card muted" style={{ padding: '60px 24px', textAlign: 'center' }}>
+            <div style={{ display: 'grid', placeItems: 'center', gap: '12px' }}>
+              <CheckCircle2 size={32} style={{ color: 'var(--cmp-success)' }} />
+              <strong style={{ fontSize: '16px', color: 'var(--cmp-text)' }}>
+                {onlyProblems ? 'No agent license issues found!' : 'No agents matched your search'}
+              </strong>
+              <p className="muted" style={{ margin: 0, fontSize: '13.5px', maxWidth: '420px' }}>
+                All registered brokers and coordinators have active, verified RERA credentials.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="card table-scroll">
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>Agent / Member</th>
+                  <th>Role</th>
+                  <th>RERA BRN</th>
+                  <th>License Status</th>
+                  <th>Verification</th>
+                  <th style={{ textAlign: 'right' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredAgents.map((a) => (
+                  <tr key={a.id}>
+                    <td>
+                      <strong style={{ color: 'var(--cmp-text)', fontSize: '13.5px' }}>{a.name}</strong>
+                      <span className="faint" style={{ display: 'block', fontSize: '12px' }}>
+                        {a.email}
+                      </span>
+                    </td>
+                    <td>
+                      <span style={{ fontSize: '13px' }}>{a.role}</span>
+                    </td>
+                    <td>
+                      <strong style={{ fontSize: '13px' }}>
+                        {a.brn ? `BRN#${a.brn}` : 'Not registered'}
+                      </strong>
+                    </td>
+                    <td>
+                      <span
+                        className={`badge ${
+                          a.severity === 'danger'
+                            ? 'badge-danger'
+                            : a.severity === 'warning'
+                            ? 'badge-warning'
+                            : a.severity === 'success'
+                            ? 'badge-success'
+                            : 'badge-neutral'
+                        }`}
+                        style={{ fontSize: '11px' }}
+                      >
+                        {a.statusText}
+                      </span>
+                    </td>
+                    <td>
+                      <span
+                        className="badge"
+                        style={{
+                          background:
+                            a.verificationStatus === 'VERIFIED'
+                              ? 'var(--cmp-brand-subtle)'
+                              : 'var(--cmp-surface-sunken)',
+                          color:
+                            a.verificationStatus === 'VERIFIED'
+                              ? 'var(--cmp-brand)'
+                              : 'var(--cmp-text-muted)',
+                          fontSize: '11px',
+                          fontWeight: 700
+                        }}
+                      >
+                        {a.verificationStatus}
+                      </span>
+                    </td>
+                    <td style={{ textAlign: 'right' }}>
+                      <NavLink
+                        to="/team/members"
+                        className="btn btn-sm btn-outline"
+                        style={{ height: '32px', padding: '0 10px', gap: '4px' }}
+                      >
+                        <span>View profile</span>
+                        <ExternalLink size={12} />
+                      </NavLink>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+      )}
     </div>
   );
 }
+
