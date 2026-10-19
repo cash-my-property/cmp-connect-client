@@ -13,6 +13,7 @@ import {
   Check
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { RangeSlider } from '../../components/ui';
 
 export default function CreditActivityPage() {
   const { agency, isLiveData } = useApp();
@@ -359,13 +360,11 @@ export default function CreditActivityPage() {
                   <span>Featured placements (60 credits / 7d)</span>
                   <strong>{calcFeatured}</strong>
                 </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="10"
+                <RangeSlider
+                  min={0}
+                  max={10}
                   value={calcFeatured}
                   onChange={(e) => setCalcFeatured(Number(e.target.value))}
-                  style={{ height: '32px' }}
                 />
               </div>
 
@@ -374,13 +373,11 @@ export default function CreditActivityPage() {
                   <span>Premium placements (150 credits / 7d)</span>
                   <strong>{calcPremium}</strong>
                 </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="5"
+                <RangeSlider
+                  min={0}
+                  max={5}
                   value={calcPremium}
                   onChange={(e) => setCalcPremium(Number(e.target.value))}
-                  style={{ height: '32px' }}
                 />
               </div>
 
@@ -389,13 +386,11 @@ export default function CreditActivityPage() {
                   <span>Manual listing refreshes (5 credits each)</span>
                   <strong>{calcRefresh}</strong>
                 </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="20"
+                <RangeSlider
+                  min={0}
+                  max={20}
                   value={calcRefresh}
                   onChange={(e) => setCalcRefresh(Number(e.target.value))}
-                  style={{ height: '32px' }}
                 />
               </div>
             </div>

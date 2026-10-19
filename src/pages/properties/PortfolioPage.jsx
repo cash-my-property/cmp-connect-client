@@ -1,5 +1,5 @@
-import React, { useState, useMemo, useCallback } from 'react';
-import { NavLink } from 'react-router-dom';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import {
   CountBadge,
@@ -8,6 +8,8 @@ import {
   QualityScoreCircle
 } from '../../components/ui';
 import { useDebounce } from '../../hooks';
+import cmpConnectApi from '../../services/cmpConnectApi';
+
 import {
   Grid,
   List,
@@ -22,75 +24,473 @@ import {
   Copy,
   Check,
   AlertTriangle,
+  AlertOctagon,
   Home,
   Tag,
   Maximize2,
   Bed,
   Edit2,
-  MoreVertical
+  MoreVertical,
+  Loader2,
+  ShieldAlert,
+  Send,
+  CheckCircle2,
+  XCircle,
+  Archive,
+  RotateCcw,
+  RotateCw,
+  Trash2,
+  UserCheck,
+  CheckSquare,
+  Square,
+  X
 } from 'lucide-react';
 
+const STATUS_TABS = [
+  { label: 'All', key: 'all' },
+  { label: 'Live', key: 'LIVE' },
+  { label: 'In review', key: 'PENDING_APPROVAL' },
+  { label: 'Drafts', key: 'DRAFT' },
+  { label: 'Unpublished', key: 'UNPUBLISHED' },
+  { label: 'Expired', key: 'EXPIRED' },
+  { label: 'Rejected', key: 'REJECTED' },
+  { label: 'On hold', key: 'ON_HOLD' },
+  { label: 'Archive', key: 'ARCHIVED' }
+];
+
 export default function PortfolioPage() {
-  const { listings, isLiveData } = useApp();
+  const { listings: mockListings, isLiveData, authToken, can, account } = useApp();
+  const navigate = useNavigate();
+
   const [activeFilter, setActiveFilter] = useState('All');
   const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'table'
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedId, setCopiedId] = useState(null);
-  const [showDrafts, setShowDrafts] = useState(true);
+  const [sortBy, setSortBy] = useState('newest');
 
-  const debouncedSearch = useDebounce(searchQuery, 200);
+  // Live API state
+  const [liveListings, setLiveListings] = useState([]);
+  const [liveCounts, setLiveCounts] = useState({
+    all: 0,
+    LIVE: 0,
+    PENDING_APPROVAL: 0,
+    DRAFT: 0,
+    UNPUBLISHED: 0,
+    EXPIRED: 0,
+    REJECTED: 0,
+    ON_HOLD: 0,
+    ARCHIVED: 0
+  });
+  const [isLoading, setIsLoading] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [apiError, setApiError] = useState(null);
+  const [actionLoadingId, setActionLoadingId] = useState(null);
+  const [feedbackMessage, setFeedbackMessage] = useState(null);
+  const [openActionMenuId, setOpenActionMenuId] = useState(null);
 
-  const filterTabs = useMemo(() => [
-    { label: 'All', count: listings.length },
-    { label: 'Live', count: listings.filter((l) => l.status === 'Live').length },
-    { label: 'Unpublished', count: 0 },
-    { label: 'In review', count: listings.filter((l) => l.status === 'In review').length },
-    { label: 'Drafts', count: listings.filter((l) => l.status === 'Draft').length },
-    { label: 'Rejected', count: listings.filter((l) => l.status === 'Rejected').length },
-    { label: 'Expired', count: listings.filter((l) => l.status === 'Expired').length }
-  ], [listings]);
+  // Bulk Actions State
+  const [isBulkMode, setIsBulkMode] = useState(false);
+  const [selectedListingIds, setSelectedListingIds] = useState(new Set());
+  const [isBulkLoading, setIsBulkLoading] = useState(false);
+  const [bulkAssignModal, setBulkAssignModal] = useState({ isOpen: false, agentId: '' });
 
-  const filteredListings = useMemo(() => {
-    const q = debouncedSearch.trim().toLowerCase();
+  // Modals state
+  const [rejectModal, setRejectModal] = useState({ isOpen: false, listingId: null, reason: '' });
+  const [assignModal, setAssignModal] = useState({ isOpen: false, listingId: null, agentId: '' });
+  const [activeTeamMembers, setActiveTeamMembers] = useState([]);
 
-    return listings.filter((item) => {
-      if (!showDrafts && (item.status === 'Draft' || item.status === 'Unpublished')) {
-        return false;
+  const debouncedSearch = useDebounce(searchQuery, 300);
+
+  // Auto clear feedback message after 4s
+  useEffect(() => {
+    if (!feedbackMessage) return;
+    const t = setTimeout(() => setFeedbackMessage(null), 4000);
+    return () => clearTimeout(t);
+  }, [feedbackMessage]);
+
+  // Load team members for assign dropdown if user has listings.assign permission
+  useEffect(() => {
+    if (isLiveData && authToken && can('listings.assign')) {
+      cmpConnectApi.listMembers({ status: 'ACTIVE' }, authToken)
+        .then((res) => {
+          if (Array.isArray(res?.data)) {
+            setActiveTeamMembers(res.data);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [isLiveData, authToken, can]);
+
+  // Map active filter label to API status
+  const currentApiStatus = useMemo(() => {
+    const found = STATUS_TABS.find((t) => t.label === activeFilter);
+    return found ? found.key : 'all';
+  }, [activeFilter]);
+
+  // Fetch live listings
+  const fetchLiveListings = useCallback(async () => {
+    if (!isLiveData || !authToken) return;
+    setIsLoading(true);
+    setApiError(null);
+
+    try {
+      const res = await cmpConnectApi.listListings(
+        {
+          status: currentApiStatus,
+          search: debouncedSearch.trim() || undefined,
+          sort: sortBy
+        },
+        authToken
+      );
+
+      if (Array.isArray(res?.data)) {
+        setLiveListings(res.data);
+      } else {
+        setLiveListings([]);
       }
 
+      if (res?.counts) {
+        setLiveCounts((prev) => ({ ...prev, ...res.counts }));
+      }
+    } catch (err) {
+      console.error('[Portfolio] Failed to load listings:', err);
+      setApiError(err.message || 'Failed to load properties.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [isLiveData, authToken, currentApiStatus, debouncedSearch, sortBy]);
+
+  useEffect(() => {
+    fetchLiveListings();
+  }, [fetchLiveListings]);
+
+  // Filter tabs with dynamic counts
+  const filterTabs = useMemo(() => {
+    if (isLiveData) {
+      return STATUS_TABS.map((tab) => ({
+        label: tab.label,
+        count: liveCounts[tab.key] ?? 0
+      }));
+    }
+
+    // Mock fallback counts
+    return [
+      { label: 'All', count: mockListings.length },
+      { label: 'Live', count: mockListings.filter((l) => l.status === 'Live').length },
+      { label: 'In review', count: mockListings.filter((l) => l.status === 'In review').length },
+      { label: 'Drafts', count: mockListings.filter((l) => l.status === 'Draft').length },
+      { label: 'Unpublished', count: 0 },
+      { label: 'Rejected', count: mockListings.filter((l) => l.status === 'Rejected').length },
+      { label: 'On hold', count: 0 },
+      { label: 'Archive', count: 0 }
+    ];
+  }, [isLiveData, liveCounts, mockListings]);
+
+  // Filtered listings in mock mode
+  const filteredMockListings = useMemo(() => {
+    const q = debouncedSearch.trim().toLowerCase();
+    return mockListings.filter((item) => {
       const matchesFilter =
         activeFilter === 'All'
           ? true
           : activeFilter === 'Drafts'
           ? item.status === 'Draft'
-          : activeFilter === 'Unpublished'
-          ? item.status === 'Unpublished'
-          : item.status.toLowerCase() === activeFilter.toLowerCase();
+          : activeFilter === 'In review'
+          ? item.status === 'In review'
+          : activeFilter === 'Live'
+          ? item.status === 'Live'
+          : activeFilter === 'Rejected'
+          ? item.status === 'Rejected'
+          : false;
 
       if (!matchesFilter) return false;
-
       if (q) {
         return (
           item.title.toLowerCase().includes(q) ||
           item.id.toLowerCase().includes(q) ||
-          item.community.toLowerCase().includes(q)
+          item.community?.toLowerCase().includes(q)
         );
       }
-
       return true;
     });
-  }, [listings, activeFilter, showDrafts, debouncedSearch]);
+  }, [mockListings, activeFilter, debouncedSearch]);
 
-  const handleCopyRef = useCallback((id, e) => {
+  const displayListings = isLiveData ? liveListings : filteredMockListings;
+
+  const handleCopyRef = useCallback((text, e) => {
     e.preventDefault();
     e.stopPropagation();
-    navigator.clipboard?.writeText(id);
-    setCopiedId(id);
+    navigator.clipboard?.writeText(text);
+    setCopiedId(text);
     setTimeout(() => setCopiedId(null), 2000);
   }, []);
 
+  // Action Handlers
+  const runListingAction = async (listingId, actionFn, successText) => {
+    setActionLoadingId(listingId);
+    setOpenActionMenuId(null);
+    try {
+      await actionFn();
+      setFeedbackMessage({ type: 'success', text: successText });
+      await fetchLiveListings();
+    } catch (err) {
+      console.error('[Action error]', err);
+      setFeedbackMessage({ type: 'error', text: err.message || 'Action failed.' });
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handlePublish = (listing) => {
+    runListingAction(
+      listing.id,
+      () => cmpConnectApi.publishListing(listing.id, authToken),
+      `Listing ${listing.listingRef || ''} is now live.`
+    );
+  };
+
+  const handleUnpublish = (listing) => {
+    runListingAction(
+      listing.id,
+      () => cmpConnectApi.unpublishListing(listing.id, authToken),
+      `Listing ${listing.listingRef || ''} unpublished.`
+    );
+  };
+
+  const handleSubmitForApproval = (listing) => {
+    runListingAction(
+      listing.id,
+      () => cmpConnectApi.submitListing(listing.id, authToken),
+      can('listings.approve')
+        ? `Listing ${listing.listingRef || ''} submitted and is now live!`
+        : `Listing ${listing.listingRef || ''} submitted for approval.`
+    );
+  };
+
+  const handleApprove = (listing) => {
+    runListingAction(
+      listing.id,
+      () => cmpConnectApi.approveListing(listing.id, authToken),
+      `Listing ${listing.listingRef || ''} approved and live.`
+    );
+  };
+
+  const handleOpenRejectModal = (listing) => {
+    setOpenActionMenuId(null);
+    setRejectModal({ isOpen: true, listingId: listing.id, reason: '' });
+  };
+
+  const handleConfirmReject = async () => {
+    if (!rejectModal.reason.trim()) {
+      alert('Please provide a reason for rejection.');
+      return;
+    }
+    const { listingId, reason } = rejectModal;
+    setRejectModal({ isOpen: false, listingId: null, reason: '' });
+
+    runListingAction(
+      listingId,
+      () => cmpConnectApi.rejectListing(listingId, reason.trim(), authToken),
+      'Listing rejected and returned to agent.'
+    );
+  };
+
+  const handleArchive = (listing) => {
+    runListingAction(
+      listing.id,
+      () => cmpConnectApi.archiveListing(listing.id, authToken),
+      `Listing ${listing.listingRef || ''} moved to archive.`
+    );
+  };
+
+  const handleRestore = (listing) => {
+    runListingAction(
+      listing.id,
+      () => cmpConnectApi.restoreListing(listing.id, authToken),
+      `Listing ${listing.listingRef || ''} restored to Draft.`
+    );
+  };
+
+  const handleDelete = (listing) => {
+    if (!window.confirm(`Are you sure you want to delete listing ${listing.listingRef || listing.title}?`)) {
+      return;
+    }
+    runListingAction(
+      listing.id,
+      () => cmpConnectApi.deleteListing(listing.id, authToken),
+      `Listing ${listing.listingRef || ''} deleted.`
+    );
+  };
+
+  const handleOpenAssignModal = (listing) => {
+    setOpenActionMenuId(null);
+    setAssignModal({
+      isOpen: true,
+      listingId: listing.id,
+      agentId: listing.listedBy?.id || ''
+    });
+  };
+
+  const handleConfirmAssign = async () => {
+    if (!assignModal.agentId) {
+      alert('Please select an agent.');
+      return;
+    }
+    const { listingId, agentId } = assignModal;
+    setAssignModal({ isOpen: false, listingId: null, agentId: '' });
+
+    runListingAction(
+      listingId,
+      () => cmpConnectApi.assignListing(listingId, agentId, authToken),
+      'Listing assignment updated successfully.'
+    );
+  };
+
+  // Refresh Listing (once per 24 hours)
+  const handleRefresh = (listing) => {
+    runListingAction(
+      listing.id,
+      () => cmpConnectApi.refreshListing(listing.id, authToken),
+      `Listing ${listing.listingRef || ''} refreshed to top of search.`
+    );
+  };
+
+  // Export CSV
+  const handleExportCsv = async () => {
+    try {
+      setIsExporting(true);
+      const blob = await cmpConnectApi.exportListingsCsv(
+        {
+          status: currentApiStatus,
+          search: debouncedSearch.trim() || undefined,
+          sort: sortBy
+        },
+        authToken
+      );
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const today = new Date().toISOString().split('T')[0];
+      a.download = `listings-${today}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      setFeedbackMessage({ type: 'success', text: 'Listings exported to CSV successfully.' });
+    } catch (err) {
+      setFeedbackMessage({ type: 'error', text: err.message || 'Failed to export CSV.' });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // Bulk Selection Handlers
+  const toggleSelectListing = (id, e) => {
+    e?.stopPropagation?.();
+    setSelectedListingIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectedListingIds.size === displayListings.length) {
+      setSelectedListingIds(new Set());
+    } else {
+      setSelectedListingIds(new Set(displayListings.map((l) => l.id)));
+    }
+  };
+
+  const handleBulkAction = async (action, agentId = null) => {
+    if (selectedListingIds.size === 0) return;
+    const ids = Array.from(selectedListingIds);
+    setIsBulkLoading(true);
+    try {
+      const res = await cmpConnectApi.bulkListingsAction({ ids, action, agentId }, authToken);
+      setFeedbackMessage({
+        type: 'success',
+        text: res?.message || `Bulk ${action} executed successfully.`
+      });
+      setSelectedListingIds(new Set());
+      setIsBulkMode(false);
+      await fetchLiveListings();
+    } catch (err) {
+      setFeedbackMessage({ type: 'error', text: err.message || `Bulk ${action} failed.` });
+    } finally {
+      setIsBulkLoading(false);
+    }
+  };
+
+  const getDaysUntilExpiry = (expiresAt) => {
+    if (!expiresAt) return null;
+    const diff = new Date(expiresAt).getTime() - Date.now();
+    return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+  };
+
+  // Helper to format price label
+  const formatPrice = (price, rentalPeriod) => {
+    if (!price && price !== 0) return 'Price on Request';
+    const num = Number(price);
+    const formatted = num >= 1000000
+      ? `AED ${(num / 1000000).toFixed(2)}M`
+      : `AED ${num.toLocaleString()}`;
+
+    if (rentalPeriod) {
+      const periodMap = {
+        PER_YEAR: '/ yr',
+        PER_MONTH: '/ mo',
+        PER_WEEK: '/ wk',
+        PER_DAY: '/ day'
+      };
+      return `${formatted} ${periodMap[rentalPeriod] || ''}`;
+    }
+    return formatted;
+  };
+
   return (
     <div>
+      {/* Feedback Toast Banner */}
+      {feedbackMessage && (
+        <div
+          style={{
+            position: 'fixed',
+            top: '20px',
+            right: '24px',
+            zIndex: 9999,
+            padding: '12px 18px',
+            borderRadius: '8px',
+            background: feedbackMessage.type === 'error' ? 'var(--cmp-danger)' : 'var(--cmp-brand)',
+            color: '#FFFFFF',
+            fontWeight: 600,
+            fontSize: '13.5px',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            animation: 'fadeIn 0.2s ease-out'
+          }}
+        >
+          {feedbackMessage.type === 'error' ? <AlertOctagon size={16} /> : <CheckCircle2 size={16} />}
+          <span>{feedbackMessage.text}</span>
+          <button
+            type="button"
+            onClick={() => setFeedbackMessage(null)}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: '#FFF',
+              cursor: 'pointer',
+              marginLeft: '8px',
+              padding: 0
+            }}
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
       {/* Top Header */}
       <div
         className="row"
@@ -109,34 +509,43 @@ export default function PortfolioPage() {
               display: 'flex',
               alignItems: 'baseline',
               gap: '10px',
-              letterSpacing: '-0.02em'
+              letterSpacing: '-0.02em',
+              margin: 0
             }}
           >
-            Portfolio <CountBadge count={listings.length} />
+            Portfolio{' '}
+            <CountBadge count={isLiveData ? (liveCounts.all || liveListings.length) : mockListings.length} />
           </h1>
+          <p className="muted" style={{ margin: '4px 0 0', fontSize: '13px' }}>
+            {isLiveData
+              ? 'Real-time property inventory synced with Dubai portals and DLD compliance.'
+              : 'Interactive portfolio mockup demonstrating live listing states.'}
+          </p>
         </div>
 
         <div className="row" style={{ gap: '8px', flexWrap: 'wrap' }}>
+          {can('listings.view') && (
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              disabled={isExporting}
+              onClick={handleExportCsv}
+              title="Download listings as CSV"
+            >
+              {isExporting ? <Loader2 size={16} className="spin" /> : <Download size={16} />}
+              <span>{isExporting ? 'Exporting...' : 'Export CSV'}</span>
+            </button>
+          )}
           <NavLink to="/rto" className="btn btn-outline btn-sm">
             <Radio size={16} />
             <span>Offers</span>
           </NavLink>
-          <button
-            type="button"
-            className="btn btn-outline btn-sm"
-            style={{ gap: '6px', whiteSpace: 'nowrap' }}
-          >
-            <Download size={16} />
-            <span>Export listings</span>
-            <ChevronDown size={14} />
-          </button>
-          <button type="button" className="btn btn-sm btn-outline">
-            Select listings
-          </button>
-          <NavLink to="/properties/new" className="btn btn-accent btn-sm">
-            <Plus size={16} />
-            <span>List new property</span>
-          </NavLink>
+          {can('listings.create') && (
+            <NavLink to="/properties/new" className="btn btn-accent btn-sm">
+              <Plus size={16} />
+              <span>List new property</span>
+            </NavLink>
+          )}
         </div>
       </div>
 
@@ -152,37 +561,46 @@ export default function PortfolioPage() {
         {/* Search */}
         <SearchInput
           id="management-search"
-          placeholder="City, community, building, title or reference"
+          placeholder="Search by title, CMP ref, unit or community..."
           value={searchQuery}
           onChange={setSearchQuery}
           onClear={() => setSearchQuery('')}
           maxWidth="330px"
         />
 
-        <button type="button" className="btn btn-sm btn-outline" style={{ height: '40px' }}>
-          <SlidersHorizontal size={16} />
-          <span>All filters</span>
-        </button>
+        {/* Sort Select */}
+        <div style={{ position: 'relative' }}>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="btn btn-outline btn-sm"
+            style={{
+              height: '40px',
+              appearance: 'none',
+              paddingRight: '28px',
+              cursor: 'pointer'
+            }}
+          >
+            <option value="newest">Listing created: Newest</option>
+            <option value="updated">Recently updated</option>
+            <option value="price_asc">Price: Low to High</option>
+            <option value="price_desc">Price: High to Low</option>
+            <option value="quality">Quality Score</option>
+          </select>
+          <ChevronDown
+            size={14}
+            style={{
+              position: 'absolute',
+              right: '10px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              pointerEvents: 'none',
+              color: 'var(--cmp-text-muted)'
+            }}
+          />
+        </div>
 
-        <button
-          type="button"
-          className="btn btn-outline btn-sm"
-          style={{ height: '40px', borderColor: 'var(--cmp-accent)' }}
-        >
-          <Bell size={16} />
-          <span>9 fixes to make</span>
-        </button>
-
-        <button
-          type="button"
-          className="btn btn-outline btn-sm"
-          style={{ gap: '6px', whiteSpace: 'nowrap', height: '40px' }}
-        >
-          <ArrowUpDown size={16} />
-          <span>Listing created: Newest</span>
-          <ChevronDown size={14} />
-        </button>
-
+        {/* View Mode Toggle */}
         <button
           type="button"
           className="btn btn-outline btn-sm"
@@ -194,55 +612,31 @@ export default function PortfolioPage() {
           <span>{viewMode === 'grid' ? 'List' : 'Grid'}</span>
         </button>
 
+        {/* Bulk Selection Toggle */}
         <button
           type="button"
-          className="btn btn-outline btn-sm"
-          aria-label="Choose columns"
-          title="Columns apply to the list view"
-          style={{ height: '40px', width: '40px', padding: 0 }}
+          className={`btn btn-sm ${isBulkMode ? 'btn-accent' : 'btn-outline'}`}
+          style={{ height: '40px' }}
+          onClick={() => {
+            setIsBulkMode(!isBulkMode);
+            if (isBulkMode) setSelectedListingIds(new Set());
+          }}
+          title="Select listings for bulk operations"
         >
-          <Sliders size={16} />
+          <CheckSquare size={16} />
+          <span>{isBulkMode ? 'Done selecting' : 'Select listings'}</span>
         </button>
 
-        <span className="row" style={{ gap: '8px', marginInlineStart: 'auto', fontSize: '13px' }}>
-          <span className="muted">Drafts / Unpublished</span>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={showDrafts}
-            aria-label="Show drafts and unpublished listings in All"
-            onClick={() => setShowDrafts(!showDrafts)}
-            style={{
-              position: 'relative',
-              width: '38px',
-              height: '22px',
-              flexShrink: 0,
-              borderRadius: '999px',
-              cursor: 'pointer',
-              padding: 0,
-              border: `1px solid ${showDrafts ? 'var(--cmp-brand)' : 'var(--cmp-border)'}`,
-              background: showDrafts ? 'var(--cmp-brand)' : 'var(--cmp-surface-sunken)'
-            }}
-          >
-            <span
-              aria-hidden="true"
-              style={{
-                position: 'absolute',
-                top: '2px',
-                left: showDrafts ? '18px' : '2px',
-                width: '16px',
-                height: '16px',
-                borderRadius: '50%',
-                background: showDrafts ? 'var(--cmp-text-on-brand)' : 'var(--cmp-text-muted)',
-                transition: 'left 0.15s'
-              }}
-            />
-          </button>
-        </span>
+        {isLoading && (
+          <span className="row muted" style={{ gap: '6px', fontSize: '13px', marginLeft: 'auto' }}>
+            <Loader2 size={16} className="spin" />
+            <span>Loading properties...</span>
+          </span>
+        )}
       </div>
 
-      {/* Status Chips matching concept listings.html */}
-      <div className="row" style={{ gap: '8px', flexWrap: 'wrap', marginBottom: '14px' }}>
+      {/* Status Chips */}
+      <div className="row" style={{ gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
         {filterTabs.map((tab) => (
           <Chip
             key={tab.label}
@@ -254,386 +648,816 @@ export default function PortfolioPage() {
         ))}
       </div>
 
+      {/* Error Banner */}
+      {apiError && (
+        <div
+          className="card"
+          style={{
+            padding: '14px 18px',
+            marginBottom: '18px',
+            background: 'var(--cmp-danger-subtle)',
+            border: '1px solid var(--cmp-danger)',
+            color: 'var(--cmp-danger)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between'
+          }}
+        >
+          <div className="row" style={{ gap: '10px' }}>
+            <ShieldAlert size={18} />
+            <span>{apiError}</span>
+          </div>
+          <button
+            type="button"
+            className="btn btn-sm btn-outline"
+            onClick={fetchLiveListings}
+            style={{ borderColor: 'var(--cmp-danger)', color: 'var(--cmp-danger)' }}
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {/* Floating Bulk Actions Toolbar */}
+      {isBulkMode && (
+        <div
+          style={{
+            position: 'sticky',
+            top: '16px',
+            zIndex: 40,
+            background: 'var(--cmp-brand-dark, #0d3824)',
+            color: '#FFFFFF',
+            borderRadius: '10px',
+            padding: '10px 18px',
+            marginBottom: '16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px',
+            flexWrap: 'wrap',
+            boxShadow: '0 6px 20px rgba(0,0,0,0.25)'
+          }}
+        >
+          <div className="row" style={{ gap: '10px', alignItems: 'center' }}>
+            <button
+              type="button"
+              className="btn btn-sm"
+              style={{ background: 'rgba(255,255,255,0.15)', color: '#FFF' }}
+              onClick={handleSelectAll}
+            >
+              {selectedListingIds.size === displayListings.length && displayListings.length > 0
+                ? 'Deselect All'
+                : 'Select All'}
+            </button>
+            <span style={{ fontWeight: 600, fontSize: '13.5px' }}>
+              {selectedListingIds.size} of {displayListings.length} selected
+            </span>
+            {isBulkLoading && <Loader2 size={16} className="spin" />}
+          </div>
+
+          <div className="row" style={{ gap: '6px', flexWrap: 'wrap' }}>
+            {can('listings.publish') && (
+              <button
+                type="button"
+                disabled={selectedListingIds.size === 0 || isBulkLoading}
+                className="btn btn-sm"
+                style={{ background: 'var(--cmp-success)', color: '#FFF' }}
+                onClick={() => handleBulkAction('publish')}
+              >
+                Publish
+              </button>
+            )}
+            {can('listings.unpublish') && (
+              <button
+                type="button"
+                disabled={selectedListingIds.size === 0 || isBulkLoading}
+                className="btn btn-sm btn-outline"
+                style={{ borderColor: 'rgba(255,255,255,0.4)', color: '#FFF' }}
+                onClick={() => handleBulkAction('unpublish')}
+              >
+                Unpublish
+              </button>
+            )}
+            {can('listings.update') && (
+              <button
+                type="button"
+                disabled={selectedListingIds.size === 0 || isBulkLoading}
+                className="btn btn-sm btn-outline"
+                style={{ borderColor: 'rgba(255,255,255,0.4)', color: '#FFF' }}
+                onClick={() => handleBulkAction('refresh')}
+              >
+                Refresh
+              </button>
+            )}
+            {can('listings.assign') && (
+              <button
+                type="button"
+                disabled={selectedListingIds.size === 0 || isBulkLoading}
+                className="btn btn-sm btn-outline"
+                style={{ borderColor: 'rgba(255,255,255,0.4)', color: '#FFF' }}
+                onClick={() => setBulkAssignModal({ isOpen: true, agentId: '' })}
+              >
+                Assign Agent
+              </button>
+            )}
+            {can('listings.archive') && (
+              <button
+                type="button"
+                disabled={selectedListingIds.size === 0 || isBulkLoading}
+                className="btn btn-sm btn-outline"
+                style={{ borderColor: 'rgba(255,255,255,0.4)', color: '#FFF' }}
+                onClick={() => handleBulkAction('archive')}
+              >
+                Archive
+              </button>
+            )}
+            {can('listings.archive') && (
+              <button
+                type="button"
+                disabled={selectedListingIds.size === 0 || isBulkLoading}
+                className="btn btn-sm btn-outline"
+                style={{ borderColor: 'rgba(255,255,255,0.4)', color: '#FFF' }}
+                onClick={() => handleBulkAction('restore')}
+              >
+                Restore
+              </button>
+            )}
+            {can('listings.delete') && (
+              <button
+                type="button"
+                disabled={selectedListingIds.size === 0 || isBulkLoading}
+                className="btn btn-sm"
+                style={{ background: 'var(--cmp-danger)', color: '#FFF' }}
+                onClick={() => {
+                  if (window.confirm(`Delete ${selectedListingIds.size} selected listings?`)) {
+                    handleBulkAction('delete');
+                  }
+                }}
+              >
+                Delete
+              </button>
+            )}
+            <button
+              type="button"
+              className="btn btn-sm btn-ghost"
+              style={{ color: '#FFF' }}
+              onClick={() => {
+                setIsBulkMode(false);
+                setSelectedListingIds(new Set());
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Content Display: Grid vs Table */}
-      {filteredListings.length === 0 ? (
+      {isLoading && displayListings.length === 0 ? (
+        <div className="card" style={{ padding: '64px 24px', textAlign: 'center' }}>
+          <Loader2 size={32} className="spin" style={{ color: 'var(--cmp-brand)', margin: '0 auto 12px' }} />
+          <p className="muted" style={{ margin: 0, fontSize: '14px' }}>
+            Fetching properties from CMP Connect...
+          </p>
+        </div>
+      ) : displayListings.length === 0 ? (
         <div className="card" style={{ padding: '48px 24px', textAlign: 'center' }}>
           <p style={{ margin: 0, fontSize: '16px', fontWeight: 700 }}>
             No properties found
           </p>
           <p className="muted" style={{ margin: '6px 0 16px', fontSize: '13.5px' }}>
-            {isLiveData ? 'No live properties yet in this agency account.' : 'No mock listings matched your filter criteria.'}
+            {isLiveData
+              ? `No properties matched the "${activeFilter}" filter.`
+              : 'No mock listings matched your filter criteria.'}
           </p>
-          <NavLink to="/properties/add" className="btn btn-primary btn-sm">
-            Add a listing
-          </NavLink>
+          {can('listings.create') && (
+            <NavLink to="/properties/new" className="btn btn-primary btn-sm">
+              <Plus size={15} />
+              <span>List your first property</span>
+            </NavLink>
+          )}
         </div>
       ) : viewMode === 'grid' ? (
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(310px, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
             gap: '18px'
           }}
         >
-          {filteredListings.map((listing) => (
-            <article
-              key={listing.id}
-              className="card"
-              style={{
-                overflow: 'hidden',
-                display: 'flex',
-                flexDirection: 'column',
-                borderRadius: '14px'
-              }}
-            >
-              {/* Image Header with Brand Watermark, Badges & Action Buttons */}
-              <div
+          {displayListings.map((listing) => {
+            const isLiveProp = isLiveData;
+            const refText = isLiveProp ? listing.listingRef : listing.id;
+            const coverImg = isLiveProp
+              ? (listing.coverImageWatermarked || listing.coverImage || 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=800&q=70')
+              : listing.image;
+
+            const title = isLiveProp ? (listing.title || 'Untitled Property') : listing.title;
+            const location = isLiveProp ? (listing.location || 'Dubai, UAE') : listing.community;
+            const beds = isLiveProp ? listing.bedrooms : listing.beds;
+            const area = isLiveProp ? listing.area : listing.areaSqft;
+            const price = isLiveProp ? formatPrice(listing.price, listing.rentalPeriod) : listing.priceLabel;
+            const qualityScore = listing.qualityScore || 0;
+            const status = isLiveProp ? listing.status : listing.status.toUpperCase();
+            const onHold = Boolean(listing.onHold);
+            const holdReason = listing.holdReason;
+            const rejectionReason = listing.rejectionReason;
+            const attentionCount = isLiveProp ? (listing.attentionRequired || 0) : (listing.attentionCount || 0);
+
+            const agentName = isLiveProp
+              ? (listing.listedBy?.fullName || 'Unassigned')
+              : listing.agent;
+            const agentInitials = isLiveProp
+              ? (listing.listedBy?.fullName ? listing.listedBy.fullName.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase() : 'AG')
+              : listing.agentInitials;
+
+            const isActionBusy = actionLoadingId === listing.id;
+            const isMenuOpen = openActionMenuId === listing.id;
+
+            return (
+              <article
+                key={listing.id}
+                className="card"
                 style={{
-                  position: 'relative',
-                  aspectRatio: '16 / 9',
                   overflow: 'hidden',
-                  background: 'var(--cmp-surface-sunken)'
+                  display: 'flex',
+                  flexDirection: 'column',
+                  borderRadius: '14px',
+                  border: onHold ? '2px solid var(--cmp-danger)' : undefined
                 }}
               >
-                <img
-                  src={listing.image}
-                  alt={listing.title}
-                  loading="lazy"
-                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                />
-
-                {/* Centered Brand Watermark Overlay */}
+                {/* Image Header */}
                 <div
                   style={{
-                    position: 'absolute',
-                    top: '50%',
-                    left: '50%',
-                    transform: 'translate(-50%, -50%)',
-                    pointerEvents: 'none',
-                    opacity: 0.5,
-                    color: '#FFFFFF',
-                    fontWeight: 800,
-                    letterSpacing: '0.12em',
-                    textTransform: 'uppercase',
-                    fontSize: '11.5px',
-                    textShadow: '0 1px 6px rgba(0,0,0,0.6)',
-                    whiteSpace: 'nowrap'
+                    position: 'relative',
+                    aspectRatio: '16 / 9',
+                    overflow: 'hidden',
+                    background: 'var(--cmp-surface-sunken)'
                   }}
                 >
-                  CMP Prime Real Estate
-                </div>
-
-                {/* Top-Left Badges matching concept */}
-                <div
-                  className="row"
-                  style={{ position: 'absolute', top: '10px', left: '10px', gap: '6px', flexWrap: 'wrap' }}
-                >
-                  <span
-                    className="badge"
-                    style={{
-                      background: 'rgba(255, 255, 255, 0.95)',
-                      color: '#18231C',
-                      textTransform: 'uppercase',
-                      fontWeight: 800
-                    }}
-                  >
-                    STANDARD
-                  </span>
-
-                  <span
-                    className="badge"
-                    style={{
-                      background:
-                        listing.permitStatus === 'Valid'
-                          ? 'rgba(15, 122, 75, 0.9)'
-                          : listing.permitStatus.includes('Expires')
-                          ? 'var(--cmp-warning)'
-                          : 'rgba(0, 0, 0, 0.55)',
-                      color: '#FFFFFF',
-                      fontWeight: 700
-                    }}
-                  >
-                    {listing.permitStatus === 'Valid' ? 'VERIFIED' : 'UNVERIFIED'}
-                  </span>
-
-                  <span
-                    className="badge"
-                    style={{
-                      background:
-                        listing.status === 'Live'
-                          ? 'var(--cmp-brand)'
-                          : listing.status === 'Draft'
-                          ? 'rgba(0, 0, 0, 0.65)'
-                          : listing.status === 'Rejected'
-                          ? 'var(--cmp-danger)'
-                          : 'var(--cmp-warning)',
-                      color: '#FFFFFF',
-                      fontWeight: 700
-                    }}
-                  >
-                    {listing.status.toUpperCase()}
-                  </span>
-                </div>
-
-                {/* Top-Right Circle Edit & Action Buttons */}
-                <div
-                  className="row"
-                  style={{ position: 'absolute', top: '10px', right: '10px', gap: '6px' }}
-                >
-                  <NavLink
-                    to="/properties/new"
-                    style={{
-                      width: '30px',
-                      height: '30px',
-                      borderRadius: '50%',
-                      display: 'grid',
-                      placeItems: 'center',
-                      background: 'rgba(255, 255, 255, 0.92)',
-                      color: '#18231C',
-                      boxShadow: '0 1px 4px rgba(0,0,0,0.2)'
-                    }}
-                    title="Edit Property"
-                  >
-                    <Edit2 size={14} />
-                  </NavLink>
-
-                  <button
-                    type="button"
-                    style={{
-                      width: '30px',
-                      height: '30px',
-                      borderRadius: '50%',
-                      border: 'none',
-                      display: 'grid',
-                      placeItems: 'center',
-                      background: 'rgba(255, 255, 255, 0.92)',
-                      color: '#18231C',
-                      cursor: 'pointer',
-                      boxShadow: '0 1px 4px rgba(0,0,0,0.2)'
-                    }}
-                    title="Actions"
-                  >
-                    <MoreVertical size={15} />
-                  </button>
-                </div>
-
-                {/* Attention Required Banner */}
-                {listing.attentionCount > 0 && (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      padding: '7px 10px',
-                      background: 'rgba(4, 21, 14, 0.75)',
-                      color: '#FFFFFF',
-                      fontSize: '13px',
-                      fontWeight: 700,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '6px'
-                    }}
-                  >
-                    <AlertTriangle size={15} style={{ color: 'var(--cmp-accent)' }} />
-                    <span>Attention required ({listing.attentionCount})</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Card Body */}
-              <div style={{ padding: '14px', display: 'grid', gap: '8px', flex: 1 }}>
-                {/* Title with Status Dot */}
-                <p
-                  className="row"
-                  style={{
-                    margin: 0,
-                    gap: '8px',
-                    fontWeight: 700,
-                    fontSize: '15px'
-                  }}
-                >
-                  <span
-                    aria-hidden="true"
-                    style={{
-                      width: '9px',
-                      height: '9px',
-                      borderRadius: '50%',
-                      flexShrink: 0,
-                      background:
-                        listing.status === 'Live'
-                          ? 'var(--cmp-success)'
-                          : 'var(--cmp-text-faint)'
-                    }}
+                  <img
+                    src={coverImg}
+                    alt={title}
+                    loading="lazy"
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                   />
-                  <span
-                    title={listing.title}
-                    style={{
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap'
-                    }}
-                  >
-                    {listing.title}
-                  </span>
-                </p>
 
-                {/* Location with Icon */}
-                <p className="row muted" style={{ margin: 0, gap: '6px', fontSize: '13px' }}>
-                  <Home size={14} style={{ flexShrink: 0 }} />
-                  <span>{listing.community}</span>
-                </p>
-
-                {/* Specs with Icons */}
-                <p className="row" style={{ margin: 0, gap: '12px', fontSize: '13px', flexWrap: 'wrap' }}>
-                  {listing.beds > 0 && (
-                    <span className="row" style={{ gap: '4px' }}>
-                      <Bed size={15} style={{ flexShrink: 0 }} />
-                      <span>{listing.beds}</span>
-                    </span>
-                  )}
-                  <span className="row" style={{ gap: '4px' }}>
-                    <Maximize2 size={15} style={{ flexShrink: 0 }} />
-                    <span>{listing.areaSqft.toLocaleString()} sqft</span>
-                  </span>
-                  <span className="row" style={{ gap: '4px', fontWeight: 600 }}>
-                    <Tag size={15} style={{ flexShrink: 0 }} />
-                    <span>{listing.priceLabel}</span>
-                  </span>
-                </p>
-
-                {/* Category Chips */}
-                <div className="row" style={{ gap: '6px', flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: '12px', padding: '2px 8px', borderRadius: '6px', background: 'var(--cmp-surface-sunken)' }}>
-                    {listing.purpose}
-                  </span>
-                  <span style={{ fontSize: '12px', padding: '2px 8px', borderRadius: '6px', background: 'var(--cmp-surface-sunken)' }}>
-                    {listing.type}
-                  </span>
-                  <span style={{ fontSize: '12px', padding: '2px 8px', borderRadius: '6px', background: 'var(--cmp-surface-sunken)' }}>
-                    {listing.category}
-                  </span>
-                </div>
-
-                {/* Reference Number Row with Copy Button */}
-                <p className="row" style={{ margin: 0, gap: '6px', fontSize: '13px' }}>
-                  <span className="muted">Reference number:</span>
-                  <span className="row" style={{ gap: '6px', display: 'inline-flex' }}>
-                    <button
-                      type="button"
-                      aria-label={`Copy ${listing.id}`}
-                      title="Copy"
-                      onClick={(e) => handleCopyRef(listing.id, e)}
+                  {/* Bulk Select Checkbox */}
+                  {isBulkMode && (
+                    <div
+                      onClick={(e) => toggleSelectListing(listing.id, e)}
                       style={{
-                        border: 'none',
-                        background: 'transparent',
-                        padding: 0,
+                        position: 'absolute',
+                        top: '10px',
+                        left: '10px',
+                        zIndex: 25,
+                        background: 'rgba(0, 0, 0, 0.7)',
+                        borderRadius: '6px',
+                        padding: '4px',
                         cursor: 'pointer',
-                        color: 'var(--cmp-text-faint)',
-                        display: 'inline-flex'
-                      }}
-                    >
-                      {copiedId === listing.id ? (
-                        <Check size={14} style={{ color: 'var(--cmp-brand)' }} />
-                      ) : (
-                        <Copy size={14} />
-                      )}
-                    </button>
-                    <a
-                      href="#"
-                      title={listing.id}
-                      onClick={(e) => e.preventDefault()}
-                      style={{
-                        color: 'var(--cmp-brand)',
-                        fontWeight: 600,
-                        fontSize: '13px',
-                        textDecoration: 'underline',
-                        textUnderlineOffset: '3px'
-                      }}
-                    >
-                      {listing.id}
-                    </a>
-                  </span>
-                </p>
-
-                {/* Leads & Circular Quality Score Bar (MATCHING SCREENSHOT) */}
-                <div
-                  className="row"
-                  style={{
-                    justifyContent: 'space-between',
-                    padding: '8px 10px',
-                    borderRadius: '8px',
-                    background: 'var(--cmp-surface-sunken)',
-                    fontSize: '13px'
-                  }}
-                >
-                  <span>
-                    Leads <strong>{listing.leads}</strong>
-                  </span>
-                  <span className="row" style={{ gap: '6px' }}>
-                    {/* Dynamic Circular SVG Progress Ring */}
-                    <QualityScoreCircle score={listing.qualityScore} size={20} strokeWidth={3} />
-                    <span>
-                      Quality score <strong>{listing.qualityScore}</strong>
-                    </span>
-                  </span>
-                </div>
-
-                {/* Agent & Update Dates */}
-                <div className="row" style={{ justifyContent: 'space-between', gap: '8px', fontSize: '12px' }}>
-                  <span className="row" style={{ gap: '6px', fontWeight: 600, fontSize: '13px' }}>
-                    <span
-                      style={{
-                        width: '22px',
-                        height: '22px',
-                        borderRadius: '50%',
                         display: 'grid',
                         placeItems: 'center',
-                        background: 'var(--cmp-brand-subtle)',
-                        color: 'var(--cmp-brand)',
-                        fontWeight: 700,
-                        fontSize: '8px'
+                        color: '#FFF'
+                      }}
+                      title="Select listing"
+                    >
+                      {selectedListingIds.has(listing.id) ? (
+                        <CheckSquare size={18} style={{ color: '#2ecc71' }} />
+                      ) : (
+                        <Square size={18} />
+                      )}
+                    </div>
+                  )}
+
+                  {/* Top-Left Badges */}
+                  <div
+                    className="row"
+                    style={{
+                      position: 'absolute',
+                      top: '10px',
+                      left: isBulkMode ? '44px' : '10px',
+                      gap: '6px',
+                      flexWrap: 'wrap'
+                    }}
+                  >
+                    <span
+                      className="badge"
+                      style={{
+                        background:
+                          status === 'LIVE'
+                            ? 'var(--cmp-brand)'
+                            : status === 'PENDING_APPROVAL'
+                            ? 'var(--cmp-warning)'
+                            : status === 'REJECTED'
+                            ? 'var(--cmp-danger)'
+                            : status === 'EXPIRED'
+                            ? '#b26b00'
+                            : status === 'ARCHIVED'
+                            ? 'rgba(0, 0, 0, 0.55)'
+                            : 'rgba(0, 0, 0, 0.65)',
+                        color: '#FFFFFF',
+                        fontWeight: 700
                       }}
                     >
-                      {listing.agentInitials}
+                      {status === 'PENDING_APPROVAL' ? 'IN REVIEW' : status}
                     </span>
-                    <span>{listing.agent}</span>
-                  </span>
 
-                  <span className="muted" style={{ textAlign: 'end', fontSize: '11.5px', lineHeight: 1.25 }}>
-                    Last updated: 17 Sep 2026<br />
-                    Published: {listing.status === 'Live' ? '12 Sep 2026' : '—'}
-                  </span>
+                    {/* Expiry Badge */}
+                    {status === 'LIVE' && listing.expiresAt && (
+                      <span
+                        className="badge"
+                        style={{
+                          background: 'rgba(0, 0, 0, 0.65)',
+                          color: '#FFFFFF',
+                          fontSize: '11px',
+                          fontWeight: 600
+                        }}
+                      >
+                        {(() => {
+                          const dl = getDaysUntilExpiry(listing.expiresAt);
+                          return dl === 0 ? 'Expires today' : `Expires in ${dl}d`;
+                        })()}
+                      </span>
+                    )}
+
+                    {status === 'EXPIRED' && (
+                      <span
+                        className="badge"
+                        style={{
+                          background: 'rgba(178, 107, 0, 0.9)',
+                          color: '#FFFFFF',
+                          fontSize: '11px',
+                          fontWeight: 700
+                        }}
+                      >
+                        Publish again to go live
+                      </span>
+                    )}
+
+                    {onHold && (
+                      <span
+                        className="badge"
+                        style={{
+                          background: 'var(--cmp-danger)',
+                          color: '#FFFFFF',
+                          fontWeight: 800
+                        }}
+                      >
+                        ON HOLD BY CMP
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Top-Right Edit & Action Buttons */}
+                  <div
+                    className="row"
+                    style={{ position: 'absolute', top: '10px', right: '10px', gap: '6px' }}
+                  >
+                    {!onHold && can('listings.update') && (
+                      <NavLink
+                        to={`/properties/${listing.id}/edit`}
+                        style={{
+                          width: '32px',
+                          height: '32px',
+                          borderRadius: '50%',
+                          display: 'grid',
+                          placeItems: 'center',
+                          background: 'rgba(255, 255, 255, 0.95)',
+                          color: '#18231C',
+                          boxShadow: '0 2px 6px rgba(0,0,0,0.25)',
+                          textDecoration: 'none'
+                        }}
+                        title="Edit Property"
+                      >
+                        <Edit2 size={14} />
+                      </NavLink>
+                    )}
+
+                    {/* Action Dropdown Menu Trigger */}
+                    {isLiveProp && !onHold && (
+                      <div style={{ position: 'relative' }}>
+                        <button
+                          type="button"
+                          disabled={isActionBusy}
+                          onClick={() => setOpenActionMenuId(isMenuOpen ? null : listing.id)}
+                          style={{
+                            width: '32px',
+                            height: '32px',
+                            borderRadius: '50%',
+                            border: 'none',
+                            display: 'grid',
+                            placeItems: 'center',
+                            background: 'rgba(255, 255, 255, 0.95)',
+                            color: '#18231C',
+                            cursor: 'pointer',
+                            boxShadow: '0 2px 6px rgba(0,0,0,0.25)'
+                          }}
+                          title="Actions"
+                        >
+                          {isActionBusy ? <Loader2 size={14} className="spin" /> : <MoreVertical size={15} />}
+                        </button>
+
+                        {/* Dropdown Menu Items */}
+                        {isMenuOpen && (
+                          <div
+                            style={{
+                              position: 'absolute',
+                              top: '38px',
+                              right: 0,
+                              zIndex: 100,
+                              minWidth: '200px',
+                              background: 'var(--cmp-surface)',
+                              border: '1px solid var(--cmp-border)',
+                              borderRadius: '8px',
+                              boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+                              padding: '6px 0',
+                              display: 'grid'
+                            }}
+                          >
+                            <NavLink
+                              to={`/properties/${listing.id}/edit`}
+                              className="btn btn-ghost btn-sm"
+                              style={{ justifyContent: 'flex-start', borderRadius: 0, width: '100%', padding: '8px 14px' }}
+                            >
+                              <Edit2 size={14} />
+                              <span>Edit Details</span>
+                            </NavLink>
+
+                            {/* Refresh Bump for Live Listings */}
+                            {status === 'LIVE' && can('listings.update') && (
+                              <button
+                                type="button"
+                                className="btn btn-ghost btn-sm"
+                                style={{ justifyContent: 'flex-start', borderRadius: 0, width: '100%', padding: '8px 14px', color: 'var(--cmp-brand)' }}
+                                onClick={() => handleRefresh(listing)}
+                              >
+                                <RotateCw size={14} />
+                                <span>Refresh (Bump listing)</span>
+                              </button>
+                            )}
+
+                            {/* Submit for Approval */}
+                            {['DRAFT', 'REJECTED'].includes(status) && can('listings.create') && (
+                              <button
+                                type="button"
+                                className="btn btn-ghost btn-sm"
+                                style={{ justifyContent: 'flex-start', borderRadius: 0, width: '100%', padding: '8px 14px', color: 'var(--cmp-brand)' }}
+                                onClick={() => handleSubmitForApproval(listing)}
+                              >
+                                <Send size={14} />
+                                <span>{can('listings.approve') ? 'Publish (Go Live)' : 'Submit for approval'}</span>
+                              </button>
+                            )}
+
+                            {/* Approve / Reject (Manager) */}
+                            {status === 'PENDING_APPROVAL' && can('listings.approve') && (
+                              <>
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost btn-sm"
+                                  style={{ justifyContent: 'flex-start', borderRadius: 0, width: '100%', padding: '8px 14px', color: 'var(--cmp-success)' }}
+                                  onClick={() => handleApprove(listing)}
+                                >
+                                  <CheckCircle2 size={14} />
+                                  <span>Approve & Publish</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost btn-sm"
+                                  style={{ justifyContent: 'flex-start', borderRadius: 0, width: '100%', padding: '8px 14px', color: 'var(--cmp-danger)' }}
+                                  onClick={() => handleOpenRejectModal(listing)}
+                                >
+                                  <XCircle size={14} />
+                                  <span>Reject with reason</span>
+                                </button>
+                              </>
+                            )}
+
+                            {/* Unpublish */}
+                            {status === 'LIVE' && can('listings.unpublish') && (
+                              <button
+                                type="button"
+                                className="btn btn-ghost btn-sm"
+                                style={{ justifyContent: 'flex-start', borderRadius: 0, width: '100%', padding: '8px 14px' }}
+                                onClick={() => handleUnpublish(listing)}
+                              >
+                                <XCircle size={14} />
+                                <span>Unpublish</span>
+                              </button>
+                            )}
+
+                            {/* Publish again (for UNPUBLISHED or EXPIRED) */}
+                            {(status === 'UNPUBLISHED' || status === 'EXPIRED') && can('listings.publish') && (
+                              <button
+                                type="button"
+                                className="btn btn-ghost btn-sm"
+                                style={{ justifyContent: 'flex-start', borderRadius: 0, width: '100%', padding: '8px 14px', color: 'var(--cmp-brand)' }}
+                                onClick={() => handlePublish(listing)}
+                              >
+                                <CheckCircle2 size={14} />
+                                <span>Publish</span>
+                              </button>
+                            )}
+
+                            {/* Assign Agent */}
+                            {can('listings.assign') && status !== 'ARCHIVED' && (
+                              <button
+                                type="button"
+                                className="btn btn-ghost btn-sm"
+                                style={{ justifyContent: 'flex-start', borderRadius: 0, width: '100%', padding: '8px 14px' }}
+                                onClick={() => handleOpenAssignModal(listing)}
+                              >
+                                <UserCheck size={14} />
+                                <span>Change Agent</span>
+                              </button>
+                            )}
+
+                            {/* Archive */}
+                            {status !== 'ARCHIVED' && status !== 'PENDING_APPROVAL' && can('listings.archive') && (
+                              <button
+                                type="button"
+                                className="btn btn-ghost btn-sm"
+                                style={{ justifyContent: 'flex-start', borderRadius: 0, width: '100%', padding: '8px 14px' }}
+                                onClick={() => handleArchive(listing)}
+                              >
+                                <Archive size={14} />
+                                <span>Archive</span>
+                              </button>
+                            )}
+
+                            {/* Restore from archive */}
+                            {status === 'ARCHIVED' && can('listings.archive') && (
+                              <button
+                                type="button"
+                                className="btn btn-ghost btn-sm"
+                                style={{ justifyContent: 'flex-start', borderRadius: 0, width: '100%', padding: '8px 14px', color: 'var(--cmp-brand)' }}
+                                onClick={() => handleRestore(listing)}
+                              >
+                                <RotateCcw size={14} />
+                                <span>Restore to Draft</span>
+                              </button>
+                            )}
+
+                            {/* Soft Delete */}
+                            {status !== 'LIVE' && can('listings.delete') && (
+                              <button
+                                type="button"
+                                className="btn btn-ghost btn-sm"
+                                style={{ justifyContent: 'flex-start', borderRadius: 0, width: '100%', padding: '8px 14px', color: 'var(--cmp-danger)' }}
+                                onClick={() => handleDelete(listing)}
+                              >
+                                <Trash2 size={14} />
+                                <span>Delete listing</span>
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Red On-Hold Banner */}
+                  {onHold && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        padding: '7px 12px',
+                        background: 'rgba(180, 20, 20, 0.92)',
+                        color: '#FFFFFF',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}
+                    >
+                      <AlertOctagon size={14} />
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        On hold by CMP: {holdReason || 'Contact CMP support'}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Attention Required Banner */}
+                  {!onHold && attentionCount > 0 && (
+                    <NavLink
+                      to={`/properties/${listing.id}/edit`}
+                      style={{
+                        position: 'absolute',
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        padding: '7px 10px',
+                        background: 'rgba(4, 21, 14, 0.85)',
+                        color: '#FFFFFF',
+                        fontSize: '12.5px',
+                        fontWeight: 700,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                        textDecoration: 'none'
+                      }}
+                    >
+                      <AlertTriangle size={14} style={{ color: 'var(--cmp-accent)' }} />
+                      <span>Attention required ({attentionCount} items)</span>
+                    </NavLink>
+                  )}
                 </div>
 
-                {/* Bottom Status Summary Footer */}
-                <div
-                  className="row"
-                  style={{
-                    justifyContent: 'space-between',
-                    gap: '8px',
-                    marginTop: 'auto',
-                    paddingTop: '8px',
-                    borderTop: '1px solid var(--cmp-border)',
-                    fontSize: '12px'
-                  }}
-                >
-                  <span className="muted">
-                    {listing.status === 'Draft'
-                      ? 'Draft. Not visible to the public.'
-                      : listing.status === 'In review'
-                      ? 'In review.'
-                      : listing.status === 'Rejected'
-                      ? 'Rejected. Fix and resubmit.'
-                      : listing.status === 'Live'
-                      ? 'Live on public portal.'
-                      : 'Expired.'}
-                  </span>
+                {/* Card Body */}
+                <div style={{ padding: '14px', display: 'grid', gap: '8px', flex: 1 }}>
+                  {/* Rejection Banner */}
+                  {status === 'REJECTED' && rejectionReason && (
+                    <div
+                      style={{
+                        padding: '8px 10px',
+                        borderRadius: '6px',
+                        background: 'var(--cmp-danger-subtle)',
+                        border: '1px solid var(--cmp-danger)',
+                        color: 'var(--cmp-danger)',
+                        fontSize: '12px',
+                        fontWeight: 600
+                      }}
+                    >
+                      <strong>Rejection note:</strong> {rejectionReason}
+                    </div>
+                  )}
+
+                  {/* Title */}
+                  <p
+                    className="row"
+                    style={{
+                      margin: 0,
+                      gap: '8px',
+                      fontWeight: 700,
+                      fontSize: '15px'
+                    }}
+                  >
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        width: '9px',
+                        height: '9px',
+                        borderRadius: '50%',
+                        flexShrink: 0,
+                        background:
+                          status === 'LIVE'
+                            ? 'var(--cmp-success)'
+                            : status === 'REJECTED'
+                            ? 'var(--cmp-danger)'
+                            : status === 'PENDING_APPROVAL'
+                            ? 'var(--cmp-warning)'
+                            : 'var(--cmp-text-faint)'
+                      }}
+                    />
+                    <span
+                      title={title}
+                      style={{
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      {title}
+                    </span>
+                  </p>
+
+                  {/* Location */}
+                  <p className="row muted" style={{ margin: 0, gap: '6px', fontSize: '13px' }}>
+                    <Home size={14} style={{ flexShrink: 0 }} />
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {location}
+                    </span>
+                  </p>
+
+                  {/* Specs */}
+                  <p className="row" style={{ margin: 0, gap: '12px', fontSize: '13px', flexWrap: 'wrap' }}>
+                    {beds && (
+                      <span className="row" style={{ gap: '4px' }}>
+                        <Bed size={15} style={{ flexShrink: 0 }} />
+                        <span>{beds === '0' ? 'Studio' : `${beds} beds`}</span>
+                      </span>
+                    )}
+                    {area && (
+                      <span className="row" style={{ gap: '4px' }}>
+                        <Maximize2 size={15} style={{ flexShrink: 0 }} />
+                        <span>{Number(area).toLocaleString()} sqft</span>
+                      </span>
+                    )}
+                    <span className="row" style={{ gap: '4px', fontWeight: 700, color: 'var(--cmp-brand)' }}>
+                      <Tag size={15} style={{ flexShrink: 0 }} />
+                      <span>{price}</span>
+                    </span>
+                  </p>
+
+                  {/* Chips */}
+                  <div className="row" style={{ gap: '6px', flexWrap: 'wrap' }}>
+                    {listing.purpose && (
+                      <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', background: 'var(--cmp-surface-sunken)', fontWeight: 600 }}>
+                        {listing.purpose}
+                      </span>
+                    )}
+                    {listing.typeLabel && (
+                      <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', background: 'var(--cmp-surface-sunken)', fontWeight: 600 }}>
+                        {listing.typeLabel}
+                      </span>
+                    )}
+                    {listing.category && (
+                      <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', background: 'var(--cmp-surface-sunken)', fontWeight: 600 }}>
+                        {listing.category}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Reference Number Row */}
+                  <div className="row" style={{ justifyContent: 'space-between', fontSize: '12.5px', marginTop: '2px' }}>
+                    <span className="muted">Ref:</span>
+                    <span className="row" style={{ gap: '6px' }}>
+                      <button
+                        type="button"
+                        aria-label={`Copy ${refText}`}
+                        title="Copy reference"
+                        onClick={(e) => handleCopyRef(refText, e)}
+                        style={{
+                          border: 'none',
+                          background: 'transparent',
+                          padding: 0,
+                          cursor: 'pointer',
+                          color: 'var(--cmp-text-faint)',
+                          display: 'inline-flex'
+                        }}
+                      >
+                        {copiedId === refText ? (
+                          <Check size={14} style={{ color: 'var(--cmp-brand)' }} />
+                        ) : (
+                          <Copy size={14} />
+                        )}
+                      </button>
+                      <NavLink
+                        to={`/properties/${listing.id}/edit`}
+                        style={{
+                          color: 'var(--cmp-brand)',
+                          fontWeight: 700,
+                          fontSize: '12.5px'
+                        }}
+                      >
+                        {refText}
+                      </NavLink>
+                    </span>
+                  </div>
+
+                  {/* Quality Score Bar */}
+                  <div
+                    className="row"
+                    style={{
+                      justifyContent: 'space-between',
+                      padding: '8px 10px',
+                      borderRadius: '8px',
+                      background: 'var(--cmp-surface-sunken)',
+                      fontSize: '13px'
+                    }}
+                  >
+                    <span>Quality Score</span>
+                    <span className="row" style={{ gap: '6px' }}>
+                      <QualityScoreCircle score={qualityScore} size={20} strokeWidth={3} />
+                      <strong>{qualityScore}</strong>
+                    </span>
+                  </div>
+
+                  {/* Agent Info */}
+                  <div className="row" style={{ justifyContent: 'space-between', gap: '8px', fontSize: '12px' }}>
+                    <span className="row" style={{ gap: '6px', fontWeight: 600 }}>
+                      <span
+                        style={{
+                          width: '22px',
+                          height: '22px',
+                          borderRadius: '50%',
+                          display: 'grid',
+                          placeItems: 'center',
+                          background: 'var(--cmp-brand-subtle)',
+                          color: 'var(--cmp-brand)',
+                          fontWeight: 700,
+                          fontSize: '9px'
+                        }}
+                      >
+                        {agentInitials}
+                      </span>
+                      <span>{agentName}</span>
+                      {listing.listedBy?.brn && (
+                        <span className="faint" style={{ fontSize: '11px' }}>
+                          (BRN: {listing.listedBy.brn})
+                        </span>
+                      )}
+                    </span>
+                  </div>
                 </div>
-              </div>
-            </article>
-          ))}
+              </article>
+            );
+          })}
         </div>
       ) : (
         /* Table View */
@@ -641,91 +1465,294 @@ export default function PortfolioPage() {
           <table className="data">
             <thead>
               <tr>
+                {isBulkMode && (
+                  <th style={{ width: '40px', textAlign: 'center' }}>
+                    <input
+                      type="checkbox"
+                      checked={selectedListingIds.size === displayListings.length && displayListings.length > 0}
+                      onChange={handleSelectAll}
+                    />
+                  </th>
+                )}
                 <th>Reference</th>
                 <th>Property</th>
                 <th>Purpose</th>
                 <th>Price</th>
                 <th>Quality</th>
-                <th>Leads</th>
-                <th>Views</th>
                 <th>Status</th>
                 <th>Agent</th>
+                <th style={{ textAlign: 'end' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {filteredListings.map((listing) => (
-                <tr key={listing.id}>
-                  <td>
-                    <span style={{ fontWeight: 600, color: 'var(--cmp-brand)' }}>
-                      {listing.id}
-                    </span>
-                  </td>
-                  <td style={{ minWidth: '220px' }}>
-                    <div style={{ fontWeight: 600 }}>{listing.title}</div>
-                    <div className="faint" style={{ fontSize: '12px' }}>
-                      {listing.community}
-                    </div>
-                  </td>
-                  <td>
-                    <span className="badge badge-neutral">{listing.purpose}</span>
-                  </td>
-                  <td style={{ fontWeight: 700 }}>{listing.priceLabel}</td>
-                  <td>
-                    <span className="row" style={{ gap: '6px' }}>
-                      <QualityScoreCircle score={listing.qualityScore} size={18} strokeWidth={2.5} />
-                      <strong
-                        style={{
-                          color:
-                            listing.qualityScore >= 80
-                              ? 'var(--cmp-success)'
-                              : listing.qualityScore >= 50
-                              ? 'var(--cmp-warning)'
-                              : 'var(--cmp-danger)'
-                        }}
-                      >
-                        {listing.qualityScore}
-                      </strong>
-                    </span>
-                  </td>
-                  <td><strong>{listing.leads}</strong></td>
-                  <td className="muted">{listing.views.toLocaleString()}</td>
-                  <td>
-                    <span
-                      className={`badge ${
-                        listing.status === 'Live'
-                          ? 'badge-brand'
-                          : listing.status === 'Rejected'
-                          ? 'badge-danger'
-                          : 'badge-neutral'
-                      }`}
-                    >
-                      {listing.status}
-                    </span>
-                  </td>
-                  <td>
-                    <span className="row" style={{ gap: '6px', fontSize: '13px' }}>
-                      <span
-                        style={{
-                          width: '20px',
-                          height: '20px',
-                          borderRadius: '50%',
-                          display: 'grid',
-                          placeItems: 'center',
-                          background: 'var(--cmp-brand-subtle)',
-                          color: 'var(--cmp-brand)',
-                          fontSize: '8.5px',
-                          fontWeight: 700
-                        }}
-                      >
-                        {listing.agentInitials}
+              {displayListings.map((listing) => {
+                const isLiveProp = isLiveData;
+                const refText = isLiveProp ? listing.listingRef : listing.id;
+                const title = isLiveProp ? (listing.title || 'Untitled Property') : listing.title;
+                const location = isLiveProp ? (listing.location || 'Dubai') : listing.community;
+                const price = isLiveProp ? formatPrice(listing.price, listing.rentalPeriod) : listing.priceLabel;
+                const qualityScore = listing.qualityScore || 0;
+                const status = isLiveProp ? listing.status : listing.status.toUpperCase();
+                const agentName = isLiveProp ? (listing.listedBy?.fullName || 'Unassigned') : listing.agent;
+                const onHold = Boolean(listing.onHold);
+                const daysLeft = isLiveProp && status === 'LIVE' ? getDaysUntilExpiry(listing.expiresAt) : null;
+                const isSelected = selectedListingIds.has(listing.id);
+
+                return (
+                  <tr key={listing.id} style={{ background: isSelected ? 'rgba(30,123,89,0.06)' : undefined }}>
+                    {isBulkMode && (
+                      <td style={{ textAlign: 'center' }}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={(e) => toggleSelectListing(listing.id, e)}
+                        />
+                      </td>
+                    )}
+                    <td>
+                      <span style={{ fontWeight: 700, color: 'var(--cmp-brand)' }}>
+                        {refText}
                       </span>
-                      {listing.agent}
-                    </span>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td style={{ minWidth: '220px' }}>
+                      <div style={{ fontWeight: 600 }}>{title}</div>
+                      <div className="faint" style={{ fontSize: '12px' }}>{location}</div>
+                    </td>
+                    <td>
+                      <span className="badge badge-neutral">
+                        {listing.purpose} {listing.typeLabel || listing.type}
+                      </span>
+                    </td>
+                    <td style={{ fontWeight: 700 }}>{price}</td>
+                    <td>
+                      <span className="row" style={{ gap: '6px' }}>
+                        <QualityScoreCircle score={qualityScore} size={18} strokeWidth={2.5} />
+                        <strong>{qualityScore}</strong>
+                      </span>
+                    </td>
+                    <td>
+                      <div style={{ display: 'grid', gap: '3px' }}>
+                        <span
+                          className={`badge ${
+                            onHold
+                              ? 'badge-danger'
+                              : status === 'LIVE'
+                              ? 'badge-brand'
+                              : status === 'EXPIRED'
+                              ? 'badge-warning'
+                              : status === 'REJECTED'
+                              ? 'badge-danger'
+                              : 'badge-neutral'
+                          }`}
+                        >
+                          {onHold ? 'ON HOLD' : status}
+                        </span>
+                        {daysLeft !== null && (
+                          <span className="faint" style={{ fontSize: '11px' }}>
+                            {daysLeft === 0 ? 'Expiring today' : `${daysLeft}d left`}
+                          </span>
+                        )}
+                        {status === 'EXPIRED' && (
+                          <span className="faint" style={{ fontSize: '11px', color: '#b26b00' }}>
+                            Publish again
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td>
+                      <span style={{ fontSize: '13px', fontWeight: 600 }}>{agentName}</span>
+                    </td>
+                    <td style={{ textAlign: 'end' }}>
+                      <div className="row" style={{ justifyContent: 'flex-end', gap: '6px' }}>
+                        {status === 'LIVE' && can('listings.update') && (
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm"
+                            title="Refresh / Bump Listing"
+                            onClick={() => handleRefresh(listing)}
+                          >
+                            <RotateCw size={13} />
+                          </button>
+                        )}
+                        {(status === 'UNPUBLISHED' || status === 'EXPIRED') && can('listings.publish') && (
+                          <button
+                            type="button"
+                            className="btn btn-outline btn-sm"
+                            title="Publish again"
+                            onClick={() => handlePublish(listing)}
+                          >
+                            <CheckCircle2 size={13} />
+                            <span>Publish</span>
+                          </button>
+                        )}
+                        <NavLink to={`/properties/${listing.id}/edit`} className="btn btn-outline btn-sm">
+                          <Edit2 size={13} />
+                          <span>Edit</span>
+                        </NavLink>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Reject Modal */}
+      {rejectModal.isOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 10000,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'grid',
+            placeItems: 'center',
+            padding: '16px'
+          }}
+        >
+          <div className="card" style={{ maxWidth: '460px', width: '100%', padding: '24px' }}>
+            <h3 style={{ margin: '0 0 10px', fontSize: '18px' }}>Reject listing</h3>
+            <p className="muted" style={{ margin: '0 0 16px', fontSize: '13.5px' }}>
+              Explain to the agent what needs to be fixed before this listing can be approved.
+            </p>
+            <textarea
+              rows={4}
+              placeholder="e.g. Please upload clear photos of both bedrooms and attach Form A."
+              value={rejectModal.reason}
+              onChange={(e) => setRejectModal({ ...rejectModal, reason: e.target.value })}
+              style={{ width: '100%', marginBottom: '16px' }}
+            />
+            <div className="row" style={{ justifyContent: 'flex-end', gap: '8px' }}>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => setRejectModal({ isOpen: false, listingId: null, reason: '' })}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm"
+                style={{ background: 'var(--cmp-danger)', color: '#FFF' }}
+                onClick={handleConfirmReject}
+              >
+                Reject Listing
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Assign Agent Modal */}
+      {assignModal.isOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 10000,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'grid',
+            placeItems: 'center',
+            padding: '16px'
+          }}
+        >
+          <div className="card" style={{ maxWidth: '440px', width: '100%', padding: '24px' }}>
+            <h3 style={{ margin: '0 0 10px', fontSize: '18px' }}>Assign listing to agent</h3>
+            <p className="muted" style={{ margin: '0 0 16px', fontSize: '13.5px' }}>
+              Choose which active agent will be the responsible listing agent.
+            </p>
+            <div style={{ marginBottom: '18px' }}>
+              <label>Select Agent</label>
+              <select
+                value={assignModal.agentId}
+                onChange={(e) => setAssignModal({ ...assignModal, agentId: e.target.value })}
+                style={{ width: '100%' }}
+              >
+                <option value="">-- Choose active agent --</option>
+                {activeTeamMembers.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.fullName} {m.compliance?.brn ? `(BRN: ${m.compliance.brn})` : ''} - {m.role?.name || m.role}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="row" style={{ justifyContent: 'flex-end', gap: '8px' }}>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => setAssignModal({ isOpen: false, listingId: null, agentId: '' })}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={handleConfirmAssign}
+              >
+                Save Assignment
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Assign Agent Modal */}
+      {bulkAssignModal.isOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 10000,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'grid',
+            placeItems: 'center',
+            padding: '16px'
+          }}
+        >
+          <div className="card" style={{ maxWidth: '440px', width: '100%', padding: '24px' }}>
+            <h3 style={{ margin: '0 0 10px', fontSize: '18px' }}>Assign {selectedListingIds.size} listings to agent</h3>
+            <p className="muted" style={{ margin: '0 0 16px', fontSize: '13.5px' }}>
+              Select the active agent who will take over all {selectedListingIds.size} selected listings.
+            </p>
+            <div style={{ marginBottom: '18px' }}>
+              <label>Select Agent</label>
+              <select
+                value={bulkAssignModal.agentId}
+                onChange={(e) => setBulkAssignModal({ ...bulkAssignModal, agentId: e.target.value })}
+                style={{ width: '100%' }}
+              >
+                <option value="">-- Choose active agent --</option>
+                {activeTeamMembers.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.fullName} {m.compliance?.brn ? `(BRN: ${m.compliance.brn})` : ''} - {m.role?.name || m.role}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="row" style={{ justifyContent: 'flex-end', gap: '8px' }}>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => setBulkAssignModal({ isOpen: false, agentId: '' })}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                disabled={!bulkAssignModal.agentId || isBulkLoading}
+                onClick={() => {
+                  const agentId = bulkAssignModal.agentId;
+                  setBulkAssignModal({ isOpen: false, agentId: '' });
+                  handleBulkAction('assign', agentId);
+                }}
+              >
+                Confirm Assignment
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

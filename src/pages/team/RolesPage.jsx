@@ -5,7 +5,11 @@ import {
   Shield,
   Lock,
   AlertTriangle,
-  Info
+  Info,
+  Plus,
+  Edit2,
+  Trash2,
+  Loader2
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { cmpConnectApi } from '../../services/cmpConnectApi';
@@ -143,7 +147,145 @@ export default function RolesPage() {
       });
   }, [authToken, isMockData]);
 
+  const userHasPerm = (permKey) => {
+    if (account?.role?.key === 'OWNER') return true;
+    return Array.isArray(account?.permissions) && account.permissions.includes(permKey);
+  };
 
+  const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
+  const [editingRoleId, setEditingRoleId] = useState(null);
+  const [roleForm, setRoleForm] = useState({
+    name: '',
+    description: '',
+    baseRoleKey: 'AGENT',
+    permissions: []
+  });
+  const [isSubmittingRole, setIsSubmittingRole] = useState(false);
+  const [roleModalError, setRoleModalError] = useState(null);
+
+  const fetchRolesData = async () => {
+    if (!authToken || isMockData) return;
+    try {
+      const res = await cmpConnectApi.listRoles(authToken);
+      if (res?.data?.groups && res?.data?.roles) {
+        setGroups(res.data.groups);
+        setRoles(res.data.roles);
+      }
+    } catch (err) {
+      console.warn('[RolesPage] fetch error:', err.message);
+    }
+  };
+
+  const openCreateModal = () => {
+    const defaultBase = roles.find((r) => r.key === 'AGENT') || roles.find((r) => r.isSystem && r.key !== 'OWNER');
+    const basePerms = defaultBase?.permissions || [];
+    const allowedPerms = basePerms.filter((p) => userHasPerm(p));
+    setRoleForm({
+      name: '',
+      description: '',
+      baseRoleKey: defaultBase?.key || 'AGENT',
+      permissions: allowedPerms
+    });
+    setEditingRoleId(null);
+    setRoleModalError(null);
+    setIsRoleModalOpen(true);
+  };
+
+  const openEditModal = (role) => {
+    setRoleForm({
+      name: role.name || '',
+      description: role.description || '',
+      baseRoleKey: role.baseRoleKey || 'AGENT',
+      permissions: role.permissions || []
+    });
+    setEditingRoleId(role.id);
+    setRoleModalError(null);
+    setIsRoleModalOpen(true);
+  };
+
+  const handleBaseRoleChange = (newBaseKey) => {
+    const baseRole = roles.find((r) => r.key === newBaseKey);
+    const basePerms = baseRole?.permissions || [];
+    const allowedPerms = basePerms.filter((p) => userHasPerm(p));
+    setRoleForm((prev) => ({
+      ...prev,
+      baseRoleKey: newBaseKey,
+      permissions: allowedPerms
+    }));
+  };
+
+  const togglePermission = (permKey) => {
+    if (!userHasPerm(permKey)) return;
+    setRoleForm((prev) => {
+      const has = prev.permissions.includes(permKey);
+      return {
+        ...prev,
+        permissions: has
+          ? prev.permissions.filter((k) => k !== permKey)
+          : [...prev.permissions, permKey]
+      };
+    });
+  };
+
+  const handleSaveRole = async (e) => {
+    e.preventDefault();
+    if (!roleForm.name.trim()) {
+      setRoleModalError('Role name is required (2–50 characters).');
+      return;
+    }
+    setIsSubmittingRole(true);
+    setRoleModalError(null);
+
+    try {
+      if (editingRoleId) {
+        await cmpConnectApi.updateCustomRole(
+          editingRoleId,
+          {
+            name: roleForm.name.trim(),
+            description: roleForm.description.trim(),
+            permissions: roleForm.permissions
+          },
+          authToken
+        );
+        showNotice(`Custom role "${roleForm.name}" updated successfully.`);
+      } else {
+        await cmpConnectApi.createCustomRole(
+          {
+            name: roleForm.name.trim(),
+            description: roleForm.description.trim(),
+            baseRoleKey: roleForm.baseRoleKey,
+            permissions: roleForm.permissions
+          },
+          authToken
+        );
+        showNotice(`Custom role "${roleForm.name}" created successfully.`);
+      }
+      setIsRoleModalOpen(false);
+      await fetchRolesData();
+    } catch (err) {
+      setRoleModalError(err.message || 'Failed to save role.');
+    } finally {
+      setIsSubmittingRole(false);
+    }
+  };
+
+  const handleDeleteRole = async (role) => {
+    if (role.memberCount > 0) {
+      alert(`Cannot delete "${role.name}" while it is assigned to ${role.memberCount} member(s). Reassign them first.`);
+      return;
+    }
+    if (!window.confirm(`Are you sure you want to delete custom role "${role.name}"?`)) {
+      return;
+    }
+
+    try {
+      await cmpConnectApi.deleteCustomRole(role.id, authToken);
+      showNotice(`Role "${role.name}" deleted.`);
+      await fetchRolesData();
+    } catch (err) {
+      showNotice(err.message || 'Failed to delete role.', true);
+    }
+  };
 
   return (
     <div>
@@ -167,6 +309,17 @@ export default function RolesPage() {
           </p>
         </div>
 
+        {can('roles.manage') && (
+          <button
+            type="button"
+            className="btn btn-accent btn-sm"
+            onClick={openCreateModal}
+            style={{ gap: '6px' }}
+          >
+            <Plus size={16} />
+            <span>Create custom role</span>
+          </button>
+        )}
       </div>
 
       {/* Notice Banner */}
@@ -190,7 +343,8 @@ export default function RolesPage() {
       {/* Permission Matrix Table */}
       {isLoading ? (
         <div className="card" style={{ padding: '40px', textAlign: 'center', color: 'var(--cmp-text-muted)' }}>
-          Loading roles and permissions matrix...
+          <Loader2 size={24} className="spin" style={{ color: 'var(--cmp-brand)', margin: '0 auto 8px' }} />
+          <span>Loading roles and permissions matrix...</span>
         </div>
       ) : (
         <div className="card table-scroll" style={{ overflowX: 'auto' }}>
@@ -201,7 +355,7 @@ export default function RolesPage() {
                 Capability
               </th>
               {roles.map((r) => (
-                <th key={r.id || r.key} style={{ textAlign: 'center', minWidth: '110px' }}>
+                <th key={r.id || r.key} style={{ textAlign: 'center', minWidth: '130px', padding: '12px 8px' }}>
                   <div style={{ display: 'grid', gap: '4px', placeItems: 'center' }}>
                     <div className="row" style={{ gap: '4px', alignItems: 'center' }}>
                       <span style={{ fontWeight: 700, fontSize: '13.5px' }}>{r.name}</span>
@@ -221,7 +375,43 @@ export default function RolesPage() {
                       )}
                     </div>
 
-                    </div>
+                    <span className="faint" style={{ fontSize: '11px' }}>
+                      {r.memberCount || 0} {r.memberCount === 1 ? 'member' : 'members'}
+                    </span>
+
+                    {/* Actions for custom roles */}
+                    {!r.isSystem && can('roles.manage') && (
+                      <div className="row" style={{ gap: '4px', marginTop: '4px' }}>
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          style={{ padding: '3px 6px', height: 'auto' }}
+                          title="Edit role name and permissions"
+                          onClick={() => openEditModal(r)}
+                        >
+                          <Edit2 size={12} />
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          disabled={r.memberCount > 0}
+                          style={{
+                            padding: '3px 6px',
+                            height: 'auto',
+                            color: r.memberCount > 0 ? 'var(--cmp-text-faint)' : 'var(--cmp-danger)'
+                          }}
+                          title={
+                            r.memberCount > 0
+                              ? `Cannot delete while assigned to ${r.memberCount} member(s)`
+                              : 'Delete custom role'
+                          }
+                          onClick={() => handleDeleteRole(r)}
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </th>
               ))}
             </tr>
@@ -315,6 +505,195 @@ export default function RolesPage() {
           </tbody>
         </table>
       </div>
+      )}
+
+      {/* CREATE / EDIT CUSTOM ROLE MODAL */}
+      {isRoleModalOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'var(--cmp-overlay)',
+            zIndex: 100,
+            display: 'grid',
+            placeItems: 'center',
+            padding: '16px'
+          }}
+          onClick={() => setIsRoleModalOpen(false)}
+        >
+          <div
+            className="card"
+            style={{
+              maxWidth: '620px',
+              width: '100%',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              padding: '24px',
+              background: 'var(--cmp-surface-raised)',
+              boxShadow: 'var(--cmp-shadow-lg)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+              <h2 style={{ fontSize: '18px', margin: 0 }}>
+                {editingRoleId ? 'Edit custom role' : 'Create a custom role'}
+              </h2>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => setIsRoleModalOpen(false)}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {roleModalError && (
+              <div
+                className="card"
+                style={{
+                  padding: '10px 14px',
+                  marginBottom: '14px',
+                  background: 'rgba(179,38,30,0.1)',
+                  color: 'var(--cmp-danger)',
+                  fontSize: '13px',
+                  fontWeight: 600
+                }}
+              >
+                {roleModalError}
+              </div>
+            )}
+
+            <form onSubmit={handleSaveRole}>
+              <div style={{ display: 'grid', gap: '14px' }}>
+                <div>
+                  <label>Role Name* (2–50 characters)</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Senior Listing Specialist"
+                    value={roleForm.name}
+                    onChange={(e) => setRoleForm({ ...roleForm, name: e.target.value })}
+                    required
+                    maxLength={50}
+                  />
+                </div>
+
+                <div>
+                  <label>Description (optional)</label>
+                  <textarea
+                    rows={2}
+                    placeholder="Describe what members with this role can do..."
+                    value={roleForm.description}
+                    onChange={(e) => setRoleForm({ ...roleForm, description: e.target.value })}
+                  />
+                </div>
+
+                {!editingRoleId && (
+                  <div>
+                    <label>Based on Default Role</label>
+                    <select
+                      value={roleForm.baseRoleKey}
+                      onChange={(e) => handleBaseRoleChange(e.target.value)}
+                    >
+                      {roles
+                        .filter((r) => r.isSystem && r.key !== 'OWNER')
+                        .map((r) => (
+                          <option key={r.key} value={r.key}>
+                            {r.name}
+                          </option>
+                        ))}
+                    </select>
+                    <span className="faint" style={{ fontSize: '12px', display: 'block', marginTop: '4px' }}>
+                      Pre-fills permissions from this standard template.
+                    </span>
+                  </div>
+                )}
+
+                <div>
+                  <label style={{ marginBottom: '4px', display: 'block' }}>
+                    Permissions ({roleForm.permissions.length} selected)
+                  </label>
+                  <span className="faint" style={{ fontSize: '12px', display: 'block', marginBottom: '10px' }}>
+                    You can only grant permissions that your own role possesses.
+                  </span>
+
+                  <div
+                    style={{
+                      maxHeight: '260px',
+                      overflowY: 'auto',
+                      border: '1px solid var(--cmp-border)',
+                      borderRadius: '8px',
+                      padding: '10px'
+                    }}
+                  >
+                    {groups.map((grp) => (
+                      <div key={grp.key} style={{ marginBottom: '14px' }}>
+                        <div
+                          style={{
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            letterSpacing: '0.04em',
+                            textTransform: 'uppercase',
+                            color: 'var(--cmp-text-faint)',
+                            marginBottom: '6px'
+                          }}
+                        >
+                          {grp.label}
+                        </div>
+                        <div style={{ display: 'grid', gap: '6px' }}>
+                          {grp.permissions.map((p) => {
+                            const isAllowed = userHasPerm(p.key);
+                            const isChecked = roleForm.permissions.includes(p.key);
+
+                            return (
+                              <label
+                                key={p.key}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '8px',
+                                  fontSize: '13px',
+                                  cursor: isAllowed ? 'pointer' : 'not-allowed',
+                                  opacity: isAllowed ? 1 : 0.45,
+                                  fontWeight: 500
+                                }}
+                                title={!isAllowed ? 'You cannot grant permissions you do not possess' : ''}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  disabled={!isAllowed}
+                                  onChange={() => togglePermission(p.key)}
+                                />
+                                <span>{p.label}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="row" style={{ justifyContent: 'flex-end', gap: '8px', marginTop: '20px' }}>
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  onClick={() => setIsRoleModalOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary btn-sm"
+                  disabled={isSubmittingRole || !roleForm.name.trim()}
+                >
+                  {isSubmittingRole ? 'Saving...' : editingRoleId ? 'Save changes' : 'Create role'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

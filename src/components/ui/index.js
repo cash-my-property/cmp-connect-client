@@ -6,3 +6,4 @@ export { default as Dropdown } from './Dropdown';
 export { default as EmptyState } from './EmptyState';
 export { default as QualityScoreCircle } from './QualityScoreCircle';
 export { default as SearchInput } from './SearchInput';
+export { default as RangeSlider } from './RangeSlider';

@@ -422,6 +422,378 @@ export const cmpConnectApi = {
       method: 'POST',
       body: JSON.stringify({ token, password })
     });
+  },
+
+  // ─────────────────────────────────────────────────────────────
+  // PROPERTIES (SIMPLE LISTINGS)
+  // ─────────────────────────────────────────────────────────────
+
+  /**
+   * 22. Get Wizard Options & Rules
+   * GET /api/cmpConnect/listings/options
+   */
+  async getListingOptions(token) {
+    return apiRequest('/api/cmpConnect/listings/options', {
+      method: 'GET',
+      token
+    });
+  },
+
+  /**
+   * 23. Get Signed Upload Signature for Cloudinary Direct Upload
+   * GET /api/cmpConnect/listings/upload-signature?listingId=
+   */
+  async getListingUploadSignature(listingId, token) {
+    const qs = listingId ? `?listingId=${encodeURIComponent(listingId)}` : '';
+    return apiRequest(`/api/cmpConnect/listings/upload-signature${qs}`, {
+      method: 'GET',
+      token
+    });
+  },
+
+  /**
+   * Upload file directly to Cloudinary using signed params
+   */
+  async uploadListingFileToCloudinary(file, sig) {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('api_key', sig.apiKey);
+    formData.append('timestamp', sig.timestamp);
+    formData.append('signature', sig.signature);
+    formData.append('folder', sig.folder);
+
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${sig.cloudName}/auto/upload`, {
+      method: 'POST',
+      body: formData
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error?.message || 'Cloudinary upload failed.');
+    }
+
+    const data = await res.json();
+    return {
+      url: data.secure_url || data.url,
+      public_id: data.public_id,
+      fileName: file.name
+    };
+  },
+
+  /**
+   * 24. List Listings (Portfolio)
+   * GET /api/cmpConnect/listings?...
+   */
+  async listListings(params = {}, token) {
+    const query = new URLSearchParams();
+    if (params.status && params.status !== 'all') query.set('status', params.status);
+    if (params.search) query.set('search', params.search);
+    if (params.agentId) query.set('agentId', params.agentId);
+    if (params.purpose) query.set('purpose', params.purpose);
+    if (params.category) query.set('category', params.category);
+    if (params.type) query.set('type', params.type);
+    if (params.sort) query.set('sort', params.sort);
+    if (params.page) query.set('page', params.page);
+    if (params.limit) query.set('limit', params.limit);
+
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    return apiRequest(`/api/cmpConnect/listings${qs}`, {
+      method: 'GET',
+      token
+    });
+  },
+
+  /**
+   * 25. Create Listing (Step 1 -> DRAFT)
+   * POST /api/cmpConnect/listings
+   */
+  async createListing(data, token) {
+    return apiRequest('/api/cmpConnect/listings', {
+      method: 'POST',
+      token,
+      body: JSON.stringify(data)
+    });
+  },
+
+  /**
+   * 26. Get Listing Detail
+   * GET /api/cmpConnect/listings/:id
+   */
+  async getListing(id, token) {
+    return apiRequest(`/api/cmpConnect/listings/${id}`, {
+      method: 'GET',
+      token
+    });
+  },
+
+  /**
+   * 27. Update Listing (Steps 2–7)
+   * PATCH /api/cmpConnect/listings/:id
+   */
+  async updateListing(id, data, token) {
+    return apiRequest(`/api/cmpConnect/listings/${id}`, {
+      method: 'PATCH',
+      token,
+      body: JSON.stringify(data)
+    });
+  },
+
+  /**
+   * 28. Assign Listing to Agent
+   * PATCH /api/cmpConnect/listings/:id/assign
+   */
+  async assignListing(id, agentId, token) {
+    return apiRequest(`/api/cmpConnect/listings/${id}/assign`, {
+      method: 'PATCH',
+      token,
+      body: JSON.stringify({ agentId })
+    });
+  },
+
+  /**
+   * 29. Submit Listing for Approval
+   * POST /api/cmpConnect/listings/:id/submit
+   */
+  async submitListing(id, token) {
+    return apiRequest(`/api/cmpConnect/listings/${id}/submit`, {
+      method: 'POST',
+      token
+    });
+  },
+
+  /**
+   * 30. Approve Listing (→ LIVE)
+   * POST /api/cmpConnect/listings/:id/approve
+   */
+  async approveListing(id, token) {
+    return apiRequest(`/api/cmpConnect/listings/${id}/approve`, {
+      method: 'POST',
+      token
+    });
+  },
+
+  /**
+   * 31. Reject Listing (→ REJECTED)
+   * POST /api/cmpConnect/listings/:id/reject
+   */
+  async rejectListing(id, reason, token) {
+    return apiRequest(`/api/cmpConnect/listings/${id}/reject`, {
+      method: 'POST',
+      token,
+      body: JSON.stringify({ reason })
+    });
+  },
+
+  /**
+   * 32. Publish Listing (UNPUBLISHED → LIVE)
+   * POST /api/cmpConnect/listings/:id/publish
+   */
+  async publishListing(id, token) {
+    return apiRequest(`/api/cmpConnect/listings/${id}/publish`, {
+      method: 'POST',
+      token
+    });
+  },
+
+  /**
+   * 33. Unpublish Listing (LIVE → UNPUBLISHED)
+   * POST /api/cmpConnect/listings/:id/unpublish
+   */
+  async unpublishListing(id, token) {
+    return apiRequest(`/api/cmpConnect/listings/${id}/unpublish`, {
+      method: 'POST',
+      token
+    });
+  },
+
+  /**
+   * 34. Archive Listing (→ ARCHIVED)
+   * POST /api/cmpConnect/listings/:id/archive
+   */
+  async archiveListing(id, token) {
+    return apiRequest(`/api/cmpConnect/listings/${id}/archive`, {
+      method: 'POST',
+      token
+    });
+  },
+
+  /**
+   * 35. Restore Listing (ARCHIVED → DRAFT)
+   * POST /api/cmpConnect/listings/:id/restore
+   */
+  async restoreListing(id, token) {
+    return apiRequest(`/api/cmpConnect/listings/${id}/restore`, {
+      method: 'POST',
+      token
+    });
+  },
+
+  /**
+   * 36. Delete Listing (Soft Delete, not while LIVE)
+   * DELETE /api/cmpConnect/listings/:id
+   */
+  async deleteListing(id, token) {
+    return apiRequest(`/api/cmpConnect/listings/${id}`, {
+      method: 'DELETE',
+      token
+    });
+  },
+
+  // ─────────────────────────────────────────────────────────────
+  // 8. HOME ("Today"), ACTIVITY & GLOBAL SEARCH
+  // ─────────────────────────────────────────────────────────────
+
+  /**
+   * 37. Get Home / Today Dashboard
+   * GET /api/cmpConnect/home
+   */
+  async getHomeDashboard(token) {
+    return apiRequest('/api/cmpConnect/home', {
+      method: 'GET',
+      token
+    });
+  },
+
+  /**
+   * 38. Get Activity Log
+   * GET /api/cmpConnect/activity?type=&actorId=&from=&to=&page=&limit=
+   */
+  async getActivityLog(params = {}, token) {
+    const query = new URLSearchParams();
+    if (params.type && params.type !== 'ALL') query.set('type', params.type);
+    if (params.actorId) query.set('actorId', params.actorId);
+    if (params.from) query.set('from', params.from);
+    if (params.to) query.set('to', params.to);
+    if (params.page) query.set('page', params.page);
+    if (params.limit) query.set('limit', params.limit);
+
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    return apiRequest(`/api/cmpConnect/activity${qs}`, {
+      method: 'GET',
+      token
+    });
+  },
+
+  /**
+   * 39. Global Search (Ctrl + K)
+   * GET /api/cmpConnect/search?q=
+   */
+  async globalSearch(q, token) {
+    if (!q || q.trim().length < 2) return { data: { listings: [], members: [] } };
+    return apiRequest(`/api/cmpConnect/search?q=${encodeURIComponent(q.trim())}`, {
+      method: 'GET',
+      token
+    });
+  },
+
+  // ─────────────────────────────────────────────────────────────
+  // 9. COMPANY: BRAND KIT (WATERMARK)
+  // ─────────────────────────────────────────────────────────────
+
+  /**
+   * 40. Get Brand Kit (Watermark Settings)
+   * GET /api/cmpConnect/company/brand-kit
+   */
+  async getBrandKit(token) {
+    return apiRequest('/api/cmpConnect/company/brand-kit', {
+      method: 'GET',
+      token
+    });
+  },
+
+  /**
+   * 41. Update Brand Kit
+   * PUT /api/cmpConnect/company/brand-kit
+   */
+  async updateBrandKit(data, token) {
+    return apiRequest('/api/cmpConnect/company/brand-kit', {
+      method: 'PUT',
+      token,
+      body: JSON.stringify(data)
+    });
+  },
+
+  /**
+   * 42. Brand Kit Upload Signature
+   * GET /api/cmpConnect/company/brand-kit/upload-signature
+   */
+  async getBrandKitUploadSignature(token) {
+    return apiRequest('/api/cmpConnect/company/brand-kit/upload-signature', {
+      method: 'GET',
+      token
+    });
+  },
+
+  // ─────────────────────────────────────────────────────────────
+  // 10. LISTINGS: REFRESH, BULK ACTIONS, EXPORT & TRANSFER
+  // ─────────────────────────────────────────────────────────────
+
+  /**
+   * 43. Refresh / Bump Listing (once per 24h)
+   * POST /api/cmpConnect/listings/:id/refresh
+   */
+  async refreshListing(id, token) {
+    return apiRequest(`/api/cmpConnect/listings/${id}/refresh`, {
+      method: 'POST',
+      token
+    });
+  },
+
+  /**
+   * 44. Bulk Listings Actions (publish, unpublish, archive, restore, delete, assign, refresh)
+   * POST /api/cmpConnect/listings/bulk
+   */
+  async bulkListingsAction({ ids, action, agentId }, token) {
+    return apiRequest('/api/cmpConnect/listings/bulk', {
+      method: 'POST',
+      token,
+      body: JSON.stringify({ ids, action, agentId })
+    });
+  },
+
+  /**
+   * 45. Export Listings to CSV
+   * GET /api/cmpConnect/listings/export?...
+   */
+  async exportListingsCsv(params = {}, token) {
+    const query = new URLSearchParams();
+    if (params.status && params.status !== 'all') query.set('status', params.status);
+    if (params.search) query.set('search', params.search);
+    if (params.agentId) query.set('agentId', params.agentId);
+    if (params.purpose) query.set('purpose', params.purpose);
+    if (params.category) query.set('category', params.category);
+    if (params.type) query.set('type', params.type);
+    if (params.sort) query.set('sort', params.sort);
+
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    const url = resolveApiUrl(`/api/cmpConnect/listings/export${qs}`);
+    const actualToken = token || getAuthToken();
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        ...(actualToken ? { Authorization: `Bearer ${actualToken}` } : {})
+      }
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to export listings CSV.');
+    }
+
+    return response.blob();
+  },
+
+  /**
+   * 46. Transfer Listings from one Agent to another
+   * POST /api/cmpConnect/team/members/:id/transfer-listings
+   */
+  async transferAgentListings(memberId, toAgentId, token) {
+    return apiRequest(`/api/cmpConnect/team/members/${memberId}/transfer-listings`, {
+      method: 'POST',
+      token,
+      body: JSON.stringify({ toAgentId })
+    });
   }
 };
 

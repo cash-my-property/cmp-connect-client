@@ -129,6 +129,7 @@ export default function AppRoutes() {
         {/* Properties Hub */}
         <Route path="/properties" element={<PortfolioPage />} />
         <Route path="/properties/new" element={<AddPropertyPage />} />
+        <Route path="/properties/add" element={<AddPropertyPage />} />
         <Route path="/properties/:id/edit" element={<EditPropertyPage />} />
         <Route path="/properties/edit" element={<EditPropertyPage />} />
         <Route path="/properties/compliance" element={<CompliancePage />} />

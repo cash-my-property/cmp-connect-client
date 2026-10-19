@@ -1,7 +1,8 @@
-import React, { useState, useMemo, useCallback, memo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { Link } from 'react-router-dom';
-import { Download, Inbox } from 'lucide-react';
+import { Download, Inbox, Loader2, RefreshCw } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import cmpConnectApi from '../../services/cmpConnectApi';
 import {
   Avatar,
   Chip,
@@ -73,132 +74,81 @@ const INITIAL_ACTIVITIES = [
     time: '02:30 PM',
     area: 'Team',
     link: '/team'
-  },
-  {
-    id: 7,
-    dateGroup: 'Sunday, 13 September',
-    initials: 'NA',
-    agent: 'Noor Al Hashimi',
-    action: 'Paid invoice 148955-03',
-    time: '10:15 AM',
-    area: 'Credits',
-    link: '/wallet'
-  },
-  {
-    id: 8,
-    dateGroup: 'Friday, 11 September',
-    initials: 'KS',
-    agent: 'Karim Saleh',
-    action: 'Recorded a closed deal on CMP-S-000941',
-    time: '04:45 PM',
-    area: 'Transactions',
-    link: '/transactions'
   }
 ];
 
-const AREAS = ['Everything', 'Clients', 'Credits', 'Properties', 'Team', 'Transactions'];
-const AGENT_OPTIONS = [
-  { label: 'Anyone', value: 'Anyone' },
-  { label: 'Karim Saleh', value: 'Karim Saleh' },
-  { label: 'Layla Haddad', value: 'Layla Haddad' },
-  { label: 'Emma Clarke', value: 'Emma Clarke' },
-  { label: 'Arjun Mehta', value: 'Arjun Mehta' },
-  { label: 'Noor Al Hashimi', value: 'Noor Al Hashimi' }
+const TYPE_TABS = [
+  { label: 'All Activity', value: 'ALL' },
+  { label: 'Listings', value: 'LISTING' },
+  { label: 'Team', value: 'MEMBER' },
+  { label: 'Roles', value: 'ROLE' },
+  { label: 'Company', value: 'COMPANY' }
 ];
 
-/**
- * Memoized Activity Row component to prevent unnecessary re-renders
- */
-const ActivityItemRow = memo(function ActivityItemRow({ item }) {
-  return (
-    <li>
-      <Avatar initials={item.initials} size={32} />
-      <span style={{ flex: '1 1 0%', minWidth: '0px' }}>
-        <span style={{ display: 'block', fontSize: '14px' }}>
-          <strong>{item.agent}</strong> · {item.action}
-        </span>
-        <span className="faint" style={{ fontSize: '12px' }}>
-          {item.time} · {item.area}
-        </span>
-      </span>
-      <Link to={item.link} className="btn btn-ghost btn-sm">
-        View
-      </Link>
-    </li>
-  );
-});
-
 export default function ActivityLogPage() {
-  const { isLiveData } = useApp();
+  const { isLiveData, authToken } = useApp();
+  const [selectedType, setSelectedType] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedArea, setSelectedArea] = useState('Everything');
-  const [selectedAgent, setSelectedAgent] = useState('Anyone');
+  const [liveActivities, setLiveActivities] = useState([]);
+  const [pagination, setPagination] = useState({ total: 0, page: 1, limit: 30, pages: 1 });
+  const [isLoading, setIsLoading] = useState(false);
 
-  const baseActivities = isLiveData ? [] : INITIAL_ACTIVITIES;
+  const debouncedQuery = useDebounce(searchQuery, 300);
 
-  // Debounce search input to optimize performance during typing
-  const debouncedQuery = useDebounce(searchQuery, 200);
-
-  // Optimized filtering using useMemo
-  const filteredActivities = useMemo(() => {
-    const query = debouncedQuery.trim().toLowerCase();
-
-    return baseActivities.filter((item) => {
-      // Area filter
-      if (selectedArea !== 'Everything' && item.area !== selectedArea) {
-        return false;
+  // Fetch real activities
+  const fetchLiveActivities = useCallback(async () => {
+    if (!isLiveData || !authToken) return;
+    setIsLoading(true);
+    try {
+      const res = await cmpConnectApi.getActivityLog(
+        {
+          type: selectedType,
+          page: pagination.page,
+          limit: 30
+        },
+        authToken
+      );
+      if (Array.isArray(res?.data)) {
+        setLiveActivities(res.data);
       }
-      // Agent filter
-      if (selectedAgent !== 'Anyone' && item.agent !== selectedAgent) {
-        return false;
+      if (res?.pagination) {
+        setPagination(res.pagination);
       }
-      // Debounced search query
-      if (query) {
-        const matchesAgent = item.agent.toLowerCase().includes(query);
-        const matchesAction = item.action.toLowerCase().includes(query);
-        const matchesArea = item.area.toLowerCase().includes(query);
-        if (!matchesAgent && !matchesAction && !matchesArea) {
-          return false;
-        }
-      }
-      return true;
+    } catch (err) {
+      console.warn('[ActivityLog] Fetch error:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [isLiveData, authToken, selectedType, pagination.page]);
+
+  useEffect(() => {
+    fetchLiveActivities();
+  }, [fetchLiveActivities]);
+
+  // Resolve entity link
+  const resolveEntityLink = (entity) => {
+    if (!entity?.id) return '/';
+    if (entity.type === 'LISTING') return `/properties/${entity.id}/edit`;
+    if (entity.type === 'MEMBER') return `/team/members`;
+    if (entity.type === 'ROLE') return `/team/roles`;
+    if (entity.type === 'COMPANY') return `/properties/brand-kit`;
+    return '/';
+  };
+
+  // Mock filtering
+  const filteredMockActivities = useMemo(() => {
+    const q = debouncedQuery.trim().toLowerCase();
+    return INITIAL_ACTIVITIES.filter((item) => {
+      if (!q) return true;
+      return (
+        item.agent.toLowerCase().includes(q) ||
+        item.action.toLowerCase().includes(q) ||
+        item.area.toLowerCase().includes(q)
+      );
     });
-  }, [debouncedQuery, selectedArea, selectedAgent]);
+  }, [debouncedQuery]);
 
-  // Group items by date while maintaining chronological order
-  const groupedSections = useMemo(() => {
-    const groups = [];
-    const seen = new Set();
-
-    filteredActivities.forEach((item) => {
-      if (!seen.has(item.dateGroup)) {
-        seen.add(item.dateGroup);
-        groups.push({
-          title: item.dateGroup,
-          items: filteredActivities.filter((i) => i.dateGroup === item.dateGroup)
-        });
-      }
-    });
-
-    return groups;
-  }, [filteredActivities]);
-
-  // Reusable CSV export callback
-  const handleDownloadCsv = useCallback(() => {
-    const headers = ['Date', 'Time', 'Agent', 'Action', 'Area'];
-    const rows = filteredActivities.map((act) => [
-      act.dateGroup,
-      act.time,
-      act.agent,
-      act.action,
-      act.area
-    ]);
-    exportToCsv('cmp-activity-log', headers, rows);
-  }, [filteredActivities]);
-
-  const handleClearSearch = useCallback(() => {
-    setSearchQuery('');
-  }, []);
+  const displayList = isLiveData ? liveActivities : filteredMockActivities;
 
   return (
     <div>
@@ -220,98 +170,173 @@ export default function ActivityLogPage() {
               display: 'flex',
               alignItems: 'baseline',
               gap: '10px',
-              letterSpacing: '-0.02em'
+              letterSpacing: '-0.02em',
+              margin: 0
             }}
           >
-            Activity log
-            <CountBadge count={filteredActivities.length} />
+            Activity log{' '}
+            <CountBadge count={isLiveData ? (pagination.total || liveActivities.length) : filteredMockActivities.length} />
           </h1>
-          <p
-            className="muted"
-            style={{
-              margin: '4px 0px 0px',
-              fontSize: '14px',
-              maxWidth: '820px'
-            }}
-          >
-            Everything your team did in CMP Connect, newest first. Useful for audits and for picking up where a colleague left off.
+          <p className="muted" style={{ margin: '4px 0 0', fontSize: '13px' }}>
+            Real-time audit log of listings published, team role changes, and compliance updates.
           </p>
         </div>
 
-        <div className="row" style={{ gap: '8px', flexWrap: 'wrap' }}>
+        {isLiveData && (
           <button
             type="button"
             className="btn btn-outline btn-sm"
-            onClick={handleDownloadCsv}
+            onClick={fetchLiveActivities}
+            disabled={isLoading}
           >
-            <Download size={16} style={{ flexShrink: 0 }} />
-            Download CSV
+            <RefreshCw size={14} className={isLoading ? 'spin' : ''} />
+            <span>Refresh</span>
           </button>
-        </div>
+        )}
       </div>
 
-      {/* Search & Agent Filter Bar */}
-      <div className="row" style={{ gap: '10px', flexWrap: 'wrap', marginBottom: '16px' }}>
-        <SearchInput
-          id="activity-search"
-          placeholder="Search activity"
-          value={searchQuery}
-          onChange={setSearchQuery}
-          onClear={handleClearSearch}
-          maxWidth="320px"
-        />
-
-        <Dropdown
-          label={selectedAgent}
-          options={AGENT_OPTIONS}
-          selectedValue={selectedAgent}
-          onSelect={setSelectedAgent}
-          width="100%"
-        />
+      {/* Filter Tabs */}
+      <div className="row" style={{ gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
+        {TYPE_TABS.map((tab) => (
+          <Chip
+            key={tab.value}
+            label={tab.label}
+            active={selectedType === tab.value}
+            onClick={() => setSelectedType(tab.value)}
+          />
+        ))}
       </div>
 
-      {/* Area Chips */}
-      <div style={{ marginBottom: '18px' }}>
-        <div className="row" role="group" aria-label="Area" style={{ gap: '8px', flexWrap: 'wrap' }}>
-          {AREAS.map((area) => (
-            <Chip
-              key={area}
-              label={area}
-              active={selectedArea === area}
-              onClick={() => setSelectedArea(area)}
-            />
-          ))}
-        </div>
-      </div>
+      {/* Activity List Card */}
+      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        {isLoading && displayList.length === 0 ? (
+          <div style={{ padding: '48px 24px', textAlign: 'center' }} className="muted">
+            <Loader2 size={24} className="spin" style={{ color: 'var(--cmp-brand)', margin: '0 auto 8px' }} />
+            <p style={{ margin: 0, fontSize: '13.5px' }}>Loading audit log...</p>
+          </div>
+        ) : displayList.length === 0 ? (
+          <div style={{ padding: '48px 24px', textAlign: 'center' }} className="muted">
+            <Inbox size={32} style={{ margin: '0 auto 8px', color: 'var(--cmp-text-faint)' }} />
+            <p style={{ margin: 0, fontSize: '14px', fontWeight: 600 }}>No activities recorded</p>
+            <p className="faint" style={{ margin: '4px 0 0', fontSize: '12.5px' }}>
+              Events appear as your team creates listings, approves updates, and changes roles.
+            </p>
+          </div>
+        ) : isLiveData ? (
+          /* Live API Activities List */
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+            {displayList.map((act) => {
+              const actorName = act.actor?.type === 'CMP_ADMIN' ? 'CMP' : act.actor?.name || 'System';
+              const actorInitials = actorName.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase();
+              const dateStr = act.at ? new Date(act.at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Just now';
 
-      {/* Grouped Timeline Sections */}
-      {groupedSections.length > 0 ? (
-        groupedSections.map((group) => (
-          <section key={group.title} style={{ marginBottom: '20px' }}>
-            <h2
-              className="faint"
-              style={{
-                fontSize: '12px',
-                textTransform: 'uppercase',
-                letterSpacing: '0.08em',
-                marginBottom: '8px'
-              }}
-            >
-              {group.title}
-            </h2>
-            <ol className="card timeline">
-              {group.items.map((item) => (
-                <ActivityItemRow key={item.id} item={item} />
-              ))}
-            </ol>
-          </section>
-        ))
-      ) : (
-        <EmptyState
-          icon={<Inbox size={32} />}
-          message={isLiveData ? "No activity recorded yet." : "No activity matches your filters."}
-        />
-      )}
+              return (
+                <li
+                  key={act.id}
+                  className="row"
+                  style={{
+                    gap: '14px',
+                    padding: '14px 20px',
+                    borderBottom: '1px solid var(--cmp-border)',
+                    alignItems: 'center'
+                  }}
+                >
+                  <span
+                    style={{
+                      width: '34px',
+                      height: '34px',
+                      borderRadius: '50%',
+                      background: act.actor?.type === 'CMP_ADMIN' ? 'var(--cmp-accent-subtle)' : 'var(--cmp-brand-subtle)',
+                      color: act.actor?.type === 'CMP_ADMIN' ? 'var(--cmp-accent)' : 'var(--cmp-brand)',
+                      display: 'grid',
+                      placeItems: 'center',
+                      fontWeight: 700,
+                      fontSize: '11px',
+                      flexShrink: 0
+                    }}
+                  >
+                    {actorInitials}
+                  </span>
+
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: '13.5px', lineHeight: 1.4 }}>
+                      <strong>{actorName}</strong>: {act.text || act.action}
+                      {act.entity?.label && (
+                        <>
+                          {' — '}
+                          <Link
+                            to={resolveEntityLink(act.entity)}
+                            style={{ color: 'var(--cmp-brand)', fontWeight: 600, textDecoration: 'underline' }}
+                          >
+                            {act.entity.label}
+                          </Link>
+                        </>
+                      )}
+                    </div>
+                    {act.note && (
+                      <div className="muted" style={{ fontSize: '12px', marginTop: '3px' }}>
+                        Note: {act.note}
+                      </div>
+                    )}
+                    <span className="faint" style={{ fontSize: '11.5px', marginTop: '2px', display: 'block' }}>
+                      {dateStr}
+                    </span>
+                  </div>
+
+                  {act.status && (
+                    <span
+                      className={`badge ${
+                        act.status === 'LIVE'
+                          ? 'badge-brand'
+                          : act.status === 'REJECTED'
+                          ? 'badge-danger'
+                          : 'badge-neutral'
+                      }`}
+                    >
+                      {act.status}
+                    </span>
+                  )}
+
+                  {act.entity?.id && (
+                    <Link to={resolveEntityLink(act.entity)} className="btn btn-ghost btn-sm">
+                      View
+                    </Link>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          /* Mock Activities Fallback */
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+            {displayList.map((item) => (
+              <li
+                key={item.id}
+                className="row"
+                style={{
+                  gap: '14px',
+                  padding: '14px 20px',
+                  borderBottom: '1px solid var(--cmp-border)',
+                  alignItems: 'center'
+                }}
+              >
+                <Avatar initials={item.initials} size={32} />
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ display: 'block', fontSize: '13.5px' }}>
+                    <strong>{item.agent}</strong> · {item.action}
+                  </span>
+                  <span className="faint" style={{ fontSize: '12px' }}>
+                    {item.dateGroup} · {item.time} · {item.area}
+                  </span>
+                </span>
+                <Link to={item.link} className="btn btn-ghost btn-sm">
+                  View
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }

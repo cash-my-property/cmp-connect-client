@@ -10,6 +10,7 @@ import {
   Check,
   Mail,
   RotateCcw,
+  RotateCw,
   UserMinus,
   UserCheck,
   AlertTriangle,
@@ -207,6 +208,23 @@ export default function MembersPage() {
   const [selectedNewRoleId, setSelectedNewRoleId] = useState('');
   const [activeActionMenuId, setActiveActionMenuId] = useState(null);
   const [notice, setNotice] = useState(null);
+
+  // Transfer Listings Modal State
+  const [transferModal, setTransferModal] = useState({
+    isOpen: false,
+    member: null,
+    toAgentId: '',
+    loading: false
+  });
+
+  // BRN Verification Modal State
+  const [verifyModal, setVerifyModal] = useState({
+    isOpen: false,
+    member: null,
+    brn: '',
+    brnExpiry: '',
+    loading: false
+  });
 
   // Invite Form & BRN Check State
   const [inviteForm, setInviteForm] = useState({
@@ -950,6 +968,53 @@ export default function MembersPage() {
     }
   };
 
+  // Handle Transfer Agent Listings
+  const handleTransferSubmit = async (e) => {
+    e.preventDefault();
+    if (!transferModal.member || !transferModal.toAgentId) return;
+    setTransferModal((prev) => ({ ...prev, loading: true }));
+    try {
+      const res = await cmpConnectApi.transferAgentListings(
+        transferModal.member.id,
+        transferModal.toAgentId,
+        authToken
+      );
+      const targetMember = members.find((x) => x.id === transferModal.toAgentId);
+      const moved = res?.data?.moved ?? res?.moved ?? 0;
+      const live = res?.data?.live ?? res?.live ?? 0;
+      showNotice(
+        `Successfully transferred ${moved} listings (${live} live) to ${targetMember?.fullName || 'the new agent'}.`
+      );
+      setTransferModal({ isOpen: false, member: null, toAgentId: '', loading: false });
+    } catch (err) {
+      showNotice(err.message || 'Failed to move listings.', true);
+      setTransferModal((prev) => ({ ...prev, loading: false }));
+    }
+  };
+
+  // Handle BRN Verification Request
+  const handleVerifySubmit = async (e) => {
+    e.preventDefault();
+    if (!verifyModal.member || !verifyModal.brn.trim()) return;
+    setVerifyModal((prev) => ({ ...prev, loading: true }));
+    try {
+      await cmpConnectApi.requestBrnVerification(
+        verifyModal.member.id,
+        {
+          brn: verifyModal.brn.trim(),
+          brnExpiry: verifyModal.brnExpiry || undefined
+        },
+        authToken
+      );
+      showNotice(`Verification requested for BRN#${verifyModal.brn.trim()}. Status is now Pending review.`);
+      setVerifyModal({ isOpen: false, member: null, brn: '', brnExpiry: '', loading: false });
+      fetchMembers();
+    } catch (err) {
+      showNotice(err.message || 'Failed to request BRN verification.', true);
+      setVerifyModal((prev) => ({ ...prev, loading: false }));
+    }
+  };
+
   // Assignable roles list (excluding Owner and roles with excessive permissions)
   const assignable = useMemo(() => {
     return assignableRoles(availableRoles, account);
@@ -1403,6 +1468,42 @@ export default function MembersPage() {
                                 >
                                   <Shield size={15} style={{ color: 'var(--cmp-text-muted)' }} />
                                   <span>Change role</span>
+                                </button>
+                              )}
+
+                              {/* Move listings (Transfer listings) */}
+                              {can('team.transfer') && (
+                                <button
+                                  type="button"
+                                  className="menu-item"
+                                  onClick={() => {
+                                    setActiveActionMenuId(null);
+                                    setTransferModal({ isOpen: true, member: m, toAgentId: '', loading: false });
+                                  }}
+                                >
+                                  <RotateCw size={15} style={{ color: 'var(--cmp-accent)' }} />
+                                  <span>Move listings</span>
+                                </button>
+                              )}
+
+                              {/* Request BRN verification */}
+                              {isAgency && m.verificationStatus !== 'VERIFIED' && m.verificationStatus !== 'PENDING' && can('team.verification_request') && (
+                                <button
+                                  type="button"
+                                  className="menu-item"
+                                  onClick={() => {
+                                    setActiveActionMenuId(null);
+                                    setVerifyModal({
+                                      isOpen: true,
+                                      member: m,
+                                      brn: m.compliance?.brn || '',
+                                      brnExpiry: m.compliance?.brnExpiry ? m.compliance.brnExpiry.split('T')[0] : '',
+                                      loading: false
+                                    });
+                                  }}
+                                >
+                                  <ShieldCheck size={15} style={{ color: 'var(--cmp-primary)' }} />
+                                  <span>Request BRN verification</span>
                                 </button>
                               )}
 
@@ -1917,6 +2018,174 @@ export default function MembersPage() {
                 </button>
                 <button type="submit" className="btn btn-primary btn-sm">
                   Save role
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MOVE LISTINGS (TRANSFER) MODAL */}
+      {transferModal.isOpen && transferModal.member && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'var(--cmp-overlay)',
+            zIndex: 100,
+            display: 'grid',
+            placeItems: 'center',
+            padding: '16px'
+          }}
+          onClick={() => setTransferModal({ isOpen: false, member: null, toAgentId: '', loading: false })}
+        >
+          <div
+            className="card"
+            style={{
+              maxWidth: '460px',
+              width: '100%',
+              padding: '24px',
+              background: 'var(--cmp-surface-raised)',
+              boxShadow: 'var(--cmp-shadow-lg)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+              <h2 style={{ fontSize: '18px', margin: 0 }}>
+                Move listings from {transferModal.member.fullName || transferModal.member.name}
+              </h2>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => setTransferModal({ isOpen: false, member: null, toAgentId: '', loading: false })}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <p className="muted" style={{ fontSize: '13px', margin: '0 0 16px', lineHeight: 1.5 }}>
+              Transfer all listings owned by this broker to another active member before deactivating or reassigning them. If any listing is live, the target agent must have a verified BRN.
+            </p>
+
+            <form onSubmit={handleTransferSubmit}>
+              <div style={{ margin: '14px 0' }}>
+                <label>Select destination agent</label>
+                <select
+                  value={transferModal.toAgentId}
+                  onChange={(e) => setTransferModal({ ...transferModal, toAgentId: e.target.value })}
+                  required
+                >
+                  <option value="">-- Choose active agent --</option>
+                  {members
+                    .filter((m) => m.id !== transferModal.member.id && m.status === 'ACTIVE')
+                    .map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.fullName} {m.compliance?.brn ? `(BRN: ${m.compliance.brn})` : ''} - {m.role?.name || m.role}
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              <div className="row" style={{ justifyContent: 'flex-end', gap: '8px', marginTop: '20px' }}>
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  onClick={() => setTransferModal({ isOpen: false, member: null, toAgentId: '', loading: false })}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary btn-sm"
+                  disabled={!transferModal.toAgentId || transferModal.loading}
+                >
+                  {transferModal.loading ? 'Transferring...' : 'Transfer listings'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* REQUEST BRN VERIFICATION MODAL */}
+      {verifyModal.isOpen && verifyModal.member && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'var(--cmp-overlay)',
+            zIndex: 100,
+            display: 'grid',
+            placeItems: 'center',
+            padding: '16px'
+          }}
+          onClick={() => setVerifyModal({ isOpen: false, member: null, brn: '', brnExpiry: '', loading: false })}
+        >
+          <div
+            className="card"
+            style={{
+              maxWidth: '460px',
+              width: '100%',
+              padding: '24px',
+              background: 'var(--cmp-surface-raised)',
+              boxShadow: 'var(--cmp-shadow-lg)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+              <h2 style={{ fontSize: '18px', margin: 0 }}>
+                Request BRN verification
+              </h2>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => setVerifyModal({ isOpen: false, member: null, brn: '', brnExpiry: '', loading: false })}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <p className="muted" style={{ fontSize: '13px', margin: '0 0 16px', lineHeight: 1.5 }}>
+              Submit broker licence number (BRN) to CMP compliance for manual or automated DLD validation.
+            </p>
+
+            <form onSubmit={handleVerifySubmit}>
+              <div style={{ display: 'grid', gap: '14px' }}>
+                <div>
+                  <label>Dubai Broker Licence (BRN)*</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 50318"
+                    value={verifyModal.brn}
+                    onChange={(e) => setVerifyModal({ ...verifyModal, brn: e.target.value })}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label>BRN Card Expiry Date (optional if on DLD list)</label>
+                  <input
+                    type="date"
+                    value={verifyModal.brnExpiry}
+                    onChange={(e) => setVerifyModal({ ...verifyModal, brnExpiry: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="row" style={{ justifyContent: 'flex-end', gap: '8px', marginTop: '20px' }}>
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  onClick={() => setVerifyModal({ isOpen: false, member: null, brn: '', brnExpiry: '', loading: false })}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary btn-sm"
+                  disabled={!verifyModal.brn.trim() || verifyModal.loading}
+                >
+                  {verifyModal.loading ? 'Submitting...' : 'Submit verification'}
                 </button>
               </div>
             </form>
