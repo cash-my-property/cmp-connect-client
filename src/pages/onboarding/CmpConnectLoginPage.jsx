@@ -103,7 +103,8 @@ export default function CmpConnectLoginPage() {
         }
       }
 
-      if (!account && !token) {
+      const isSuccessfulLogin = Boolean(account || token || response?.data?.sessionId || response?.status === 'success');
+      if (!isSuccessfulLogin) {
         throw new Error(response?.message || 'Invalid login response from server.');
       }
 

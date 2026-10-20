@@ -61,7 +61,7 @@ import AcceptInvitePage from '../pages/onboarding/AcceptInvitePage';
 import ResetPasswordPage from '../pages/onboarding/ResetPasswordPage';
 
 function ProtectedLayout() {
-  const { isAuthenticated, mustChangePassword, isAuthLoading } = useApp();
+  const { isAuthenticated, account, mustChangePassword, isAuthLoading, isMockData } = useApp();
   const location = useLocation();
 
   if (isAuthLoading) {
@@ -72,7 +72,7 @@ function ProtectedLayout() {
     );
   }
 
-  if (!isAuthenticated) {
+  if (!account && !isMockData) {
     return <Navigate to="/cmp-connect/login" state={{ from: location }} replace />;
   }
 
