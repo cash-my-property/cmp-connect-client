@@ -4,7 +4,7 @@ import { AlertTriangle, AlertCircle, ShieldAlert, X } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
 export default function BrnComplianceBanner() {
-  const { account, isLiveData } = useApp();
+  const { account, isLiveData, theme } = useApp();
   const [isDismissed, setIsDismissed] = useState(false);
 
   // Only relevant for live data and AGENCY accounts
@@ -21,14 +21,15 @@ export default function BrnComplianceBanner() {
     return null;
   }
 
+  const isDark = theme === 'dark';
   let config = null;
 
   if (isExpired) {
     config = {
-      icon: <AlertTriangle size={15} style={{ color: '#b45309', flexShrink: 0 }} />,
-      bg: 'rgba(245, 158, 11, 0.1)',
-      border: 'rgba(245, 158, 11, 0.3)',
-      color: '#92400e',
+      icon: <AlertTriangle size={15} style={{ color: isDark ? '#FBBF24' : '#b45309', flexShrink: 0 }} />,
+      bg: isDark ? '#271704' : '#FEF3C7',
+      border: isDark ? '#4A2A08' : '#FDE68A',
+      color: isDark ? '#FDE68A' : '#92400e',
       title: 'BRN Licence Expired',
       message: 'Your broker licence (BRN) has expired. Publishing listings is restricted until renewed.',
       linkText: 'Update Licence',
@@ -36,10 +37,10 @@ export default function BrnComplianceBanner() {
     };
   } else if (vStatus === 'REJECTED') {
     config = {
-      icon: <AlertCircle size={15} style={{ color: 'var(--cmp-danger)', flexShrink: 0 }} />,
-      bg: 'var(--cmp-danger-subtle, rgba(220, 38, 38, 0.1))',
-      border: 'var(--cmp-danger)',
-      color: 'var(--cmp-danger)',
+      icon: <AlertCircle size={15} style={{ color: isDark ? '#F87171' : '#dc2626', flexShrink: 0 }} />,
+      bg: isDark ? '#2D0F0F' : '#FEE2E2',
+      border: isDark ? '#531919' : '#FECACA',
+      color: isDark ? '#FCA5A5' : '#991B1B',
       title: 'BRN Verification Rejected',
       message: 'Your broker licence verification was rejected by CMP. Please review your compliance details.',
       linkText: 'Check Compliance',
@@ -47,10 +48,10 @@ export default function BrnComplianceBanner() {
     };
   } else if (vStatus === 'PENDING') {
     config = {
-      icon: <AlertTriangle size={15} style={{ color: 'var(--cmp-brand)', flexShrink: 0 }} />,
-      bg: 'var(--cmp-brand-subtle)',
-      border: 'var(--cmp-brand)',
-      color: 'var(--cmp-brand)',
+      icon: <AlertTriangle size={15} style={{ color: isDark ? '#34D399' : '#059669', flexShrink: 0 }} />,
+      bg: isDark ? '#06261D' : '#D1FAE5',
+      border: isDark ? '#0D4736' : '#A7F3D0',
+      color: isDark ? '#6EE7B7' : '#065F46',
       title: 'Verification In Review',
       message: 'Your broker licence (BRN) verification is currently being reviewed by CMP.',
       linkText: 'View Status',
@@ -58,10 +59,10 @@ export default function BrnComplianceBanner() {
     };
   } else if (vStatus === 'UNVERIFIED') {
     config = {
-      icon: <ShieldAlert size={15} style={{ color: '#b45309', flexShrink: 0 }} />,
-      bg: 'rgba(245, 158, 11, 0.1)',
-      border: 'rgba(245, 158, 11, 0.3)',
-      color: '#92400e',
+      icon: <ShieldAlert size={15} style={{ color: isDark ? '#FBBF24' : '#b45309', flexShrink: 0 }} />,
+      bg: isDark ? '#271704' : '#FEF3C7',
+      border: isDark ? '#4A2A08' : '#FDE68A',
+      color: isDark ? '#FDE68A' : '#92400e',
       title: 'BRN Verification Required',
       message: 'Your broker licence (BRN) is not yet verified. Request verification to unlock live publishing.',
       linkText: 'Request Verification',
@@ -73,30 +74,33 @@ export default function BrnComplianceBanner() {
 
   return (
     <div
+      className="brn-compliance-banner"
       style={{
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
         gap: '12px',
-        padding: '8px 16px',
+        padding: '9px 28px',
         background: config.bg,
         borderBottom: `1px solid ${config.border}`,
         fontSize: '12.5px',
         color: config.color,
         fontWeight: 500,
-        zIndex: 30,
-        position: 'relative'
+        zIndex: 20,
+        position: 'relative',
+        width: '100%',
+        boxSizing: 'border-box'
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
         {config.icon}
-        <span style={{ fontWeight: 700 }}>{config.title}:</span>
+        <span style={{ fontWeight: 700, flexShrink: 0 }}>{config.title}:</span>
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {config.message}
         </span>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
         <NavLink
           to={config.linkTo}
           style={{
@@ -114,13 +118,17 @@ export default function BrnComplianceBanner() {
           style={{
             border: 'none',
             background: 'transparent',
-            padding: 0,
+            padding: '2px',
             cursor: 'pointer',
             color: 'inherit',
-            opacity: 0.7,
-            display: 'inline-flex'
+            opacity: 0.75,
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: '4px'
           }}
           title="Dismiss banner"
+          aria-label="Dismiss banner"
         >
           <X size={14} />
         </button>

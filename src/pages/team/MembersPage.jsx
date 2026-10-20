@@ -22,6 +22,15 @@ import {
 import { useApp } from '../../context/AppContext';
 import { cmpConnectApi } from '../../services/cmpConnectApi';
 import { assignableRoles } from '../../utils/permissions';
+import Avatar from '../../components/ui/Avatar';
+
+const PHONE_CODES = ['+971', '+966', '+974', '+44', '+91', '+92'];
+const splitPhone = (full) => {
+  if (!full) return { code: '+971', number: '' };
+  const str = String(full).trim();
+  const code = PHONE_CODES.find((c) => str.startsWith(c)) || '+971';
+  return { code, number: str.slice(code.length).replace(/\D/g, '') };
+};
 
 const formatDate = (isoString) => {
   if (!isoString) return '—';
@@ -998,7 +1007,7 @@ export default function MembersPage() {
     if (!verifyModal.member || !verifyModal.brn.trim()) return;
     setVerifyModal((prev) => ({ ...prev, loading: true }));
     try {
-      await cmpConnectApi.requestBrnVerification(
+      await cmpConnectApi.requestMemberVerification(
         verifyModal.member.id,
         {
           brn: verifyModal.brn.trim(),
@@ -1034,8 +1043,8 @@ export default function MembersPage() {
         }}
       >
         <div>
-          <h1 style={{ fontSize: '26px', margin: 0, letterSpacing: '-0.02em' }}>
-            Members ({isLoading ? '…' : counts.all})
+          <h1 style={{ fontSize: '22px', display: 'flex', alignItems: 'baseline', gap: '10px', letterSpacing: '-0.02em', margin: 0 }}>
+            Members <span className="count-badge">{isLoading ? '…' : (pagination.total || counts.all)}</span>
           </h1>
           <p className="muted" style={{ margin: '4px 0 0', fontSize: '14px' }}>
             Manage agency agents, brokers, admins and account operators.
@@ -1077,52 +1086,37 @@ export default function MembersPage() {
         </div>
       )}
 
-      {/* Status Segmented Quick Filter Chips */}
-      <div className="row" style={{ gap: '8px', flexWrap: 'wrap', marginBottom: '14px' }}>
-        {[
-          { key: 'all', label: 'All', count: isLoading ? '…' : counts.all },
-          { key: 'ACTIVE', label: 'Active', count: isLoading ? '…' : counts.ACTIVE },
-          { key: 'INVITED', label: 'Invited', count: isLoading ? '…' : counts.INVITED },
-          { key: 'INACTIVE', label: 'Inactive', count: isLoading ? '…' : counts.INACTIVE }
-        ].map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            className="chip"
-            aria-pressed={statusFilter === tab.key}
-            onClick={() => setStatusFilter(tab.key)}
-            style={{ gap: '6px' }}
-          >
-            <span>{tab.label}</span>
-            <span style={{ fontSize: '11px', opacity: 0.8 }}>({tab.count})</span>
-          </button>
-        ))}
-      </div>
-
-      {/* Search & Role Filter Bar */}
+      {/* Search & Role / Status Filter Bar */}
       <div className="row" style={{ gap: '10px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
-        <div style={{ position: 'relative', flex: '1 1 320px', maxWidth: '420px' }}>
-          <Search
-            size={16}
-            style={{
-              position: 'absolute',
-              left: '12px',
-              top: '50%',
-              transform: 'translateY(-50%)',
-              color: 'var(--cmp-text-faint)',
-              pointerEvents: 'none'
-            }}
-          />
+        <div className="row" style={{ flex: '1 1 320px', maxWidth: '420px', gap: 0 }}>
+          <label htmlFor="users-search" className="visually-hidden">Search by name, email or mobile</label>
           <input
             id="users-search"
             placeholder="Search by name, email, mobile"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            style={{ paddingLeft: '36px', height: '40px', width: '100%', fontSize: '13px' }}
+            style={{ height: '40px', borderRadius: '8px 0 0 8px', flex: 1, borderRight: 'none', fontSize: '13px' }}
           />
+          <span
+            className="btn btn-outline"
+            aria-hidden="true"
+            style={{
+              height: '40px',
+              borderRadius: '0 8px 8px 0',
+              display: 'grid',
+              placeItems: 'center',
+              padding: '0 12px',
+              color: 'var(--cmp-text-faint)',
+              pointerEvents: 'none'
+            }}
+          >
+            <Search size={16} />
+          </span>
         </div>
 
-        <div style={{ width: '200px' }}>
+        <span style={{ flex: 1 }} />
+
+        <div style={{ width: '190px' }}>
           <select
             value={roleFilter}
             onChange={(e) => setRoleFilter(e.target.value)}
@@ -1134,6 +1128,19 @@ export default function MembersPage() {
                 {r.name}
               </option>
             ))}
+          </select>
+        </div>
+
+        <div style={{ width: '190px' }}>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            style={{ height: '40px', width: '100%', fontSize: '13px' }}
+          >
+            <option value="all">Any status</option>
+            <option value="ACTIVE">Active ({isLoading ? '…' : counts.ACTIVE})</option>
+            <option value="INVITED">Invited ({isLoading ? '…' : counts.INVITED})</option>
+            <option value="INACTIVE">Inactive ({isLoading ? '…' : counts.INACTIVE})</option>
           </select>
         </div>
       </div>
@@ -1148,20 +1155,19 @@ export default function MembersPage() {
               <th>Verification</th>
               <th>Compliance</th>
               <th>Status</th>
-              <th>Activity</th>
               <th style={{ textAlign: 'end', width: '60px' }}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={7} style={{ textAlign: 'center', padding: '40px', color: 'var(--cmp-text-muted)' }}>
+                <td colSpan={6} style={{ textAlign: 'center', padding: '40px', color: 'var(--cmp-text-muted)' }}>
                   Loading team members...
                 </td>
               </tr>
             ) : members.length === 0 ? (
               <tr>
-                <td colSpan={7} style={{ textAlign: 'center', padding: '36px', color: 'var(--cmp-text-muted)' }}>
+                <td colSpan={6} style={{ textAlign: 'center', padding: '36px', color: 'var(--cmp-text-muted)' }}>
                   No members matched the filter criteria.
                 </td>
               </tr>
@@ -1169,15 +1175,6 @@ export default function MembersPage() {
               members.map((m) => {
                 const displayName = m.fullName || m.name || `${m.firstName || ''} ${m.lastName || ''}`.trim() || 'User';
                 const roleName = m.role?.name || (typeof m.role === 'string' ? m.role : 'Member');
-                const initials = (displayName || 'U')
-                  .split(' ')
-                  .map((n) => n[0])
-                  .filter(Boolean)
-                  .slice(0, 2)
-                  .join('')
-                  .toUpperCase();
-
-                const brnText = m.compliance?.brn ? `BRN#${m.compliance.brn}` : (typeof m.compliance === 'string' ? m.compliance : '—');
                 const isBlocked = Boolean(m.blockedByCmp);
                 const isInvited = m.status === 'INVITED';
                 const isInactive = m.status === 'INACTIVE';
@@ -1185,25 +1182,9 @@ export default function MembersPage() {
 
                 return (
                   <tr key={m.id || m._id}>
-                    <td>
-                      <div className="row" style={{ gap: '12px', alignItems: 'flex-start' }}>
-                        <span
-                          style={{
-                            width: '38px',
-                            height: '38px',
-                            borderRadius: '50%',
-                            display: 'grid',
-                            placeItems: 'center',
-                            background: m.isOwner ? 'rgba(200, 130, 40, 0.15)' : 'var(--cmp-brand-subtle)',
-                            color: m.isOwner ? 'var(--cmp-accent, #c88228)' : 'var(--cmp-brand)',
-                            fontWeight: 700,
-                            fontSize: '13px',
-                            flexShrink: 0,
-                            border: m.isOwner ? '1px solid rgba(200, 130, 40, 0.3)' : 'none'
-                          }}
-                        >
-                          {initials}
-                        </span>
+                    <td style={{ minWidth: '240px' }}>
+                      <div className="row" style={{ gap: '12px', alignItems: 'center' }}>
+                        <Avatar name={displayName} src={m.photo || m.avatar} size={42} />
                         <div>
                           <div className="row" style={{ gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
                             <NavLink
@@ -1229,31 +1210,25 @@ export default function MembersPage() {
                             )}
                           </div>
 
-                          {m.code && (
-                            <span
-                              className="badge"
-                              style={{
-                                display: 'inline-block',
-                                fontSize: '10.5px',
-                                fontFamily: 'monospace',
-                                letterSpacing: '0.04em',
-                                padding: '1px 5px',
-                                marginTop: '3px',
-                                background: 'var(--cmp-surface-sunken)',
-                                color: 'var(--cmp-text-faint)'
-                              }}
-                              title="User Reference Code"
-                            >
-                              {m.code}
-                            </span>
-                          )}
-
                           <span className="faint" style={{ display: 'block', fontSize: '12px', marginTop: '2px' }}>
                             {m.mobile || m.phone || '—'}
                           </span>
                           <span className="faint" style={{ display: 'block', fontSize: '12px' }}>
                             {m.email}
                           </span>
+                          {m.lastLoginAt ? (
+                            <span className="faint" style={{ display: 'block', fontSize: '11px', marginTop: '2px', opacity: 0.8 }}>
+                              Last seen {formatDateTime(m.lastLoginAt)}
+                            </span>
+                          ) : isInvited ? (
+                            <span className="faint" style={{ display: 'block', fontSize: '11px', marginTop: '2px', opacity: 0.8 }}>
+                              Invited {formatDate(m.invite?.invitedAt || m.createdAt)}
+                            </span>
+                          ) : (
+                            <span className="faint" style={{ display: 'block', fontSize: '11px', marginTop: '2px', opacity: 0.8 }}>
+                              Joined {formatDate(m.createdAt)}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -1277,13 +1252,12 @@ export default function MembersPage() {
                           Verified <Check size={14} />
                         </span>
                       ) : m.verificationStatus === 'PENDING' ? (
-                        <span className="badge badge-warning" style={{ fontSize: '12px' }}>
+                        <span style={{ color: 'var(--cmp-warning)', fontSize: '13px', fontWeight: 600 }}>
                           Pending
                         </span>
                       ) : m.verificationStatus === 'REJECTED' ? (
                         <span
-                          className="badge"
-                          style={{ background: 'rgba(179,38,30,0.1)', color: 'var(--cmp-danger)', fontSize: '12px' }}
+                          style={{ color: 'var(--cmp-danger)', fontSize: '13px', fontWeight: 600 }}
                           title={m.verification?.note || 'Verification rejected'}
                         >
                           Rejected
@@ -1333,34 +1307,22 @@ export default function MembersPage() {
                     <td>
                       {isBlocked ? (
                         <span
-                          className="badge"
-                          style={{ background: 'rgba(179,38,30,0.15)', color: 'var(--cmp-danger)', fontSize: '12px' }}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            padding: '2px 10px',
+                            borderRadius: '999px',
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            whiteSpace: 'nowrap',
+                            color: 'var(--cmp-danger)',
+                            border: '1px solid color-mix(in srgb, var(--cmp-danger) 55%, transparent)',
+                            background: 'color-mix(in srgb, var(--cmp-danger) 10%, transparent)'
+                          }}
                           title={m.blockedReason || 'Suspended by CMP administration'}
                         >
-                          Suspended by CMP
-                        </span>
-                      ) : isInvited ? (
-                        <div>
-                          <span
-                            className="badge"
-                            style={{
-                              background: m.invite?.expired ? 'rgba(179,38,30,0.1)' : 'var(--cmp-surface-sunken)',
-                              color: m.invite?.expired ? 'var(--cmp-danger)' : 'var(--cmp-text-muted)',
-                              fontSize: '12px'
-                            }}
-                          >
-                            Invited {m.invite?.expired ? '· Expired' : ''}
-                          </span>
-                          {m.invite && (
-                            <span className="faint" style={{ display: 'block', fontSize: '11px', marginTop: '3px' }}>
-                              {m.invite.emailStatus === 'SENT' ? 'Invite email sent' : m.invite.emailStatus ? `Email: ${m.invite.emailStatus}` : ''}
-                              {m.invite.expiresAt ? ` · Exp: ${formatDate(m.invite.expiresAt)}` : ''}
-                            </span>
-                          )}
-                        </div>
-                      ) : isInactive ? (
-                        <span className="badge" style={{ background: 'var(--cmp-surface-sunken)', color: 'var(--cmp-text-faint)', fontSize: '12px' }}>
-                          Inactive
+                          Suspended
                         </span>
                       ) : (
                         <span
@@ -1372,44 +1334,15 @@ export default function MembersPage() {
                             borderRadius: '999px',
                             fontSize: '12px',
                             fontWeight: 600,
-                            color: 'var(--cmp-success)',
-                            border: '1px solid currentColor',
-                            background: 'var(--cmp-brand-subtle)'
+                            whiteSpace: 'nowrap',
+                            color: isInactive ? 'var(--cmp-text-muted)' : isInvited ? 'var(--cmp-warning)' : 'var(--cmp-success)',
+                            border: `1px solid color-mix(in srgb, ${isInactive ? 'var(--cmp-text-muted)' : isInvited ? 'var(--cmp-warning)' : 'var(--cmp-success)'} 55%, transparent)`,
+                            background: `color-mix(in srgb, ${isInactive ? 'var(--cmp-text-muted)' : isInvited ? 'var(--cmp-warning)' : 'var(--cmp-success)'} 10%, transparent)`
                           }}
                         >
-                          Active
+                          {isInactive ? 'Inactive' : isInvited ? 'Invited' : 'Active'}
                         </span>
                       )}
-                    </td>
-
-                    {/* Activity Column (lastLoginAt & createdAt) */}
-                    <td>
-                      <div style={{ fontSize: '12.5px', lineHeight: 1.4 }}>
-                        {m.lastLoginAt ? (
-                          <>
-                            <span style={{ fontWeight: 600, color: 'var(--cmp-text)' }}>
-                              {formatDateTime(m.lastLoginAt)}
-                            </span>
-                            <span className="faint" style={{ display: 'block', fontSize: '11px' }}>
-                              Joined {formatDate(m.createdAt)}
-                            </span>
-                          </>
-                        ) : isInvited ? (
-                          <>
-                            <span className="muted" style={{ fontSize: '12px' }}>Invite pending</span>
-                            <span className="faint" style={{ display: 'block', fontSize: '11px' }}>
-                              Invited {formatDate(m.invite?.invitedAt || m.createdAt)}
-                            </span>
-                          </>
-                        ) : (
-                          <>
-                            <span className="muted" style={{ fontSize: '12px' }}>Never logged in</span>
-                            <span className="faint" style={{ display: 'block', fontSize: '11px' }}>
-                              Joined {formatDate(m.createdAt)}
-                            </span>
-                          </>
-                        )}
-                      </div>
                     </td>
 
                     {/* Actions ⋮ Column */}
@@ -1619,16 +1552,17 @@ export default function MembersPage() {
           <div
             className="card"
             style={{
-              maxWidth: '520px',
+              maxWidth: '620px',
               width: '100%',
               padding: '24px',
               background: 'var(--cmp-surface-raised)',
-              boxShadow: 'var(--cmp-shadow-lg)'
+              boxShadow: 'var(--cmp-shadow-lg)',
+              borderRadius: 'var(--cmp-radius-xl, 14px)'
             }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h2 style={{ fontSize: '18px', margin: 0 }}>Invite new team member</h2>
+              <h2 style={{ fontSize: '18px', margin: 0, fontWeight: 700 }}>Create a new user</h2>
               <button
                 type="button"
                 className="btn btn-ghost btn-sm"
@@ -1655,111 +1589,106 @@ export default function MembersPage() {
             )}
 
             <form onSubmit={handleInviteSubmit}>
-              <div style={{ display: 'grid', gap: '14px' }}>
-                {/* Dubai Broker Licence (BRN) - Agencies Only */}
-                {isAgency && (
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                      <label style={{ margin: 0, fontWeight: 600 }}>Dubai broker licence (BRN)*</label>
-                      <span style={{ fontSize: '11px', color: 'var(--cmp-text-muted)' }}>Checks DLD broker registry</span>
-                    </div>
-                    <div style={{ position: 'relative' }}>
-                      <input
-                        type="text"
-                        placeholder="e.g. 50318"
-                        value={inviteForm.brn}
-                        onChange={(e) => setInviteForm({ ...inviteForm, brn: e.target.value })}
-                        required={isAgency}
-                        style={{
-                          width: '100%',
-                          borderColor: (brnCheckState.allowed === false || brnCheckState.inUse)
-                            ? 'var(--cmp-danger)'
-                            : brnCheckState.whitelisted
-                            ? 'var(--cmp-primary)'
-                            : undefined
-                        }}
-                      />
-                      {brnCheckState.checking && (
-                        <div style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
-                          <Clock size={15} style={{ color: 'var(--cmp-text-muted)', animation: 'spin 1s linear infinite' }} />
-                        </div>
-                      )}
-                    </div>
-
-                    {/* BRN Status Feedback */}
-                    {brnCheckState.checking && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px', fontSize: '12px', color: 'var(--cmp-text-muted)' }}>
-                        <Clock size={13} />
-                        <span>Checking broker licence on DLD...</span>
-                      </div>
-                    )}
-
-                    {!brnCheckState.checking && brnCheckState.checked && inviteForm.brn.trim() && (
-                      <div style={{ marginTop: '6px', display: 'grid', gap: '4px' }}>
-                        {brnCheckState.allowed === false ? (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--cmp-danger)', fontWeight: 600 }}>
-                            <X size={14} style={{ flexShrink: 0 }} />
-                            <span>{brnCheckState.message || (brnCheckState.inUse ? `Already linked to ${brnCheckState.inUseBy || 'another user'}.` : 'This broker is registered under another office and cannot be invited.')}</span>
-                          </div>
-                        ) : (
-                          <>
-                            {brnCheckState.whitelisted && (
-                              <>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--cmp-primary)', fontWeight: 600 }}>
-                                  <Check size={14} style={{ flexShrink: 0 }} />
-                                  <span>
-                                    ✓ Found on DLD list: {brnCheckState.broker?.name}
-                                    {brnCheckState.broker?.officeName ? `, ${brnCheckState.broker.officeName}` : ''}
-                                  </span>
-                                </div>
-                                {brnCheckState.broker?.cardExpired && (
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#b26b00' }}>
-                                    <AlertTriangle size={13} style={{ flexShrink: 0 }} />
-                                    <span>⚠ Broker card expired{brnCheckState.broker?.cardExpiryDate ? ` on ${formatDate(brnCheckState.broker.cardExpiryDate)}` : ''}</span>
-                                  </div>
-                                )}
-                              </>
-                            )}
-
-                            {brnCheckState.isNew && (
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#b26b00' }}>
-                                <AlertTriangle size={13} style={{ flexShrink: 0 }} />
-                                <span>⚠ Not on the DLD list. CMP will check it manually.</span>
-                              </div>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <div>
-                    <label>First name*</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Karim"
-                      value={inviteForm.firstName}
-                      onChange={(e) => setInviteForm({ ...inviteForm, firstName: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label>Last name</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Saleh"
-                      value={inviteForm.lastName}
-                      onChange={(e) => setInviteForm({ ...inviteForm, lastName: e.target.value })}
-                    />
-                  </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '14px' }}>
+                <div>
+                  <label htmlFor="nu-first" style={{ display: 'block', marginBottom: '4px', fontSize: '13px', fontWeight: 600 }}>First name*</label>
+                  <input
+                    id="nu-first"
+                    type="text"
+                    placeholder="e.g. Karim"
+                    value={inviteForm.firstName}
+                    onChange={(e) => setInviteForm({ ...inviteForm, firstName: e.target.value })}
+                    required
+                    style={{ height: '40px', width: '100%' }}
+                  />
                 </div>
 
                 <div>
-                  <label>Login email* (becomes their username)</label>
+                  <label htmlFor="nu-last" style={{ display: 'block', marginBottom: '4px', fontSize: '13px', fontWeight: 600 }}>Last name</label>
+                  <input
+                    id="nu-last"
+                    type="text"
+                    placeholder="e.g. Saleh"
+                    value={inviteForm.lastName}
+                    onChange={(e) => setInviteForm({ ...inviteForm, lastName: e.target.value })}
+                    style={{ height: '40px', width: '100%' }}
+                  />
+                </div>
+
+                {/* Mobile phone with country code */}
+                <div>
+                  <label htmlFor="nu-mobile" style={{ display: 'block', marginBottom: '4px', fontSize: '13px', fontWeight: 600 }}>Mobile phone*</label>
+                  <div className="row" style={{ gap: 0 }}>
+                    <label htmlFor="nu-mobile-code" className="visually-hidden">Country code</label>
+                    <select
+                      id="nu-mobile-code"
+                      value={splitPhone(inviteForm.mobile).code}
+                      onChange={(e) => {
+                        const { number } = splitPhone(inviteForm.mobile);
+                        setInviteForm((prev) => ({ ...prev, mobile: `${e.target.value}${number}` }));
+                      }}
+                      style={{ width: '96px', borderRadius: '8px 0 0 8px', height: '40px', fontSize: '13px' }}
+                    >
+                      {PHONE_CODES.map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                    <input
+                      id="nu-mobile"
+                      inputMode="tel"
+                      placeholder="50 123 4567"
+                      value={splitPhone(inviteForm.mobile).number}
+                      onChange={(e) => {
+                        const { code } = splitPhone(inviteForm.mobile);
+                        const raw = e.target.value.replace(/\D/g, '').slice(0, 10);
+                        setInviteForm((prev) => ({ ...prev, mobile: `${code}${raw}` }));
+                      }}
+                      required
+                      style={{
+                        borderRadius: '0 8px 8px 0',
+                        borderLeft: 'none',
+                        flex: 1,
+                        height: '40px',
+                        fontSize: '13px',
+                        borderColor: !mobileCheckState.available
+                          ? 'var(--cmp-danger)'
+                          : mobileCheckState.checked && inviteForm.mobile.trim().length >= 7
+                          ? 'var(--cmp-primary)'
+                          : undefined
+                      }}
+                    />
+                  </div>
+
+                  {mobileCheckState.checking && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px', fontSize: '12px', color: 'var(--cmp-text-muted)' }}>
+                      <Clock size={12} />
+                      <span>Checking mobile number...</span>
+                    </div>
+                  )}
+
+                  {!mobileCheckState.checking && mobileCheckState.checked && inviteForm.mobile.trim().length >= 7 && (
+                    <div style={{ marginTop: '4px' }}>
+                      {!mobileCheckState.available ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--cmp-danger)', fontWeight: 500 }}>
+                          <X size={13} style={{ flexShrink: 0 }} />
+                          <span>{mobileCheckState.message || 'Mobile already in use.'}</span>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--cmp-primary)', fontWeight: 500 }}>
+                          <Check size={12} />
+                          <span>Mobile number available</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Login email */}
+                <div>
+                  <label htmlFor="nu-email" style={{ display: 'block', marginBottom: '4px', fontSize: '13px', fontWeight: 600 }}>Login email*</label>
                   <div style={{ position: 'relative' }}>
                     <input
+                      id="nu-email"
                       type="email"
                       placeholder="user@agency.ae"
                       value={inviteForm.email}
@@ -1767,6 +1696,8 @@ export default function MembersPage() {
                       required
                       style={{
                         width: '100%',
+                        height: '40px',
+                        fontSize: '13px',
                         borderColor: !emailCheckState.available
                           ? emailCheckState.reason === 'ALREADY_INVITED' ? '#b26b00' : 'var(--cmp-danger)'
                           : emailCheckState.checked && inviteForm.email.includes('@')
@@ -1776,21 +1707,20 @@ export default function MembersPage() {
                     />
                     {emailCheckState.checking && (
                       <div style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
-                        <Clock size={15} style={{ color: 'var(--cmp-text-muted)', animation: 'spin 1s linear infinite' }} />
+                        <Clock size={14} style={{ color: 'var(--cmp-text-muted)', animation: 'spin 1s linear infinite' }} />
                       </div>
                     )}
                   </div>
 
-                  {/* Email Feedback Indicators */}
                   {emailCheckState.checking && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px', fontSize: '12px', color: 'var(--cmp-text-muted)' }}>
-                      <Clock size={13} />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px', fontSize: '12px', color: 'var(--cmp-text-muted)' }}>
+                      <Clock size={12} />
                       <span>Checking email...</span>
                     </div>
                   )}
 
                   {!emailCheckState.checking && emailCheckState.checked && inviteForm.email.trim() && (
-                    <div style={{ marginTop: '6px' }}>
+                    <div style={{ marginTop: '4px' }}>
                       {emailCheckState.reason === 'ALREADY_INVITED' ? (
                         <div
                           style={{
@@ -1798,7 +1728,7 @@ export default function MembersPage() {
                             alignItems: 'center',
                             justifyContent: 'space-between',
                             gap: '8px',
-                            padding: '6px 10px',
+                            padding: '4px 8px',
                             background: 'rgba(178,107,0,0.08)',
                             borderRadius: '6px',
                             fontSize: '12px',
@@ -1806,8 +1736,8 @@ export default function MembersPage() {
                           }}
                         >
                           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <AlertTriangle size={14} style={{ flexShrink: 0 }} />
-                            <span>{emailCheckState.message || 'This person has already been invited.'}</span>
+                            <AlertTriangle size={13} style={{ flexShrink: 0 }} />
+                            <span>{emailCheckState.message || 'Already invited.'}</span>
                           </div>
                           {emailCheckState.memberId && (
                             <button
@@ -1816,7 +1746,7 @@ export default function MembersPage() {
                               style={{
                                 color: emailCheckState.resent ? 'var(--cmp-success)' : 'var(--cmp-brand)',
                                 fontWeight: 700,
-                                padding: '2px 8px',
+                                padding: '2px 6px',
                                 textDecoration: emailCheckState.resent ? 'none' : 'underline',
                                 flexShrink: 0
                               }}
@@ -1833,12 +1763,12 @@ export default function MembersPage() {
                         </div>
                       ) : !emailCheckState.available ? (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--cmp-danger)', fontWeight: 500 }}>
-                          <X size={14} style={{ flexShrink: 0 }} />
-                          <span>{emailCheckState.message || 'This email is already used by another CMP Connect account.'}</span>
+                          <X size={13} style={{ flexShrink: 0 }} />
+                          <span>{emailCheckState.message || 'Email already registered.'}</span>
                         </div>
                       ) : (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--cmp-primary)', fontWeight: 500 }}>
-                          <Check size={13} />
+                          <Check size={12} />
                           <span>Email is available</span>
                         </div>
                       )}
@@ -1846,62 +1776,15 @@ export default function MembersPage() {
                   )}
                 </div>
 
+                {/* Role select */}
                 <div>
-                  <label>Mobile phone* (UAE number)</label>
-                  <div style={{ position: 'relative' }}>
-                    <input
-                      type="tel"
-                      placeholder="0553182240 or +971553182240"
-                      value={inviteForm.mobile}
-                      onChange={(e) => setInviteForm({ ...inviteForm, mobile: e.target.value })}
-                      required
-                      style={{
-                        width: '100%',
-                        borderColor: !mobileCheckState.available
-                          ? 'var(--cmp-danger)'
-                          : mobileCheckState.checked && inviteForm.mobile.trim().length >= 7
-                          ? 'var(--cmp-primary)'
-                          : undefined
-                      }}
-                    />
-                    {mobileCheckState.checking && (
-                      <div style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
-                        <Clock size={15} style={{ color: 'var(--cmp-text-muted)', animation: 'spin 1s linear infinite' }} />
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Mobile Feedback Indicators */}
-                  {mobileCheckState.checking && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px', fontSize: '12px', color: 'var(--cmp-text-muted)' }}>
-                      <Clock size={13} />
-                      <span>Checking mobile number...</span>
-                    </div>
-                  )}
-
-                  {!mobileCheckState.checking && mobileCheckState.checked && inviteForm.mobile.trim().length >= 7 && (
-                    <div style={{ marginTop: '6px' }}>
-                      {!mobileCheckState.available ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--cmp-danger)', fontWeight: 500 }}>
-                          <X size={14} style={{ flexShrink: 0 }} />
-                          <span>{mobileCheckState.message || 'This mobile number is already used by another account.'}</span>
-                        </div>
-                      ) : (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--cmp-primary)', fontWeight: 500 }}>
-                          <Check size={13} />
-                          <span>Mobile number is available</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                <div>
-                  <label>Role*</label>
+                  <label htmlFor="nu-role" style={{ display: 'block', marginBottom: '4px', fontSize: '13px', fontWeight: 600 }}>Role*</label>
                   <select
+                    id="nu-role"
                     value={inviteForm.roleId}
                     onChange={(e) => setInviteForm({ ...inviteForm, roleId: e.target.value })}
                     required
+                    style={{ height: '40px', width: '100%', fontSize: '13px' }}
                   >
                     <option value="">Select a role</option>
                     <optgroup label="Default roles">
@@ -1922,7 +1805,92 @@ export default function MembersPage() {
                     )}
                   </select>
                 </div>
+
+                {/* Dubai Broker Licence (BRN) - Agencies Only */}
+                {isAgency && (
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                      <label htmlFor="nu-brn" style={{ margin: 0, fontSize: '13px', fontWeight: 600 }}>Dubai broker licence (BRN)*</label>
+                      <span style={{ fontSize: '11px', color: 'var(--cmp-text-muted)' }}>DLD check</span>
+                    </div>
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        id="nu-brn"
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="e.g. 50318"
+                        value={inviteForm.brn}
+                        onChange={(e) => setInviteForm({ ...inviteForm, brn: e.target.value.replace(/\D/g, '').slice(0, 6) })}
+                        required={isAgency}
+                        style={{
+                          width: '100%',
+                          height: '40px',
+                          fontSize: '13px',
+                          borderColor: (brnCheckState.allowed === false || brnCheckState.inUse)
+                            ? 'var(--cmp-danger)'
+                            : brnCheckState.whitelisted
+                            ? 'var(--cmp-primary)'
+                            : undefined
+                        }}
+                      />
+                      {brnCheckState.checking && (
+                        <div style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
+                          <Clock size={14} style={{ color: 'var(--cmp-text-muted)', animation: 'spin 1s linear infinite' }} />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* BRN Status Feedback */}
+                    {brnCheckState.checking && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px', fontSize: '12px', color: 'var(--cmp-text-muted)' }}>
+                        <Clock size={12} />
+                        <span>Checking broker licence on DLD...</span>
+                      </div>
+                    )}
+
+                    {!brnCheckState.checking && brnCheckState.checked && inviteForm.brn.trim() && (
+                      <div style={{ marginTop: '4px', display: 'grid', gap: '4px' }}>
+                        {brnCheckState.allowed === false ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--cmp-danger)', fontWeight: 600 }}>
+                            <X size={13} style={{ flexShrink: 0 }} />
+                            <span>{brnCheckState.message || (brnCheckState.inUse ? `Already linked to ${brnCheckState.inUseBy || 'another user'}.` : 'Registered under another office.')}</span>
+                          </div>
+                        ) : (
+                          <>
+                            {brnCheckState.whitelisted && (
+                              <>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--cmp-primary)', fontWeight: 600 }}>
+                                  <Check size={13} style={{ flexShrink: 0 }} />
+                                  <span>
+                                    ✓ Found on DLD list: {brnCheckState.broker?.name}
+                                  </span>
+                                </div>
+                                {brnCheckState.broker?.cardExpired && (
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#b26b00' }}>
+                                    <AlertTriangle size={12} style={{ flexShrink: 0 }} />
+                                    <span>⚠ Broker card expired{brnCheckState.broker?.cardExpiryDate ? ` on ${formatDate(brnCheckState.broker.cardExpiryDate)}` : ''}</span>
+                                  </div>
+                                )}
+                              </>
+                            )}
+
+                            {brnCheckState.isNew && (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#b26b00' }}>
+                                <AlertTriangle size={12} style={{ flexShrink: 0 }} />
+                                <span>⚠ Not on the DLD list. CMP will check it manually.</span>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
+
+              <p className="faint" style={{ margin: '14px 0 0', fontSize: '13px' }}>
+                They receive an email to set a password, then complete their public profile.
+              </p>
 
               <div className="row" style={{ justifyContent: 'flex-end', gap: '8px', marginTop: '20px' }}>
                 <button
@@ -1945,7 +1913,7 @@ export default function MembersPage() {
                     (!mobileCheckState.available && mobileCheckState.checked)
                   }
                 >
-                  {isInviting ? 'Sending invite...' : 'Send invite'}
+                  {isInviting ? 'Sending invitation...' : 'Send invitation'}
                 </button>
               </div>
             </form>

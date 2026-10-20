@@ -1,15 +1,15 @@
-import React, { useState, useMemo, useCallback, memo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { useApp } from '../../context/AppContext';
 import {
   Avatar,
-  Badge,
   Chip,
   Dropdown,
   EmptyState,
   SearchInput
 } from '../../components/ui';
-import { formatAED } from '../../utils';
 import { useDebounce } from '../../hooks';
+import cmpConnectApi from '../../services/cmpConnectApi';
+import { RecordDealModal, ViewClaimModal } from '../../components/transactions';
 import {
   Clock,
   Copy,
@@ -17,44 +17,41 @@ import {
   Bed,
   Maximize2,
   Inbox,
-  X,
-  ExternalLink,
-  ShieldCheck,
-  HelpCircle
+  Plus,
+  Loader2,
+  AlertTriangle,
+  CheckCircle2,
+  HelpCircle,
+  X
 } from 'lucide-react';
 
-const REVIEW_STATUS_CHIPS = ['All', 'Approved', 'Under review', 'Rejected'];
-
-const AGENT_OPTIONS = [
-  { label: 'Assigned agent', value: '' },
-  { label: 'All agents', value: '' },
-  { label: 'Emma Clarke', value: 'Emma Clarke' },
-  { label: 'Karim Saleh', value: 'Karim Saleh' },
-  { label: 'Layla Haddad', value: 'Layla Haddad' },
-  { label: 'Arjun Mehta', value: 'Arjun Mehta' }
+const STATUS_KEYS = [
+  { label: 'All', key: 'all' },
+  { label: 'Not claimed', key: 'UNCLAIMED' },
+  { label: 'Under review', key: 'UNDER_REVIEW' },
+  { label: 'Approved', key: 'APPROVED' },
+  { label: 'Rejected', key: 'REJECTED' }
 ];
 
 const OFFERING_OPTIONS = [
-  { label: 'Offering type', value: '' },
   { label: 'All offerings', value: '' },
-  { label: 'Residential rent', value: 'Residential rent' },
-  { label: 'Residential sale', value: 'Residential sale' },
-  { label: 'Commercial rent', value: 'Commercial rent' },
-  { label: 'Commercial sale', value: 'Commercial sale' }
+  { label: 'Residential rent', value: 'RESIDENTIAL_RENT' },
+  { label: 'Residential sale', value: 'RESIDENTIAL_SALE' },
+  { label: 'Commercial rent', value: 'COMMERCIAL_RENT' },
+  { label: 'Commercial sale', value: 'COMMERCIAL_SALE' }
 ];
 
 const PROPERTY_TYPE_OPTIONS = [
-  { label: 'Property type', value: '' },
   { label: 'All property types', value: '' },
-  { label: 'Apartment', value: 'Apartment' },
-  { label: 'Villa', value: 'Villa' },
-  { label: 'Office', value: 'Office' },
-  { label: 'Townhouse', value: 'Townhouse' },
-  { label: 'Penthouse', value: 'Penthouse' }
+  { label: 'Apartment', value: 'APARTMENT' },
+  { label: 'Villa', value: 'VILLA' },
+  { label: 'Office', value: 'OFFICE' },
+  { label: 'Townhouse', value: 'TOWNHOUSE' },
+  { label: 'Penthouse', value: 'PENTHOUSE' }
 ];
 
 /**
- * Memoized Transaction Table Row matching concept transactions.html
+ * Memoized Transaction Table Row matching concept transactions.html & Section 10
  */
 const TransactionRow = memo(function TransactionRow({
   item,
@@ -62,85 +59,119 @@ const TransactionRow = memo(function TransactionRow({
   onCopyRef,
   onActionClick
 }) {
-  const isCopied = copiedId === item.id;
+  const isCopied = copiedId === (item.listing?.listingRef || item.id);
 
-  const getClaimBadgeStyle = (status) => {
-    switch (status) {
-      case 'Approved':
-        return {
-          color: 'var(--cmp-success)',
-          border: '1px solid color-mix(in srgb, var(--cmp-success) 55%, transparent)',
-          background: 'color-mix(in srgb, var(--cmp-success) 10%, transparent)'
-        };
-      case 'Under review':
-        return {
-          color: 'var(--cmp-warning)',
-          border: '1px solid color-mix(in srgb, var(--cmp-warning) 55%, transparent)',
-          background: 'color-mix(in srgb, var(--cmp-warning) 10%, transparent)'
-        };
-      case 'Rejected':
-        return {
-          color: 'var(--cmp-danger)',
-          border: '1px solid color-mix(in srgb, var(--cmp-danger) 55%, transparent)',
-          background: 'color-mix(in srgb, var(--cmp-danger) 10%, transparent)'
-        };
-      case 'Not claimed':
-      default:
-        return {
-          color: 'var(--cmp-text-muted)',
-          border: '1px solid color-mix(in srgb, var(--cmp-text-muted) 55%, transparent)',
-          background: 'color-mix(in srgb, var(--cmp-text-muted) 10%, transparent)'
-        };
-    }
+  // Normalise fields between API response and mock data
+  const listing = item.listing || {};
+  const agent = item.agent || {};
+
+  const displayPrice = item.finalPrice
+    ? `AED ${Number(item.finalPrice).toLocaleString()}`
+    : item.priceDisplay || '—';
+
+  const offeringLabel =
+    listing.offering?.replace('_', ' ').toLowerCase() ||
+    item.badge ||
+    (listing.purpose === 'RENT' ? 'Residential rent' : 'Residential sale');
+
+  const refNumber = listing.listingRef || item.id || '—';
+  const agentName = agent.fullName || item.agent || '—';
+  const agentBrn = agent.brn ? `BRN: ${agent.brn}` : item.agentBrn || '';
+  const agentInitials =
+    agentName
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .slice(0, 2)
+      .toUpperCase() || 'AG';
+
+  const status = item.status || (item.claimStatus === 'Not claimed' ? 'UNCLAIMED' : item.claimStatus === 'Approved' ? 'APPROVED' : item.claimStatus === 'Rejected' ? 'REJECTED' : 'UNDER_REVIEW');
+  const isUnclaimed = status === 'UNCLAIMED' || item.claimStatus === 'Not claimed';
+  const completedDate = item.transactionDate
+    ? new Date(item.transactionDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+    : item.completedDate || '—';
+
+  const getStatusDotColor = () => {
+    if (isUnclaimed) return 'var(--cmp-text-muted, #888)';
+    if (status === 'APPROVED') return 'var(--cmp-success)';
+    if (status === 'UNDER_REVIEW') return 'var(--cmp-warning)';
+    return 'var(--cmp-danger)';
   };
 
-  const getStatusDotColor = (status) => {
-    if (status === 'Approved') return 'var(--cmp-success)';
-    if (status === 'Under review') return 'var(--cmp-warning)';
-    return 'var(--cmp-danger)';
+  const getStatusBadgeStyle = () => {
+    if (isUnclaimed) {
+      return {
+        color: 'var(--cmp-text-muted, #718096)',
+        border: '1px solid var(--cmp-border, #e2e8f0)',
+        background: 'var(--cmp-surface-sunken, #f7fafc)'
+      };
+    }
+    if (status === 'APPROVED') {
+      return {
+        color: 'var(--cmp-success)',
+        border: '1px solid color-mix(in srgb, var(--cmp-success) 55%, transparent)',
+        background: 'color-mix(in srgb, var(--cmp-success) 10%, transparent)'
+      };
+    }
+    if (status === 'UNDER_REVIEW') {
+      return {
+        color: 'var(--cmp-warning)',
+        border: '1px solid color-mix(in srgb, var(--cmp-warning) 55%, transparent)',
+        background: 'color-mix(in srgb, var(--cmp-warning) 10%, transparent)'
+      };
+    }
+    return {
+      color: 'var(--cmp-danger)',
+      border: '1px solid color-mix(in srgb, var(--cmp-danger) 55%, transparent)',
+      background: 'color-mix(in srgb, var(--cmp-danger) 10%, transparent)'
+    };
   };
 
   return (
     <tr>
       {/* 1. Listing details */}
-      <td style={{ minWidth: '300px' }}>
-        <p className="row" style={{ margin: 0, gap: '8px' }}>
+      <td style={{ minWidth: '280px' }}>
+        <p className="row" style={{ margin: 0, gap: '8px', alignItems: 'center' }}>
           <span
             aria-hidden="true"
             style={{
               width: '8px',
               height: '8px',
               borderRadius: '50%',
-              background: getStatusDotColor(item.claimStatus),
+              background: getStatusDotColor(),
               flexShrink: 0
             }}
           />
-          <strong>{item.priceDisplay}</strong>
-          <span className="badge badge-neutral">{item.badge}</span>
+          <strong>{displayPrice}</strong>
+          <span className="badge badge-neutral" style={{ textTransform: 'capitalize' }}>
+            {offeringLabel}
+          </span>
         </p>
 
-        <p style={{ margin: '6px 0 0', fontSize: '14px', fontWeight: 500 }}>
-          {item.title}
+        <p style={{ margin: '6px 0 0', fontSize: '14px', fontWeight: 600 }}>
+          {listing.title || item.title || 'Property deal'}
         </p>
 
         <p className="muted" style={{ margin: '2px 0 0', fontSize: '13px' }}>
-          {item.location}
+          {listing.location || item.location || 'Dubai'}
         </p>
 
-        <p className="row" style={{ margin: '6px 0 0', gap: '12px', fontSize: '13px' }}>
-          {item.beds && (
-            <span className="row" style={{ gap: '4px' }}>
-              <Bed size={15} style={{ flexShrink: 0 }} />
-              {item.beds}
-            </span>
-          )}
-          {item.sqft && (
-            <span className="row" style={{ gap: '4px' }}>
-              <Maximize2 size={15} style={{ flexShrink: 0 }} />
-              {item.sqft}
-            </span>
-          )}
-        </p>
+        {(listing.bedrooms || listing.area || item.beds || item.sqft) && (
+          <p className="row" style={{ margin: '6px 0 0', gap: '12px', fontSize: '13px' }}>
+            {(listing.bedrooms || item.beds) && (
+              <span className="row" style={{ gap: '4px' }}>
+                <Bed size={15} style={{ flexShrink: 0 }} />
+                {listing.bedrooms || item.beds} {typeof (listing.bedrooms || item.beds) === 'number' ? 'Beds' : ''}
+              </span>
+            )}
+            {(listing.area || item.sqft) && (
+              <span className="row" style={{ gap: '4px' }}>
+                <Maximize2 size={15} style={{ flexShrink: 0 }} />
+                {listing.area ? `${Number(listing.area).toLocaleString()} ${listing.areaUnit || 'sqft'}` : item.sqft}
+              </span>
+            )}
+          </p>
+        )}
       </td>
 
       {/* 2. Reference no. */}
@@ -148,9 +179,9 @@ const TransactionRow = memo(function TransactionRow({
         <span className="row" style={{ gap: '6px', display: 'inline-flex', alignItems: 'center' }}>
           <button
             type="button"
-            aria-label={`Copy ${item.id}`}
-            title={isCopied ? 'Copied!' : 'Copy'}
-            onClick={(e) => onCopyRef(item.id, e)}
+            aria-label={`Copy ${refNumber}`}
+            title={isCopied ? 'Copied!' : 'Copy reference'}
+            onClick={(e) => onCopyRef(refNumber, e)}
             style={{
               border: 'none',
               background: 'transparent',
@@ -163,41 +194,44 @@ const TransactionRow = memo(function TransactionRow({
             {isCopied ? <Check size={14} /> : <Copy size={14} />}
           </button>
           <span
-            title={item.id}
+            title={refNumber}
             style={{
               color: 'var(--cmp-brand)',
-              fontWeight: 600,
+              fontWeight: 700,
               fontSize: '13px'
             }}
           >
-            {item.id}
+            {refNumber}
           </span>
         </span>
       </td>
 
       {/* 3. Assigned agent */}
       <td style={{ whiteSpace: 'nowrap' }}>
-        <span className="row" style={{ gap: '10px' }}>
-          <Avatar initials={item.agentInitials} size={34} />
+        <span className="row" style={{ gap: '10px', alignItems: 'center' }}>
+          <Avatar initials={agentInitials} size={34} />
           <span>
-            {item.agent}
-            <span className="faint" style={{ display: 'block', fontSize: '12px' }}>
-              {item.agentBrn}
-            </span>
+            {agentName}
+            {agentBrn && (
+              <span className="faint" style={{ display: 'block', fontSize: '12px' }}>
+                {agentBrn}
+              </span>
+            )}
           </span>
         </span>
       </td>
 
       {/* 4. Property type */}
-      <td>{item.propertyType}</td>
+      <td>{listing.typeLabel || listing.propertyType || item.propertyType || 'Apartment'}</td>
 
-      {/* 5. Status & Claim Badge */}
+      {/* 5. Status & Completion Date */}
       <td style={{ whiteSpace: 'nowrap' }}>
-        Completed
+        <span style={{ fontSize: '13px', color: 'var(--cmp-text)' }}>Completed</span>
         <span className="faint" style={{ display: 'block', fontSize: '12px', marginBottom: '4px' }}>
-          {item.completedDate}
+          {completedDate}
         </span>
         <span
+          title={status === 'REJECTED' && item.reviewNote ? item.reviewNote : undefined}
           style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -207,28 +241,34 @@ const TransactionRow = memo(function TransactionRow({
             fontSize: '12px',
             fontWeight: 600,
             whiteSpace: 'nowrap',
-            ...getClaimBadgeStyle(item.claimStatus)
+            ...getStatusBadgeStyle()
           }}
         >
-          {item.claimStatus}
+          {isUnclaimed
+            ? 'Not claimed'
+            : status === 'APPROVED'
+            ? 'Approved'
+            : status === 'REJECTED'
+            ? 'Rejected'
+            : 'Under review'}
         </span>
       </td>
 
       {/* 6. Actions */}
       <td>
-        {item.claimStatus === 'Not claimed' ? (
+        {isUnclaimed ? (
           <button
             type="button"
-            className="btn btn-outline btn-sm"
+            className="btn btn-primary btn-sm"
             onClick={() => onActionClick('claim', item)}
           >
             Claim transaction
           </button>
-        ) : item.claimStatus === 'Rejected' ? (
+        ) : status === 'REJECTED' ? (
           <button
             type="button"
             className="btn btn-outline btn-sm"
-            onClick={() => onActionClick('record', item)}
+            onClick={() => onActionClick('recordAgain', item)}
           >
             Record again
           </button>
@@ -247,95 +287,164 @@ const TransactionRow = memo(function TransactionRow({
 });
 
 export default function TransactionsPage() {
-  const { transactions } = useApp();
+  const { isLiveData, transactions: mockTransactions } = useApp();
 
-  const [reviewFilter, setReviewFilter] = useState('All');
+  const [transactions, setTransactions] = useState([]);
+  const [counts, setCounts] = useState({ all: 0, UNCLAIMED: 0, UNDER_REVIEW: 0, APPROVED: 0, REJECTED: 0 });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  // Filters
+  const [statusFilter, setStatusFilter] = useState('all');
   const [searchLocation, setSearchLocation] = useState('');
   const [selectedAgent, setSelectedAgent] = useState('');
   const [refSearch, setRefSearch] = useState('');
   const [offeringType, setOfferingType] = useState('');
   const [propertyType, setPropertyType] = useState('');
 
+  // Agents list for filter
+  const [agentsList, setAgentsList] = useState([]);
+
+  // Modals state
   const [copiedId, setCopiedId] = useState(null);
-  const [modalItem, setModalItem] = useState(null);
-  const [modalType, setModalType] = useState(null); // 'claim' | 'view' | 'info'
+  const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
+  const [recordInitialData, setRecordInitialData] = useState(null);
 
-  // Debounced search terms for high-performance typing
-  const debouncedLocation = useDebounce(searchLocation, 200);
-  const debouncedRef = useDebounce(refSearch, 200);
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [viewDealId, setViewDealId] = useState(null);
+  const [viewInitialDeal, setViewInitialDeal] = useState(null);
 
-  // Filtered transactions matching all combined criteria
-  const filteredTransactions = useMemo(() => {
-    const locQuery = debouncedLocation.trim().toLowerCase();
-    const refQuery = debouncedRef.trim().toLowerCase();
+  const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
 
-    return transactions.filter((tx) => {
-      // Review status chip filter
-      if (reviewFilter !== 'All' && tx.claimStatus !== reviewFilter) {
-        return false;
-      }
+  // Debounced search
+  const debouncedLocation = useDebounce(searchLocation, 300);
+  const debouncedRef = useDebounce(refSearch, 300);
 
-      // Location / City / Community search
-      if (locQuery) {
-        const matchesLoc =
-          tx.location.toLowerCase().includes(locQuery) ||
-          tx.title.toLowerCase().includes(locQuery);
-        if (!matchesLoc) return false;
-      }
+  // Load active agents for dropdown
+  useEffect(() => {
+    if (isLiveData) {
+      cmpConnectApi.listMembers({ status: 'ACTIVE', limit: 100 })
+        .then((res) => {
+          if (res?.data) {
+            setAgentsList(res.data.map((m) => ({ label: m.fullName, value: m.id })));
+          }
+        })
+        .catch(() => {});
+    }
+  }, [isLiveData]);
 
-      // Agent filter
-      if (selectedAgent && tx.agent !== selectedAgent) {
-        return false;
-      }
+  // Fetch transactions from API or mock
+  const fetchTransactions = useCallback(async () => {
+    let localUnclaimed = [];
+    try {
+      localUnclaimed = JSON.parse(localStorage.getItem('cmp_unclaimed_transactions') || '[]');
+    } catch {}
 
-      // Reference filter
-      if (refQuery && !tx.id.toLowerCase().includes(refQuery)) {
-        return false;
-      }
+    if (!isLiveData) {
+      // Mock data filter
+      const allDeals = [...localUnclaimed, ...mockTransactions];
+      const filtered = allDeals.filter((tx) => {
+        if (statusFilter !== 'all') {
+          const s = tx.status || (tx.claimStatus === 'Not claimed' ? 'UNCLAIMED' : tx.claimStatus === 'Approved' ? 'APPROVED' : tx.claimStatus === 'Rejected' ? 'REJECTED' : 'UNDER_REVIEW');
+          if (s !== statusFilter) return false;
+        }
+        return true;
+      });
+      setTransactions(filtered);
+      setCounts({
+        all: allDeals.length,
+        UNCLAIMED: allDeals.filter((t) => t.status === 'UNCLAIMED' || t.claimStatus === 'Not claimed').length,
+        APPROVED: allDeals.filter((t) => t.status === 'APPROVED' || t.claimStatus === 'Approved').length,
+        UNDER_REVIEW: allDeals.filter((t) => t.status === 'UNDER_REVIEW' || t.claimStatus === 'Under review').length,
+        REJECTED: allDeals.filter((t) => t.status === 'REJECTED' || t.claimStatus === 'Rejected').length
+      });
+      return;
+    }
 
-      // Offering type filter
-      if (offeringType && tx.offeringType !== offeringType) {
-        return false;
-      }
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await cmpConnectApi.listTransactions({
+        status: statusFilter !== 'all' ? statusFilter : undefined,
+        search: debouncedLocation || undefined,
+        ref: debouncedRef || undefined,
+        agentId: selectedAgent || undefined,
+        offering: offeringType || undefined,
+        propertyType: propertyType || undefined,
+        limit: 50
+      });
 
-      // Property type filter
-      if (propertyType && tx.propertyType !== propertyType) {
-        return false;
-      }
+      const serverDeals = res?.data || [];
+      const combined = [
+        ...localUnclaimed.filter((u) => !serverDeals.some((s) => s.id === u.id || s.listing?.id === u.listingId)),
+        ...serverDeals
+      ];
 
-      return true;
-    });
+      const visible = statusFilter === 'all'
+        ? combined
+        : combined.filter((d) => (d.status === statusFilter) || (statusFilter === 'UNCLAIMED' && d.claimStatus === 'Not claimed'));
+
+      setTransactions(visible);
+
+      const dynamicCounts = {
+        all: combined.length,
+        UNCLAIMED: combined.filter((t) => t.status === 'UNCLAIMED' || t.claimStatus === 'Not claimed').length,
+        UNDER_REVIEW: combined.filter((t) => t.status === 'UNDER_REVIEW' || t.claimStatus === 'Under review').length,
+        APPROVED: combined.filter((t) => t.status === 'APPROVED' || t.claimStatus === 'Approved').length,
+        REJECTED: combined.filter((t) => t.status === 'REJECTED' || t.claimStatus === 'Rejected').length
+      };
+      setCounts(dynamicCounts);
+    } catch (err) {
+      setError(err.message || 'Failed to load closed deals.');
+    } finally {
+      setLoading(false);
+    }
   }, [
-    transactions,
-    reviewFilter,
+    isLiveData,
+    mockTransactions,
+    statusFilter,
     debouncedLocation,
-    selectedAgent,
     debouncedRef,
+    selectedAgent,
     offeringType,
     propertyType
   ]);
 
-  const handleCopyRef = useCallback((id, e) => {
+  useEffect(() => {
+    fetchTransactions();
+  }, [fetchTransactions]);
+
+  const handleCopyRef = useCallback((ref, e) => {
     e.preventDefault();
     e.stopPropagation();
-    navigator.clipboard?.writeText(id);
-    setCopiedId(id);
+    navigator.clipboard?.writeText(ref);
+    setCopiedId(ref);
     setTimeout(() => setCopiedId(null), 2000);
   }, []);
 
   const handleActionClick = useCallback((type, item) => {
-    setModalItem(item);
-    setModalType(type);
+    if (type === 'claim' || type === 'recordAgain') {
+      setRecordInitialData(item);
+      setIsRecordModalOpen(true);
+    } else if (type === 'view') {
+      setViewDealId(item.id || item._id);
+      setViewInitialDeal(item);
+      setIsViewModalOpen(true);
+    }
   }, []);
 
-  const closeModal = useCallback(() => {
-    setModalItem(null);
-    setModalType(null);
-  }, []);
+  const handleOpenRecordNew = () => {
+    setRecordInitialData(null);
+    setIsRecordModalOpen(true);
+  };
+
+  const handleRecordSuccess = (msg) => {
+    fetchTransactions();
+  };
 
   return (
     <div>
-      {/* Top Header matching concept transactions.html */}
+      {/* Top Header matching concept transactions.html & Section 10 */}
       <div
         className="row"
         style={{
@@ -353,58 +462,64 @@ export default function TransactionsPage() {
               display: 'flex',
               alignItems: 'baseline',
               gap: '10px',
-              letterSpacing: '-0.02em'
+              letterSpacing: '-0.02em',
+              margin: 0
             }}
           >
             Closed deals
           </h1>
+          <p style={{ margin: '4px 0 0', fontSize: '14px', color: 'var(--cmp-text-muted)' }}>
+            Record deals you closed on your own Cash My Property listings.
+          </p>
         </div>
 
-        <div className="row" style={{ gap: '8px', flexWrap: 'wrap' }}>
-          <span className="row" style={{ gap: '14px', fontSize: '13px' }}>
-            <span className="row muted" style={{ gap: '6px' }}>
-              <Clock size={16} style={{ flexShrink: 0 }} />
-              Data as of yesterday
-            </span>
-            <button
-              type="button"
-              onClick={() => setModalType('info')}
-              style={{
-                border: 'none',
-                background: 'none',
-                color: 'var(--cmp-brand)',
-                textDecoration: 'underline',
-                cursor: 'pointer',
-                fontWeight: 600,
-                fontSize: 'inherit',
-                fontFamily: 'inherit'
-              }}
-            >
-              Learn more about claim transactions
-            </button>
-          </span>
+        <div className="row" style={{ gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <button
+            type="button"
+            onClick={() => setIsInfoModalOpen(true)}
+            style={{
+              border: 'none',
+              background: 'none',
+              color: 'var(--cmp-brand)',
+              textDecoration: 'underline',
+              cursor: 'pointer',
+              fontWeight: 600,
+              fontSize: '13px'
+            }}
+          >
+            Learn more about closed deals
+          </button>
+
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={handleOpenRecordNew}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+          >
+            <Plus size={16} />
+            <span>Record a closed deal</span>
+          </button>
         </div>
       </div>
 
-      <p style={{ margin: '0 0 12px', fontSize: '14px' }}>
-        Record deals you closed on your own Cash My Property listings.
-      </p>
-
-      {/* Review Status Filter Chips */}
+      {/* Review Status Filter Chips with Counts */}
       <div
         className="row"
         role="group"
         aria-label="Review status"
-        style={{ gap: '8px', flexWrap: 'wrap', marginBottom: '14px' }}
+        style={{ gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}
       >
-        {REVIEW_STATUS_CHIPS.map((chip) => (
-          <Chip
-            key={chip}
-            label={chip}
-            active={reviewFilter === chip}
-            onClick={() => setReviewFilter(chip)}
-          />
-        ))}
+        {STATUS_KEYS.map((chip) => {
+          const count = counts[chip.key] ?? 0;
+          return (
+            <Chip
+              key={chip.key}
+              label={`${chip.label}${count !== undefined ? ` (${count})` : ''}`}
+              active={statusFilter === chip.key}
+              onClick={() => setStatusFilter(chip.key)}
+            />
+          );
+        })}
       </div>
 
       {/* Filter and Control Bar Grid matching concept */}
@@ -428,8 +543,10 @@ export default function TransactionsPage() {
 
         {/* 2. Assigned agent */}
         <Dropdown
-          label={selectedAgent || 'Assigned agent'}
-          options={AGENT_OPTIONS}
+          label={
+            agentsList.find((a) => a.value === selectedAgent)?.label || 'All agents'
+          }
+          options={[{ label: 'All agents', value: '' }, ...agentsList]}
           selectedValue={selectedAgent}
           onSelect={(val) => setSelectedAgent(val)}
           width="100%"
@@ -442,16 +559,18 @@ export default function TransactionsPage() {
           </label>
           <input
             id="tx-ref"
-            placeholder="Reference number"
+            placeholder="Reference (CLID-...)"
             value={refSearch}
             onChange={(e) => setRefSearch(e.target.value)}
-            style={{ height: '40px' }}
+            style={{ height: '40px', width: '100%', borderRadius: '8px' }}
           />
         </div>
 
         {/* 4. Offering type */}
         <Dropdown
-          label={offeringType || 'Offering type'}
+          label={
+            OFFERING_OPTIONS.find((o) => o.value === offeringType)?.label || 'Offering type'
+          }
           options={OFFERING_OPTIONS}
           selectedValue={offeringType}
           onSelect={(val) => setOfferingType(val)}
@@ -460,7 +579,9 @@ export default function TransactionsPage() {
 
         {/* 5. Property type */}
         <Dropdown
-          label={propertyType || 'Property type'}
+          label={
+            PROPERTY_TYPE_OPTIONS.find((p) => p.value === propertyType)?.label || 'Property type'
+          }
           options={PROPERTY_TYPE_OPTIONS}
           selectedValue={propertyType}
           onSelect={(val) => setPropertyType(val)}
@@ -468,8 +589,32 @@ export default function TransactionsPage() {
         />
       </div>
 
-      {/* Transactions Data Table */}
-      {filteredTransactions.length > 0 ? (
+      {/* Loading & Error States */}
+      {loading ? (
+        <div style={{ display: 'grid', placeItems: 'center', padding: '60px 20px', gap: '12px' }}>
+          <Loader2 size={32} className="animate-spin" style={{ color: 'var(--cmp-brand)' }} />
+          <span style={{ fontSize: '14px', color: 'var(--cmp-text-muted)' }}>Loading closed deals...</span>
+        </div>
+      ) : error ? (
+        <div
+          style={{
+            padding: '24px',
+            borderRadius: '12px',
+            background: 'var(--cmp-danger-subtle, rgba(220, 38, 38, 0.1))',
+            border: '1px solid var(--cmp-danger)',
+            color: 'var(--cmp-danger)',
+            textAlign: 'center',
+            margin: '20px 0'
+          }}
+        >
+          <AlertTriangle size={24} style={{ margin: '0 auto 8px' }} />
+          <p style={{ fontWeight: 700, margin: '0 0 4px' }}>Unable to load transactions</p>
+          <p style={{ fontSize: '13px', margin: '0 0 12px' }}>{error}</p>
+          <button type="button" className="btn btn-outline btn-sm" onClick={fetchTransactions}>
+            Try again
+          </button>
+        </div>
+      ) : transactions.length > 0 ? (
         <div className="card table-scroll">
           <table className="data">
             <thead>
@@ -485,9 +630,9 @@ export default function TransactionsPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredTransactions.map((tx) => (
+              {transactions.map((tx) => (
                 <TransactionRow
-                  key={tx.id}
+                  key={tx.id || tx._id}
                   item={tx}
                   copiedId={copiedId}
                   onCopyRef={handleCopyRef}
@@ -500,12 +645,50 @@ export default function TransactionsPage() {
       ) : (
         <EmptyState
           icon={<Inbox size={32} />}
-          message="No transactions match the selected filters."
+          message="No closed deals match the selected criteria."
+          action={
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={handleOpenRecordNew}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+            >
+              <Plus size={15} />
+              <span>Record your first deal</span>
+            </button>
+          }
         />
       )}
 
-      {/* Claim / View Claim / Info Modal Dialog */}
-      {modalType && (
+      {/* Record a Closed Deal Modal */}
+      <RecordDealModal
+        isOpen={isRecordModalOpen}
+        onClose={() => {
+          setIsRecordModalOpen(false);
+          setRecordInitialData(null);
+        }}
+        onSuccess={handleRecordSuccess}
+        initialData={recordInitialData}
+      />
+
+      {/* View Claim Details Modal */}
+      <ViewClaimModal
+        isOpen={isViewModalOpen}
+        dealId={viewDealId}
+        initialDeal={viewInitialDeal}
+        onClose={() => {
+          setIsViewModalOpen(false);
+          setViewDealId(null);
+          setViewInitialDeal(null);
+        }}
+        onRecordAgain={(deal) => {
+          setRecordInitialData(deal);
+          setIsRecordModalOpen(true);
+        }}
+      />
+
+      {/* Info Modal */}
+      {isInfoModalOpen && (
         <div
           role="dialog"
           aria-modal="true"
@@ -515,136 +698,47 @@ export default function TransactionsPage() {
             background: 'var(--cmp-overlay)',
             display: 'grid',
             placeItems: 'center',
-            zIndex: 99,
+            zIndex: 1000,
             padding: '20px'
           }}
-          onClick={closeModal}
+          onClick={() => setIsInfoModalOpen(false)}
         >
           <div
             className="card"
             style={{
-              width: 'min(520px, 100%)',
+              width: 'min(500px, 100%)',
               padding: '24px',
               background: 'var(--cmp-surface-raised)',
-              boxShadow: 'var(--cmp-shadow-lg)',
-              position: 'relative'
+              boxShadow: 'var(--cmp-shadow-lg)'
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div
-              className="row"
-              style={{
-                justifyContent: 'space-between',
-                marginBottom: '16px'
-              }}
-            >
-              <h2 style={{ fontSize: '18px', fontWeight: 800 }}>
-                {modalType === 'info'
-                  ? 'Claim Transactions Guide'
-                  : modalType === 'view'
-                  ? `Claim Details: ${modalItem?.id}`
-                  : `Record Closed Deal: ${modalItem?.id}`}
-              </h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+              <h2 style={{ fontSize: '18px', fontWeight: 800, margin: 0 }}>Closed Deals on CMP</h2>
               <button
                 type="button"
                 className="btn btn-ghost btn-sm"
-                onClick={closeModal}
-                style={{ padding: '4px', height: '32px', width: '32px' }}
-                aria-label="Close"
+                onClick={() => setIsInfoModalOpen(false)}
+                style={{ width: '32px', height: '32px', padding: 0 }}
               >
                 <X size={18} />
               </button>
             </div>
-
-            {modalType === 'info' ? (
-              <div style={{ fontSize: '14px', lineHeight: 1.6 }}>
-                <p className="muted" style={{ marginTop: 0 }}>
-                  By recording and claiming your closed deals on Cash My Property:
-                </p>
-                <ul style={{ paddingLeft: '20px', margin: '12px 0' }}>
-                  <li>Your agency and agents earn verified transaction badges.</li>
-                  <li>Increases your Quality Score and ranking in search results.</li>
-                  <li>Unlock monthly rebate credits and exclusive portal perks.</li>
-                </ul>
-                <div style={{ textAlign: 'right', marginTop: '20px' }}>
-                  <button type="button" className="btn btn-primary btn-sm" onClick={closeModal}>
-                    Got it
-                  </button>
-                </div>
+            <div style={{ fontSize: '14px', lineHeight: 1.6, color: 'var(--cmp-text)' }}>
+              <p className="muted" style={{ marginTop: 0 }}>
+                When an agent closes a deal on a live or marketed property, recording it ensures:
+              </p>
+              <ul style={{ paddingLeft: '20px', margin: '12px 0' }}>
+                <li>The listing moves off-market cleanly to <strong>CLOSED</strong> (Sold / Rented).</li>
+                <li>Your agency and agents earn verified transaction credentials.</li>
+                <li>Compliance verification ensures prompt proof audit by CMP within 3 working days.</li>
+              </ul>
+              <div style={{ textAlign: 'right', marginTop: '20px' }}>
+                <button type="button" className="btn btn-primary btn-sm" onClick={() => setIsInfoModalOpen(false)}>
+                  Got it
+                </button>
               </div>
-            ) : modalType === 'view' ? (
-              <div>
-                <div
-                  style={{
-                    padding: '14px',
-                    borderRadius: '10px',
-                    background: 'var(--cmp-surface-sunken)',
-                    marginBottom: '16px'
-                  }}
-                >
-                  <p style={{ margin: '0 0 6px', fontWeight: 700, fontSize: '15px' }}>
-                    {modalItem?.title}
-                  </p>
-                  <p className="muted" style={{ margin: '0 0 8px', fontSize: '13px' }}>
-                    {modalItem?.location}
-                  </p>
-                  <div className="row" style={{ gap: '14px', fontSize: '13px' }}>
-                    <span>
-                      Closing Price: <strong>{modalItem?.priceDisplay}</strong>
-                    </span>
-                    <span>
-                      Status: <strong>{modalItem?.claimStatus}</strong>
-                    </span>
-                  </div>
-                </div>
-                <p className="faint" style={{ fontSize: '13px' }}>
-                  Claim verified on {modalItem?.completedDate} by Cash My Property compliance desk.
-                </p>
-                <div style={{ textAlign: 'right', marginTop: '20px' }}>
-                  <button type="button" className="btn btn-outline btn-sm" onClick={closeModal}>
-                    Close
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  alert(`Claim for ${modalItem?.id} submitted for review!`);
-                  closeModal();
-                }}
-              >
-                <p className="muted" style={{ fontSize: '14px', marginTop: 0 }}>
-                  Upload proof of transfer or Form F to submit this deal for verification.
-                </p>
-                <div style={{ marginBottom: '14px' }}>
-                  <label htmlFor="deal-form-f">Form F / Title Deed Reference</label>
-                  <input
-                    id="deal-form-f"
-                    placeholder="e.g. DLD-TR-2026-88190"
-                    required
-                    style={{ height: '40px' }}
-                  />
-                </div>
-                <div style={{ marginBottom: '14px' }}>
-                  <label htmlFor="deal-buyer">Buyer / Tenant Name</label>
-                  <input
-                    id="deal-buyer"
-                    placeholder="Full name of client"
-                    required
-                    style={{ height: '40px' }}
-                  />
-                </div>
-                <div className="row" style={{ justifyContent: 'flex-end', gap: '8px', marginTop: '20px' }}>
-                  <button type="button" className="btn btn-outline btn-sm" onClick={closeModal}>
-                    Cancel
-                  </button>
-                  <button type="submit" className="btn btn-primary btn-sm">
-                    Submit Claim
-                  </button>
-                </div>
-              </form>
-            )}
+            </div>
           </div>
         </div>
       )}

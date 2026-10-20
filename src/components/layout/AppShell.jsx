@@ -43,8 +43,8 @@ export default function AppShell({ children }) {
     <div className="portal-shell">
       <AppRail />
       <div className="portal-column">
-        <HubBar />
         <BrnComplianceBanner />
+        <HubBar />
         <main className="portal-main">
           {children}
         </main>

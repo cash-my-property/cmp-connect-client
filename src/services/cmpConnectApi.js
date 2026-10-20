@@ -565,6 +565,25 @@ export const cmpConnectApi = {
     });
   },
 
+  /**
+   * Request BRN Verification for Team Member (agencies only)
+   * POST /api/cmpConnect/team/members/:id/request-verification
+   */
+  async requestMemberVerification(memberId, { brn, brnExpiry } = {}, token) {
+    return apiRequest(`/api/cmpConnect/team/members/${memberId}/request-verification`, {
+      method: 'POST',
+      token,
+      body: JSON.stringify({
+        brn: String(brn || '').trim(),
+        ...(brnExpiry ? { brnExpiry } : {})
+      })
+    });
+  },
+
+  async requestBrnVerification(memberId, payload, token) {
+    return this.requestMemberVerification(memberId, payload, token);
+  },
+
   // ─────────────────────────────────────────────────────────────
   // TEAM: ROLES & ACCESS (roles.html)
   // ─────────────────────────────────────────────────────────────
@@ -823,6 +842,17 @@ export const cmpConnectApi = {
   },
 
   /**
+   * Move Listing to Draft (LIVE/PENDING_APPROVAL/UNPUBLISHED/EXPIRED/REJECTED -> DRAFT)
+   * POST /api/cmpConnect/listings/:id/move-to-draft
+   */
+  async moveListingToDraft(id, token) {
+    return apiRequest(`/api/cmpConnect/listings/${id}/move-to-draft`, {
+      method: 'POST',
+      token
+    });
+  },
+
+  /**
    * 34. Archive Listing (→ ARCHIVED)
    * POST /api/cmpConnect/listings/:id/archive
    */
@@ -853,6 +883,26 @@ export const cmpConnectApi = {
       method: 'DELETE',
       token
     });
+  },
+
+  /**
+   * Mark Listing as Sold / Rented
+   * POST /api/cmpConnect/listings/:id/sold or PATCH /api/cmpConnect/listings/:id
+   */
+  async markListingSold(id, token, status = 'SOLD') {
+    try {
+      return await apiRequest(`/api/cmpConnect/listings/${id}/sold`, {
+        method: 'POST',
+        token,
+        body: JSON.stringify({ status })
+      });
+    } catch {
+      return await apiRequest(`/api/cmpConnect/listings/${id}`, {
+        method: 'PATCH',
+        token,
+        body: JSON.stringify({ status })
+      });
+    }
   },
 
   // ─────────────────────────────────────────────────────────────
@@ -987,6 +1037,7 @@ export const cmpConnectApi = {
 
     const response = await fetch(url, {
       method: 'GET',
+      credentials: 'include',
       headers: {
         ...(actualToken ? { Authorization: `Bearer ${actualToken}` } : {})
       }
@@ -1010,6 +1061,133 @@ export const cmpConnectApi = {
       token,
       body: JSON.stringify({ toAgentId })
     });
+  },
+
+  // ─────────────────────────────────────────────────────────────
+  // 11. TRANSACTIONS (CLOSED DEALS)
+  // ─────────────────────────────────────────────────────────────
+
+  /**
+   * 47. Get Signed Upload Signature for Proof Document
+   * GET /api/cmpConnect/transactions/upload-signature
+   */
+  async getTransactionUploadSignature(token) {
+    return apiRequest('/api/cmpConnect/transactions/upload-signature', {
+      method: 'GET',
+      token
+    });
+  },
+
+  /**
+   * Helper: Upload proof file to Cloudinary using transaction signature
+   */
+  async uploadTransactionProof(file, sig) {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('api_key', sig.apiKey);
+    formData.append('timestamp', sig.timestamp);
+    formData.append('signature', sig.signature);
+    formData.append('folder', sig.folder);
+
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${sig.cloudName}/auto/upload`, {
+      method: 'POST',
+      body: formData
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error?.message || 'Transaction proof document upload failed.');
+    }
+
+    const data = await res.json();
+    return {
+      url: data.secure_url || data.url,
+      public_id: data.public_id,
+      fileName: file.name
+    };
+  },
+
+  /**
+   * 48. List Closed Deals (Transactions)
+   * GET /api/cmpConnect/transactions?status=&search=&ref=&agentId=&offering=&propertyType=&outcome=&page=&limit=
+   */
+  async listTransactions(params = {}, token) {
+    const query = new URLSearchParams();
+    if (params.status && params.status !== 'all') query.set('status', params.status);
+    if (params.search) query.set('search', params.search);
+    if (params.ref) query.set('ref', params.ref);
+    if (params.agentId) query.set('agentId', params.agentId);
+    if (params.offering) query.set('offering', params.offering);
+    if (params.propertyType) query.set('propertyType', params.propertyType);
+    if (params.outcome) query.set('outcome', params.outcome);
+    if (params.page) query.set('page', params.page);
+    if (params.limit) query.set('limit', params.limit);
+
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    return apiRequest(`/api/cmpConnect/transactions${qs}`, {
+      method: 'GET',
+      token
+    });
+  },
+
+  /**
+   * 49. Get Closed Deal Details ("View claim")
+   * GET /api/cmpConnect/transactions/:id
+   */
+  async getTransaction(id, token) {
+    return apiRequest(`/api/cmpConnect/transactions/${id}`, {
+      method: 'GET',
+      token
+    });
+  },
+
+  /**
+   * 50. Record a Closed Deal (Mark as sold / rented with proof)
+   * POST /api/cmpConnect/transactions
+   * Payload: { listingId, agentId, transactionDate, finalPrice, counterpartyName, notes, document: { url, public_id, fileName }, declared: true }
+   */
+  async recordClosedDeal(payload, token) {
+    return apiRequest('/api/cmpConnect/transactions', {
+      method: 'POST',
+      token,
+      body: JSON.stringify(payload)
+    });
+  },
+
+  /**
+   * 51. Mark Listing as Sold / Rented (Step 1)
+   * POST /api/cmpConnect/listings/:id/mark-sold
+   * Moves listing to CLOSED and adds UNCLAIMED deal in Transactions
+   */
+  async markListingSold(listingId, token) {
+    return apiRequest(`/api/cmpConnect/listings/${listingId}/mark-sold`, {
+      method: 'POST',
+      token
+    });
+  },
+
+  /**
+   * 52. Claim a Transaction (Step 2)
+   * POST /api/cmpConnect/transactions/:id/claim
+   * Submits proof document and details for CMP review
+   */
+  async claimTransaction(transactionId, payload, token) {
+    try {
+      return await apiRequest(`/api/cmpConnect/transactions/${transactionId}/claim`, {
+        method: 'POST',
+        token,
+        body: JSON.stringify(payload)
+      });
+    } catch (err) {
+      if (err?.status === 404) {
+        return apiRequest('/api/cmpConnect/transactions', {
+          method: 'POST',
+          token,
+          body: JSON.stringify({ ...payload, transactionId })
+        });
+      }
+      throw err;
+    }
   }
 };
 

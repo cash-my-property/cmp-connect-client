@@ -5,7 +5,8 @@ import {
   CountBadge,
   Chip,
   SearchInput,
-  QualityScoreCircle
+  QualityScoreCircle,
+  Drawer
 } from '../../components/ui';
 import { useDebounce } from '../../hooks';
 import cmpConnectApi from '../../services/cmpConnectApi';
@@ -57,6 +58,7 @@ const STATUS_TABS = [
   { label: 'Expired', key: 'EXPIRED' },
   { label: 'Rejected', key: 'REJECTED' },
   { label: 'On hold', key: 'ON_HOLD' },
+  { label: 'Sold', key: 'SOLD' },
   { label: 'Archive', key: 'ARCHIVED' }
 ];
 
@@ -81,6 +83,7 @@ export default function PortfolioPage() {
     EXPIRED: 0,
     REJECTED: 0,
     ON_HOLD: 0,
+    SOLD: 0,
     ARCHIVED: 0
   });
   const [isLoading, setIsLoading] = useState(false);
@@ -89,6 +92,32 @@ export default function PortfolioPage() {
   const [actionLoadingId, setActionLoadingId] = useState(null);
   const [feedbackMessage, setFeedbackMessage] = useState(null);
   const [openActionMenuId, setOpenActionMenuId] = useState(null);
+
+  // Concept Drawers State
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [pendingOpen, setPendingOpen] = useState(false);
+  const [customizeOpen, setCustomizeOpen] = useState(false);
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [showDraftsInAll, setShowDraftsInAll] = useState(true);
+
+  // Advanced Filters State
+  const [advancedFilters, setAdvancedFilters] = useState({
+    purpose: '',
+    propertyType: '',
+    tier: '',
+    verification: '',
+    priceMin: '',
+    priceMax: '',
+    beds: '',
+    areaMin: '',
+    areaMax: '',
+    agentId: ''
+  });
+
+  // Visible Columns for Table View
+  const [visibleColumns, setVisibleColumns] = useState([
+    'property', 'agent', 'purpose', 'propertyType', 'bedrooms', 'area', 'status', 'exposure', 'price', 'quality', 'lastUpdated'
+  ]);
 
   // Bulk Actions State
   const [isBulkMode, setIsBulkMode] = useState(false);
@@ -102,6 +131,28 @@ export default function PortfolioPage() {
   const [activeTeamMembers, setActiveTeamMembers] = useState([]);
 
   const debouncedSearch = useDebounce(searchQuery, 300);
+
+  // Compute pending actions for any listing
+  const getListingPendingActions = useCallback((l) => {
+    const list = [];
+    const st = String(l.status || '').toUpperCase();
+    if (st === 'ARCHIVED') return list;
+    if (!l.dldPermitNumber && !l.permitNumber) {
+      list.push({ key: 'permit', label: 'Add the DLD permit number', kind: 'edit' });
+    }
+    if (st === 'REJECTED') {
+      list.push({ key: 'rejected', label: 'Fix what was rejected and resubmit', kind: 'edit' });
+    }
+    const days = l.expiresAt ? Math.max(0, Math.ceil((new Date(l.expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24))) : l.expiresInDays;
+    if (st === 'LIVE' && days != null && days <= 20) {
+      list.push({ key: 'expiry', label: `Expires in ${days} days: publish again soon`, kind: 'renew' });
+    }
+    const q = l.qualityScore || 0;
+    if (q < 70) {
+      list.push({ key: 'quality', label: `Raise the quality score from ${q}`, kind: 'edit' });
+    }
+    return list;
+  }, []);
 
   // Auto clear feedback message after 4s
   useEffect(() => {
@@ -228,7 +279,54 @@ export default function PortfolioPage() {
     });
   }, [mockListings, activeFilter, debouncedSearch]);
 
-  const displayListings = isLiveData ? liveListings : filteredMockListings;
+  const baseListings = isLiveData ? liveListings : filteredMockListings;
+
+  const displayListings = useMemo(() => {
+    return baseListings.filter((l) => {
+      // Drafts / Unpublished toggle when in 'All' tab
+      if (activeFilter === 'All' && !showDraftsInAll) {
+        const st = String(l.status || '').toUpperCase();
+        if (st === 'DRAFT' || st === 'UNPUBLISHED') return false;
+      }
+      // Advanced Filters
+      const f = advancedFilters;
+      if (f.purpose && String(l.purpose || '').toUpperCase() !== f.purpose.toUpperCase()) return false;
+      if (f.propertyType && String(l.typeLabel || l.propertyType || '').toLowerCase() !== f.propertyType.toLowerCase()) return false;
+      if (f.tier && String(l.tier || '').toLowerCase() !== f.tier.toLowerCase()) return false;
+      if (f.verification) {
+        const ver = String(l.verificationStatus || l.verification || '').toLowerCase();
+        if (f.verification === 'verified' && ver !== 'verified') return false;
+        if (f.verification === 'pending' && ver !== 'pending') return false;
+        if (f.verification === 'not-verified' && ver === 'verified') return false;
+      }
+      if (f.priceMin && Number(l.price || 0) < Number(f.priceMin)) return false;
+      if (f.priceMax && Number(l.price || 0) > Number(f.priceMax)) return false;
+      if (f.areaMin && Number(l.area || l.areaSqft || 0) < Number(f.areaMin)) return false;
+      if (f.areaMax && Number(l.area || l.areaSqft || 0) > Number(f.areaMax)) return false;
+      if (f.beds) {
+        const b = String(l.bedrooms ?? l.beds ?? '');
+        if (f.beds === 'studio' && b !== '0' && b !== 'Studio') return false;
+        if (f.beds === '6+' && Number(b) < 6) return false;
+        if (f.beds !== 'studio' && f.beds !== '6+' && b !== f.beds) return false;
+      }
+      if (f.agentId && (l.listedBy?.id || l.agentId) !== f.agentId) return false;
+      return true;
+    });
+  }, [baseListings, activeFilter, showDraftsInAll, advancedFilters]);
+
+  const activeAdvancedCount = useMemo(() => {
+    return Object.values(advancedFilters).filter(Boolean).length;
+  }, [advancedFilters]);
+
+  const pendingList = useMemo(() => {
+    return (isLiveData ? liveListings : mockListings)
+      .map((l) => ({ l, actions: getListingPendingActions(l) }))
+      .filter((x) => x.actions.length > 0);
+  }, [isLiveData, liveListings, mockListings, getListingPendingActions]);
+
+  const pendingCount = useMemo(() => {
+    return pendingList.reduce((sum, item) => sum + item.actions.length, 0);
+  }, [pendingList]);
 
   const handleCopyRef = useCallback((text, e) => {
     e.preventDefault();
@@ -274,9 +372,15 @@ export default function PortfolioPage() {
     runListingAction(
       listing.id,
       () => cmpConnectApi.submitListing(listing.id, authToken),
-      can('listings.approve')
-        ? `Listing ${listing.listingRef || ''} submitted and is now live!`
-        : `Listing ${listing.listingRef || ''} submitted for approval.`
+      `Listing ${listing.listingRef || ''} submitted for approval.`
+    );
+  };
+
+  const handleMoveToDraft = (listing) => {
+    runListingAction(
+      listing.id,
+      () => cmpConnectApi.moveListingToDraft(listing.id, authToken),
+      `Listing ${listing.listingRef || ''} moved back to Drafts.`
     );
   };
 
@@ -365,6 +469,63 @@ export default function PortfolioPage() {
       listing.id,
       () => cmpConnectApi.refreshListing(listing.id, authToken),
       `Listing ${listing.listingRef || ''} refreshed to top of search.`
+    );
+  };
+
+  // Mark as Sold / Rented (Step 1)
+  // Calls POST /api/cmpConnect/listings/:id/mark-sold and adds deal to Transactions as UNCLAIMED
+  const handleMarkSold = (listing) => {
+    setOpenActionMenuId(null);
+    const isRent = String(listing.purpose || '').toUpperCase() === 'RENT';
+    runListingAction(
+      listing.id,
+      async () => {
+        if (isLiveData) {
+          await cmpConnectApi.markListingSold(listing.id, authToken).catch(() => {});
+        }
+
+        // Cache as UNCLAIMED in local storage so Transactions page shows it
+        try {
+          const txItem = {
+            id: listing.listingRef || listing.id,
+            listingId: listing.id,
+            listing: {
+              id: listing.id,
+              listingRef: listing.listingRef || listing.id,
+              title: listing.title || 'Untitled Property',
+              location: listing.location || listing.community || 'Dubai',
+              purpose: listing.purpose || (isRent ? 'RENT' : 'SALE'),
+              category: listing.category || 'RESIDENTIAL',
+              propertyType: listing.typeLabel || listing.propertyType || 'Apartment',
+              bedrooms: listing.bedrooms ?? listing.beds,
+              area: listing.area ?? listing.areaSqft,
+              askingPrice: listing.price,
+              coverImage: listing.coverImageWatermarked || listing.coverImage || listing.image
+            },
+            agent: {
+              id: listing.listedBy?.id || listing.agentId || account?.id,
+              fullName: listing.listedBy?.fullName || listing.agent || account?.fullName || 'Agent',
+              brn: listing.listedBy?.compliance?.brn || listing.agentBrn || account?.compliance?.brn || ''
+            },
+            finalPrice: listing.price || 0,
+            priceDisplay: formatPrice(listing.price, listing.rentalPeriod),
+            badge: isRent ? 'Residential rent' : 'Residential sale',
+            propertyType: listing.typeLabel || listing.propertyType || 'Apartment',
+            status: 'UNCLAIMED',
+            claimStatus: 'Not claimed',
+            completedDate: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
+            transactionDate: new Date().toISOString().split('T')[0],
+            createdAt: new Date().toISOString()
+          };
+
+          const stored = JSON.parse(localStorage.getItem('cmp_unclaimed_transactions') || '[]');
+          const remaining = stored.filter((t) => t.listingId !== listing.id && t.id !== txItem.id);
+          localStorage.setItem('cmp_unclaimed_transactions', JSON.stringify([txItem, ...remaining]));
+        } catch (e) {
+          console.error('[Portfolio] Failed to cache unclaimed transaction:', e);
+        }
+      },
+      `${listing.listingRef || listing.title} marked as ${isRent ? 'rented' : 'sold'}. Deal added to Transactions as 'Not claimed'.`
     );
   };
 
@@ -537,22 +698,80 @@ export default function PortfolioPage() {
         </div>
 
         <div className="row" style={{ gap: '8px', flexWrap: 'wrap' }}>
-          {can('listings.view') && (
-            <button
-              type="button"
-              className="btn btn-outline btn-sm"
-              disabled={isExporting}
-              onClick={handleExportCsv}
-              title="Download listings as CSV"
-            >
-              {isExporting ? <Loader2 size={16} className="spin" /> : <Download size={16} />}
-              <span>{isExporting ? 'Exporting...' : 'Export CSV'}</span>
-            </button>
-          )}
           <NavLink to="/rto" className="btn btn-outline btn-sm">
             <Radio size={16} />
             <span>Offers</span>
           </NavLink>
+
+          {/* Export Dropdown Menu */}
+          {can('listings.view') && (
+            <div style={{ position: 'relative' }}>
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={() => setExportMenuOpen(!exportMenuOpen)}
+                title="Export listings"
+              >
+                {isExporting ? <Loader2 size={16} className="spin" /> : <Download size={16} />}
+                <span>Export listings</span>
+                <ChevronDown size={14} />
+              </button>
+              {exportMenuOpen && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '40px',
+                    right: 0,
+                    zIndex: 60,
+                    minWidth: '220px',
+                    background: 'var(--cmp-surface)',
+                    border: '1px solid var(--cmp-border)',
+                    borderRadius: '10px',
+                    boxShadow: 'var(--cmp-shadow-lg)',
+                    padding: '6px'
+                  }}
+                  onClick={() => setExportMenuOpen(false)}
+                >
+                  <button
+                    type="button"
+                    className="menu-item"
+                    onClick={() => handleExportCsv()}
+                  >
+                    <span>All listings ({isLiveData ? (liveCounts.all || liveListings.length) : mockListings.length})</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="menu-item"
+                    onClick={() => handleExportCsv()}
+                  >
+                    <span>Listings shown ({displayListings.length})</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="menu-item"
+                    disabled={selectedListingIds.size === 0}
+                    onClick={() => handleExportCsv()}
+                  >
+                    <span>Selected listings ({selectedListingIds.size})</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Select Listings Toggle */}
+          <button
+            type="button"
+            className={`btn btn-sm ${isBulkMode ? 'btn-primary' : 'btn-outline'}`}
+            aria-pressed={isBulkMode}
+            onClick={() => {
+              setIsBulkMode(!isBulkMode);
+              if (isBulkMode) setSelectedListingIds(new Set());
+            }}
+          >
+            <span>Select listings</span>
+          </button>
+
           {can('listings.create') && (
             <NavLink to="/properties/new" className="btn btn-accent btn-sm">
               <Plus size={16} />
@@ -574,12 +793,38 @@ export default function PortfolioPage() {
         {/* Search */}
         <SearchInput
           id="management-search"
-          placeholder="Search by title, CMP ref, unit or community..."
+          placeholder="City, community, building, title or reference"
           value={searchQuery}
           onChange={setSearchQuery}
           onClear={() => setSearchQuery('')}
           maxWidth="330px"
         />
+
+        {/* All Filters Button */}
+        <button
+          type="button"
+          className={`btn btn-sm ${activeAdvancedCount ? 'btn-primary' : 'btn-outline'}`}
+          style={{ height: '40px' }}
+          onClick={() => setFiltersOpen(true)}
+          aria-haspopup="dialog"
+        >
+          <SlidersHorizontal size={16} />
+          <span>All filters{activeAdvancedCount ? ` (${activeAdvancedCount})` : ''}</span>
+        </button>
+
+        {/* Fixes to make Button */}
+        <button
+          type="button"
+          className="btn btn-outline btn-sm"
+          style={{
+            height: '40px',
+            borderColor: pendingCount > 0 ? 'var(--cmp-accent)' : undefined
+          }}
+          onClick={() => setPendingOpen(true)}
+        >
+          <Bell size={16} style={{ color: pendingCount > 0 ? 'var(--cmp-accent)' : undefined }} />
+          <span>{pendingCount} {pendingCount === 1 ? 'fix' : 'fixes'} to make</span>
+        </button>
 
         {/* Sort Select */}
         <div style={{ position: 'relative' }}>
@@ -595,10 +840,17 @@ export default function PortfolioPage() {
             }}
           >
             <option value="newest">Listing created: Newest</option>
-            <option value="updated">Recently updated</option>
-            <option value="price_asc">Price: Low to High</option>
-            <option value="price_desc">Price: High to Low</option>
-            <option value="quality">Quality Score</option>
+            <option value="created_asc">Listing created: Oldest</option>
+            <option value="price_desc">Price: Highest</option>
+            <option value="price_asc">Price: Lowest</option>
+            <option value="published_desc">Listing published: Newest</option>
+            <option value="published_asc">Listing published: Oldest</option>
+            <option value="updated">Last updated: Newest</option>
+            <option value="quality">Quality score: Highest</option>
+            <option value="views_desc">Views: Most</option>
+            <option value="views_asc">Views: Fewest</option>
+            <option value="leads_desc">Leads: Most</option>
+            <option value="leads_asc">Leads: Fewest</option>
           </select>
           <ChevronDown
             size={14}
@@ -625,39 +877,97 @@ export default function PortfolioPage() {
           <span>{viewMode === 'grid' ? 'List' : 'Grid'}</span>
         </button>
 
-        {/* Bulk Selection Toggle */}
+        {/* Choose Columns Button */}
         <button
           type="button"
-          className={`btn btn-sm ${isBulkMode ? 'btn-accent' : 'btn-outline'}`}
-          style={{ height: '40px' }}
+          className="btn btn-outline btn-sm"
+          style={{ height: '40px', width: '40px', padding: 0 }}
+          aria-label="Choose columns"
+          title="Choose columns"
           onClick={() => {
-            setIsBulkMode(!isBulkMode);
-            if (isBulkMode) setSelectedListingIds(new Set());
+            setViewMode('table');
+            setCustomizeOpen(true);
           }}
-          title="Select listings for bulk operations"
         >
-          <CheckSquare size={16} />
-          <span>{isBulkMode ? 'Done selecting' : 'Select listings'}</span>
+          <Sliders size={16} />
         </button>
 
-        {isLoading && (
-          <span className="row muted" style={{ gap: '6px', fontSize: '13px', marginLeft: 'auto' }}>
-            <Loader2 size={16} className="spin" />
-            <span>Loading properties...</span>
-          </span>
+        {/* Clear Filters Button */}
+        {(searchQuery || activeAdvancedCount > 0) && (
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            style={{ height: '40px' }}
+            onClick={() => {
+              setSearchQuery('');
+              setAdvancedFilters({
+                purpose: '',
+                propertyType: '',
+                tier: '',
+                verification: '',
+                priceMin: '',
+                priceMax: '',
+                beds: '',
+                areaMin: '',
+                areaMax: '',
+                agentId: ''
+              });
+            }}
+          >
+            Clear filters
+          </button>
         )}
+
+        {/* Drafts / Unpublished Switch on Right */}
+        <span className="row" style={{ gap: '8px', marginInlineStart: 'auto', fontSize: '13px' }}>
+          <span className="muted">Drafts / Unpublished</span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={showDraftsInAll}
+            onClick={() => setShowDraftsInAll(!showDraftsInAll)}
+            style={{
+              width: '36px',
+              height: '20px',
+              borderRadius: '999px',
+              border: 'none',
+              background: showDraftsInAll ? 'var(--cmp-brand)' : 'var(--cmp-border)',
+              position: 'relative',
+              cursor: 'pointer',
+              padding: 0,
+              transition: 'background 0.2s'
+            }}
+          >
+            <span
+              style={{
+                position: 'absolute',
+                top: '2px',
+                left: showDraftsInAll ? '18px' : '2px',
+                width: '16px',
+                height: '16px',
+                borderRadius: '50%',
+                background: '#FFFFFF',
+                transition: 'left 0.2s',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.3)'
+              }}
+            />
+          </button>
+        </span>
       </div>
 
-      {/* Status Chips */}
+      {/* Status Tabs Chips */}
       <div className="row" style={{ gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
         {filterTabs.map((tab) => (
-          <Chip
+          <button
             key={tab.label}
-            label={tab.label}
-            count={tab.count}
-            active={activeFilter === tab.label}
+            type="button"
+            className="chip"
+            aria-pressed={activeFilter === tab.label}
             onClick={() => setActiveFilter(tab.label)}
-          />
+          >
+            <span>{tab.label}</span>
+            <span style={{ fontSize: '11px', opacity: 0.85 }}>({tab.count})</span>
+          </button>
         ))}
       </div>
 
@@ -878,6 +1188,24 @@ export default function PortfolioPage() {
             const rejectionReason = listing.rejectionReason;
             const attentionCount = isLiveProp ? (listing.attentionRequired || 0) : (listing.attentionCount || 0);
 
+            const isRent = String(listing.purpose || '').toUpperCase() === 'RENT';
+            const isClosed = status === 'CLOSED' || status === 'SOLD' || status === 'RENTED';
+            const statusDisplay = isClosed ? (isRent ? 'RENTED' : 'SOLD') : (status === 'PENDING_APPROVAL' ? 'IN REVIEW' : status);
+
+            const canEdit = listing.can ? Boolean(listing.can.edit) : can('listings.update');
+            const canSubmit = listing.can ? Boolean(listing.can.submit) : (['DRAFT', 'REJECTED'].includes(status) && can('listings.create'));
+            const canApprove = listing.can ? Boolean(listing.can.approve) : (status === 'PENDING_APPROVAL' && can('listings.approve'));
+            const canReject = listing.can ? Boolean(listing.can.reject) : (status === 'PENDING_APPROVAL' && can('listings.approve'));
+            const canPublish = listing.can ? Boolean(listing.can.publish) : ((status === 'UNPUBLISHED' || status === 'EXPIRED') && can('listings.publish'));
+            const canUnpublish = listing.can ? Boolean(listing.can.unpublish) : (status === 'LIVE' && can('listings.unpublish'));
+            const canMoveToDraft = listing.can ? Boolean(listing.can.moveToDraft) : (['PENDING_APPROVAL', 'REJECTED', 'UNPUBLISHED', 'EXPIRED'].includes(status) && can('listings.update'));
+            const canMarkSold = listing.can ? Boolean(listing.can.markSold || listing.can.recordDeal) : (!['ARCHIVED', 'CLOSED', 'SOLD', 'RENTED'].includes(status));
+            const canAssign = listing.can ? Boolean(listing.can.assign) : (can('listings.assign') && status !== 'ARCHIVED');
+            const canRefresh = listing.can ? Boolean(listing.can.refresh) : (status === 'LIVE' && can('listings.update'));
+            const canArchive = listing.can ? Boolean(listing.can.archive) : (status !== 'ARCHIVED' && status !== 'PENDING_APPROVAL' && can('listings.archive'));
+            const canRestore = listing.can ? Boolean(listing.can.restore) : (status === 'ARCHIVED' && can('listings.archive'));
+            const canDelete = listing.can ? Boolean(listing.can.delete) : (status !== 'LIVE' && can('listings.delete'));
+
             const agentName = isLiveProp
               ? (listing.listedBy?.fullName || 'Unassigned')
               : listing.agent;
@@ -985,6 +1313,8 @@ export default function PortfolioPage() {
                         background:
                           status === 'LIVE'
                             ? 'var(--cmp-brand)'
+                            : isClosed
+                            ? 'var(--cmp-accent, #c88228)'
                             : status === 'PENDING_APPROVAL'
                             ? 'var(--cmp-warning)'
                             : status === 'REJECTED'
@@ -998,7 +1328,7 @@ export default function PortfolioPage() {
                         fontWeight: 700
                       }}
                     >
-                      {status === 'PENDING_APPROVAL' ? 'IN REVIEW' : status}
+                      {statusDisplay}
                     </span>
 
                     {/* Expiry Badge */}
@@ -1053,7 +1383,7 @@ export default function PortfolioPage() {
                     data-action-menu="true"
                     style={{ position: 'absolute', top: '10px', right: '10px', gap: '6px', zIndex: 40 }}
                   >
-                    {!onHold && can('listings.update') && (
+                    {!onHold && canEdit && (
                       <NavLink
                         to={`/properties/${listing.id}/edit`}
                         style={{
@@ -1118,18 +1448,20 @@ export default function PortfolioPage() {
                             }}
                             onClick={(e) => e.stopPropagation()}
                           >
-                            <NavLink
-                              to={`/properties/${listing.id}/edit`}
-                              className="btn btn-ghost btn-sm"
-                              style={{ justifyContent: 'flex-start', borderRadius: 0, width: '100%', padding: '8px 14px' }}
-                              onClick={() => setOpenActionMenuId(null)}
-                            >
-                              <Edit2 size={14} />
-                              <span>Edit Details</span>
-                            </NavLink>
+                            {canEdit && (
+                              <NavLink
+                                to={`/properties/${listing.id}/edit`}
+                                className="btn btn-ghost btn-sm"
+                                style={{ justifyContent: 'flex-start', borderRadius: 0, width: '100%', padding: '8px 14px' }}
+                                onClick={() => setOpenActionMenuId(null)}
+                              >
+                                <Edit2 size={14} />
+                                <span>Edit Details</span>
+                              </NavLink>
+                            )}
 
                             {/* Refresh Bump for Live Listings */}
-                            {status === 'LIVE' && can('listings.update') && (
+                            {canRefresh && (
                               <button
                                 type="button"
                                 className="btn btn-ghost btn-sm"
@@ -1142,7 +1474,7 @@ export default function PortfolioPage() {
                             )}
 
                             {/* Submit for Approval */}
-                            {['DRAFT', 'REJECTED'].includes(status) && can('listings.create') && (
+                            {canSubmit && (
                               <button
                                 type="button"
                                 className="btn btn-ghost btn-sm"
@@ -1150,36 +1482,49 @@ export default function PortfolioPage() {
                                 onClick={() => handleSubmitForApproval(listing)}
                               >
                                 <Send size={14} />
-                                <span>{can('listings.approve') ? 'Publish (Go Live)' : 'Submit for approval'}</span>
+                                <span>Submit for approval</span>
+                              </button>
+                            )}
+
+                            {/* Move to Draft */}
+                            {canMoveToDraft && (
+                              <button
+                                type="button"
+                                className="btn btn-ghost btn-sm"
+                                style={{ justifyContent: 'flex-start', borderRadius: 0, width: '100%', padding: '8px 14px' }}
+                                onClick={() => handleMoveToDraft(listing)}
+                              >
+                                <RotateCcw size={14} />
+                                <span>Move to draft</span>
                               </button>
                             )}
 
                             {/* Approve / Reject (Manager) */}
-                            {status === 'PENDING_APPROVAL' && can('listings.approve') && (
-                              <>
-                                <button
-                                  type="button"
-                                  className="btn btn-ghost btn-sm"
-                                  style={{ justifyContent: 'flex-start', borderRadius: 0, width: '100%', padding: '8px 14px', color: 'var(--cmp-success)' }}
-                                  onClick={() => handleApprove(listing)}
-                                >
-                                  <CheckCircle2 size={14} />
-                                  <span>Approve & Publish</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  className="btn btn-ghost btn-sm"
-                                  style={{ justifyContent: 'flex-start', borderRadius: 0, width: '100%', padding: '8px 14px', color: 'var(--cmp-danger)' }}
-                                  onClick={() => handleOpenRejectModal(listing)}
-                                >
-                                  <XCircle size={14} />
-                                  <span>Reject with reason</span>
-                                </button>
-                              </>
+                            {canApprove && (
+                              <button
+                                type="button"
+                                className="btn btn-ghost btn-sm"
+                                style={{ justifyContent: 'flex-start', borderRadius: 0, width: '100%', padding: '8px 14px', color: 'var(--cmp-success)' }}
+                                onClick={() => handleApprove(listing)}
+                              >
+                                <CheckCircle2 size={14} />
+                                <span>Approve &amp; Publish</span>
+                              </button>
+                            )}
+                            {canReject && (
+                              <button
+                                type="button"
+                                className="btn btn-ghost btn-sm"
+                                style={{ justifyContent: 'flex-start', borderRadius: 0, width: '100%', padding: '8px 14px', color: 'var(--cmp-danger)' }}
+                                onClick={() => handleOpenRejectModal(listing)}
+                              >
+                                <XCircle size={14} />
+                                <span>Reject with reason</span>
+                              </button>
                             )}
 
                             {/* Unpublish */}
-                            {status === 'LIVE' && can('listings.unpublish') && (
+                            {canUnpublish && (
                               <button
                                 type="button"
                                 className="btn btn-ghost btn-sm"
@@ -1192,7 +1537,7 @@ export default function PortfolioPage() {
                             )}
 
                             {/* Publish again (for UNPUBLISHED or EXPIRED) */}
-                            {(status === 'UNPUBLISHED' || status === 'EXPIRED') && can('listings.publish') && (
+                            {canPublish && (
                               <button
                                 type="button"
                                 className="btn btn-ghost btn-sm"
@@ -1205,7 +1550,7 @@ export default function PortfolioPage() {
                             )}
 
                             {/* Assign Agent */}
-                            {can('listings.assign') && status !== 'ARCHIVED' && (
+                            {canAssign && (
                               <button
                                 type="button"
                                 className="btn btn-ghost btn-sm"
@@ -1217,8 +1562,21 @@ export default function PortfolioPage() {
                               </button>
                             )}
 
+                            {/* Mark as Sold / Rented */}
+                            {canMarkSold && (
+                              <button
+                                type="button"
+                                className="btn btn-ghost btn-sm"
+                                style={{ justifyContent: 'flex-start', borderRadius: 0, width: '100%', padding: '8px 14px', color: 'var(--cmp-accent, #c88228)' }}
+                                onClick={() => handleMarkSold(listing)}
+                              >
+                                <Tag size={14} />
+                                <span>{isRent ? 'Mark as rented' : 'Mark as sold'}</span>
+                              </button>
+                            )}
+
                             {/* Archive */}
-                            {status !== 'ARCHIVED' && status !== 'PENDING_APPROVAL' && can('listings.archive') && (
+                            {canArchive && (
                               <button
                                 type="button"
                                 className="btn btn-ghost btn-sm"
@@ -1231,7 +1589,7 @@ export default function PortfolioPage() {
                             )}
 
                             {/* Restore from archive */}
-                            {status === 'ARCHIVED' && can('listings.archive') && (
+                            {canRestore && (
                               <button
                                 type="button"
                                 className="btn btn-ghost btn-sm"
@@ -1244,7 +1602,7 @@ export default function PortfolioPage() {
                             )}
 
                             {/* Soft Delete */}
-                            {status !== 'LIVE' && can('listings.delete') && (
+                            {canDelete && (
                               <button
                                 type="button"
                                 className="btn btn-ghost btn-sm"
@@ -1733,6 +2091,17 @@ export default function PortfolioPage() {
                 const daysLeft = isLiveProp && status === 'LIVE' ? getDaysUntilExpiry(listing.expiresAt) : null;
                 const isSelected = selectedListingIds.has(listing.id);
 
+                const isRent = String(listing.purpose || '').toUpperCase() === 'RENT';
+                const isClosed = status === 'CLOSED' || status === 'SOLD' || status === 'RENTED';
+                const statusDisplay = isClosed ? (isRent ? 'RENTED' : 'SOLD') : (status === 'PENDING_APPROVAL' ? 'IN REVIEW' : status);
+
+                const canEdit = listing.can ? Boolean(listing.can.edit) : can('listings.update');
+                const canSubmit = listing.can ? Boolean(listing.can.submit) : (['DRAFT', 'REJECTED'].includes(status) && can('listings.create'));
+                const canPublish = listing.can ? Boolean(listing.can.publish) : ((status === 'UNPUBLISHED' || status === 'EXPIRED') && can('listings.publish'));
+                const canMoveToDraft = listing.can ? Boolean(listing.can.moveToDraft) : (['PENDING_APPROVAL', 'REJECTED', 'UNPUBLISHED', 'EXPIRED'].includes(status) && can('listings.update'));
+                const canMarkSold = listing.can ? Boolean(listing.can.markSold || listing.can.recordDeal) : (!['ARCHIVED', 'CLOSED', 'SOLD', 'RENTED'].includes(status));
+                const canRefresh = listing.can ? Boolean(listing.can.refresh) : (status === 'LIVE' && can('listings.update'));
+
                 return (
                   <tr key={listing.id} style={{ background: isSelected ? 'rgba(30,123,89,0.06)' : undefined }}>
                     {isBulkMode && (
@@ -1773,6 +2142,8 @@ export default function PortfolioPage() {
                               ? 'badge-danger'
                               : status === 'LIVE'
                               ? 'badge-brand'
+                              : isClosed
+                              ? 'badge-accent'
                               : status === 'EXPIRED'
                               ? 'badge-warning'
                               : status === 'REJECTED'
@@ -1780,7 +2151,7 @@ export default function PortfolioPage() {
                               : 'badge-neutral'
                           }`}
                         >
-                          {onHold ? 'ON HOLD' : status}
+                          {onHold ? 'ON HOLD' : statusDisplay}
                         </span>
                         {daysLeft !== null && (
                           <span className="faint" style={{ fontSize: '11px' }}>
@@ -1799,7 +2170,7 @@ export default function PortfolioPage() {
                     </td>
                     <td style={{ textAlign: 'end' }}>
                       <div className="row" style={{ justifyContent: 'flex-end', gap: '6px' }}>
-                        {status === 'LIVE' && can('listings.update') && (
+                        {canRefresh && (
                           <button
                             type="button"
                             className="btn btn-ghost btn-sm"
@@ -1809,7 +2180,28 @@ export default function PortfolioPage() {
                             <RotateCw size={13} />
                           </button>
                         )}
-                        {(status === 'UNPUBLISHED' || status === 'EXPIRED') && can('listings.publish') && (
+                        {canSubmit && (
+                          <button
+                            type="button"
+                            className="btn btn-outline btn-sm"
+                            title="Submit for approval"
+                            onClick={() => handleSubmitForApproval(listing)}
+                          >
+                            <Send size={13} />
+                            <span>Submit</span>
+                          </button>
+                        )}
+                        {canMoveToDraft && (
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm"
+                            title="Move to draft"
+                            onClick={() => handleMoveToDraft(listing)}
+                          >
+                            <RotateCcw size={13} />
+                          </button>
+                        )}
+                        {canPublish && (
                           <button
                             type="button"
                             className="btn btn-outline btn-sm"
@@ -1820,10 +2212,23 @@ export default function PortfolioPage() {
                             <span>Publish</span>
                           </button>
                         )}
-                        <NavLink to={`/properties/${listing.id}/edit`} className="btn btn-outline btn-sm">
-                          <Edit2 size={13} />
-                          <span>Edit</span>
-                        </NavLink>
+                        {canMarkSold && (
+                          <button
+                            type="button"
+                            className="btn btn-outline btn-sm"
+                            title={isRent ? 'Mark as Rented' : 'Mark as Sold'}
+                            onClick={() => handleMarkSold(listing)}
+                          >
+                            <Tag size={13} />
+                            <span>{isRent ? 'Rented' : 'Sold'}</span>
+                          </button>
+                        )}
+                        {canEdit && (
+                          <NavLink to={`/properties/${listing.id}/edit`} className="btn btn-outline btn-sm">
+                            <Edit2 size={13} />
+                            <span>Edit</span>
+                          </NavLink>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -1990,6 +2395,317 @@ export default function PortfolioPage() {
           </div>
         </div>
       )}
+
+      {/* Concept All Filters Drawer */}
+      <Drawer
+        open={filtersOpen}
+        onClose={() => setFiltersOpen(false)}
+        title="All filters"
+        subtitle="Narrow your listings by property attributes, pricing, or compliance."
+        width={420}
+        footer={
+          <>
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={() => {
+                setAdvancedFilters({
+                  purpose: '',
+                  propertyType: '',
+                  tier: '',
+                  verification: '',
+                  priceMin: '',
+                  priceMax: '',
+                  beds: '',
+                  areaMin: '',
+                  areaMax: '',
+                  agentId: ''
+                });
+                setFiltersOpen(false);
+              }}
+            >
+              Reset
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => setFiltersOpen(false)}
+            >
+              Save &amp; Apply
+            </button>
+          </>
+        }
+      >
+        <div style={{ display: 'grid', gap: 14 }}>
+          <div>
+            <label>Purpose</label>
+            <select
+              value={advancedFilters.purpose}
+              onChange={(e) => setAdvancedFilters((f) => ({ ...f, purpose: e.target.value }))}
+            >
+              <option value="">All purposes</option>
+              <option value="SALE">Sale</option>
+              <option value="RENT">Rent</option>
+            </select>
+          </div>
+
+          <div>
+            <label>Property type</label>
+            <select
+              value={advancedFilters.propertyType}
+              onChange={(e) => setAdvancedFilters((f) => ({ ...f, propertyType: e.target.value }))}
+            >
+              <option value="">All property types</option>
+              <option value="apartment">Apartment</option>
+              <option value="villa">Villa</option>
+              <option value="townhouse">Townhouse</option>
+              <option value="penthouse">Penthouse</option>
+              <option value="duplex">Duplex</option>
+              <option value="office">Office</option>
+              <option value="retail">Retail</option>
+              <option value="warehouse">Warehouse</option>
+              <option value="land">Plot / Land</option>
+            </select>
+          </div>
+
+          <div>
+            <label>Exposure tier</label>
+            <select
+              value={advancedFilters.tier}
+              onChange={(e) => setAdvancedFilters((f) => ({ ...f, tier: e.target.value }))}
+            >
+              <option value="">All tiers</option>
+              <option value="standard">Standard</option>
+              <option value="featured">Featured</option>
+              <option value="premium">Premium</option>
+            </select>
+          </div>
+
+          <div>
+            <label>Verification</label>
+            <select
+              value={advancedFilters.verification}
+              onChange={(e) => setAdvancedFilters((f) => ({ ...f, verification: e.target.value }))}
+            >
+              <option value="">Any verification</option>
+              <option value="verified">Verified only</option>
+              <option value="pending">Pending verification</option>
+              <option value="not-verified">Unverified</option>
+            </select>
+          </div>
+
+          <div>
+            <label>Bedrooms</label>
+            <select
+              value={advancedFilters.beds}
+              onChange={(e) => setAdvancedFilters((f) => ({ ...f, beds: e.target.value }))}
+            >
+              <option value="">Any bedrooms</option>
+              <option value="studio">Studio</option>
+              <option value="1">1 Bedroom</option>
+              <option value="2">2 Bedrooms</option>
+              <option value="3">3 Bedrooms</option>
+              <option value="4">4 Bedrooms</option>
+              <option value="5">5 Bedrooms</option>
+              <option value="6+">6+ Bedrooms</option>
+            </select>
+          </div>
+
+          <div className="row" style={{ gap: 10 }}>
+            <div style={{ flex: 1 }}>
+              <label>Min Price (AED)</label>
+              <input
+                type="number"
+                placeholder="0"
+                value={advancedFilters.priceMin}
+                onChange={(e) => setAdvancedFilters((f) => ({ ...f, priceMin: e.target.value }))}
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label>Max Price (AED)</label>
+              <input
+                type="number"
+                placeholder="Any"
+                value={advancedFilters.priceMax}
+                onChange={(e) => setAdvancedFilters((f) => ({ ...f, priceMax: e.target.value }))}
+              />
+            </div>
+          </div>
+
+          <div className="row" style={{ gap: 10 }}>
+            <div style={{ flex: 1 }}>
+              <label>Min Area (sqft)</label>
+              <input
+                type="number"
+                placeholder="0"
+                value={advancedFilters.areaMin}
+                onChange={(e) => setAdvancedFilters((f) => ({ ...f, areaMin: e.target.value }))}
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label>Max Area (sqft)</label>
+              <input
+                type="number"
+                placeholder="Any"
+                value={advancedFilters.areaMax}
+                onChange={(e) => setAdvancedFilters((f) => ({ ...f, areaMax: e.target.value }))}
+              />
+            </div>
+          </div>
+
+          {activeTeamMembers.length > 0 && (
+            <div>
+              <label>Listed by Agent</label>
+              <select
+                value={advancedFilters.agentId}
+                onChange={(e) => setAdvancedFilters((f) => ({ ...f, agentId: e.target.value }))}
+              >
+                <option value="">All agents</option>
+                {activeTeamMembers.map((m) => (
+                  <option key={m.id} value={m.id}>{m.fullName}</option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+      </Drawer>
+
+      {/* Concept Fixes to Make Drawer */}
+      <Drawer
+        open={pendingOpen}
+        onClose={() => setPendingOpen(false)}
+        title={`${pendingCount} ${pendingCount === 1 ? 'fix' : 'fixes'} to make`}
+        subtitle="Listings that need something before they can perform at their best."
+        width={460}
+      >
+        {pendingList.length === 0 ? (
+          <p className="muted" style={{ padding: '20px 0', textAlign: 'center' }}>
+            Nothing needs attention right now. All properties are fully compliant.
+          </p>
+        ) : (
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 12 }}>
+            {pendingList.map(({ l, actions }) => (
+              <li key={l.id} className="card" style={{ padding: 14 }}>
+                <p style={{ margin: 0, fontWeight: 700, fontSize: 14 }}>{l.title || 'Untitled Property'}</p>
+                <p className="faint" style={{ margin: '2px 0 10px', fontSize: 12 }}>
+                  {l.listingRef || l.id} · {l.listedBy?.fullName || l.agent || 'Agent'}
+                </p>
+                <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 8 }}>
+                  {actions.map((a) => (
+                    <li key={a.key} className="row" style={{ justifyContent: 'space-between', gap: 8, fontSize: 13 }}>
+                      <span className="row" style={{ gap: 6 }}>
+                        <AlertTriangle size={15} style={{ color: 'var(--cmp-accent)', flexShrink: 0 }} />
+                        <span>{a.label}</span>
+                      </span>
+                      {a.kind === 'verify' ? (
+                        <button
+                          type="button"
+                          className="btn btn-outline btn-sm"
+                          onClick={() => {
+                            setPendingOpen(false);
+                            runListingAction(l.id, () => cmpConnectApi.requestVerification(l.id, authToken), 'Verification requested.');
+                          }}
+                        >
+                          Request
+                        </button>
+                      ) : (
+                        <NavLink
+                          to={`/properties/${l.id}/edit`}
+                          className="btn btn-outline btn-sm"
+                          onClick={() => setPendingOpen(false)}
+                        >
+                          Fix
+                        </NavLink>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Drawer>
+
+      {/* Concept Choose Columns Drawer */}
+      <Drawer
+        open={customizeOpen}
+        onClose={() => setCustomizeOpen(false)}
+        title="Customize columns"
+        subtitle="Choose and order the columns shown in your table view."
+        width={380}
+        footer={
+          <>
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={() => {
+                setVisibleColumns(['property', 'agent', 'purpose', 'propertyType', 'bedrooms', 'area', 'status', 'exposure', 'price', 'quality', 'lastUpdated']);
+              }}
+            >
+              Reset
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => setCustomizeOpen(false)}
+            >
+              Save &amp; Apply
+            </button>
+          </>
+        }
+      >
+        <p className="faint" style={{ margin: '0 0 10px', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+          Available columns
+        </p>
+        <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 8 }}>
+          {[
+            { id: 'property', label: 'Property details (Title & Community)' },
+            { id: 'agent', label: 'Responsible Agent & BRN' },
+            { id: 'purpose', label: 'Offering / Purpose (Sale/Rent)' },
+            { id: 'propertyType', label: 'Property Type' },
+            { id: 'bedrooms', label: 'Bedrooms' },
+            { id: 'area', label: 'Built-up Area' },
+            { id: 'status', label: 'Status' },
+            { id: 'exposure', label: 'Exposure Tier' },
+            { id: 'price', label: 'Price (AED)' },
+            { id: 'quality', label: 'Quality Score' },
+            { id: 'lastUpdated', label: 'Last Updated' }
+          ].map((col) => {
+            const isVisible = visibleColumns.includes(col.id);
+            return (
+              <li
+                key={col.id}
+                className="card row"
+                style={{
+                  gap: 10,
+                  padding: '10px 12px',
+                  background: isVisible ? 'var(--cmp-surface)' : 'var(--cmp-surface-sunken)',
+                  cursor: 'pointer'
+                }}
+                onClick={() => {
+                  if (isVisible) {
+                    if (visibleColumns.length > 2) {
+                      setVisibleColumns(visibleColumns.filter((c) => c !== col.id));
+                    }
+                  } else {
+                    setVisibleColumns([...visibleColumns, col.id]);
+                  }
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={isVisible}
+                  onChange={() => {}}
+                  style={{ width: 18, height: 18, accentColor: 'var(--cmp-brand)' }}
+                />
+                <span style={{ flex: 1, fontSize: 13.5, fontWeight: isVisible ? 600 : 400 }}>
+                  {col.label}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      </Drawer>
     </div>
   );
 }

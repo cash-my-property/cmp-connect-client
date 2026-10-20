@@ -89,10 +89,27 @@ export default function DashboardPage() {
     ? homeData.topListings
     : mockListings.slice(0, 4);
 
+  const [newDue, setNewDue] = useState(new Date().toISOString().slice(0, 10));
+
+  const formatPriceCompact = (amount) => {
+    if (!amount && amount !== 0) return 'AED —';
+    const num = Number(amount);
+    if (isNaN(num)) return `AED ${amount}`;
+    if (num >= 1_000_000) {
+      const formatted = (num / 1_000_000).toFixed(1).replace(/\.0$/, '');
+      return `AED ${formatted}M`;
+    }
+    if (num >= 1_000) {
+      const formatted = (num / 1_000).toFixed(0);
+      return `AED ${formatted}K`;
+    }
+    return `AED ${num.toLocaleString('en-AE')}`;
+  };
+
   const handleFollowUpSubmit = (e) => {
     e.preventDefault();
     if (newFollowUpText.trim()) {
-      addFollowUp(newFollowUpText.trim());
+      addFollowUp(newFollowUpText.trim(), newDue);
       setNewFollowUpText('');
     }
   };
@@ -103,32 +120,68 @@ export default function DashboardPage() {
     if (item.link.kind === 'listing') return `/properties/${item.link.id}/edit`;
     if (item.link.kind === 'member') return `/team/members`;
     if (item.link.kind === 'profile') return `/account`;
+    if (item.href) return item.href;
     return '/properties';
   };
 
   const resolveNeedsYouActionLabel = (item) => {
-    if (item.type === 'APPROVE_LISTING') return 'Review & Approve';
-    if (item.type === 'FIX_REJECTED_LISTING') return 'Fix & Resubmit';
-    if (item.type === 'LISTING_ON_HOLD') return 'View Notice';
-    if (item.type === 'PUBLISH_AGAIN') return 'Publish Again';
-    if (item.type === 'EXPIRING_SOON') return 'Extend / Refresh';
-    if (item.type === 'FINISH_DRAFT') return 'Continue Draft';
-    if (item.type === 'VERIFY_MY_BRN') return 'Verify BRN';
-    if (item.type === 'RESEND_INVITE') return 'Resend Invite';
-    if (item.type === 'FIX_MEMBER_BRN') return 'Fix Licence';
-    return 'View Details';
+    if (item.action) return item.action;
+    if (item.type === 'APPROVE_LISTING') return 'Review';
+    if (item.type === 'FIX_REJECTED_LISTING') return 'Fix';
+    if (item.type === 'LISTING_ON_HOLD') return 'Review';
+    if (item.type === 'PUBLISH_AGAIN') return 'Publish';
+    if (item.type === 'EXPIRING_SOON') return 'Review';
+    if (item.type === 'FINISH_DRAFT') return 'Edit';
+    if (item.type === 'VERIFY_MY_BRN') return 'Update';
+    if (item.type === 'RESEND_INVITE') return 'Resend';
+    if (item.type === 'FIX_MEMBER_BRN') return 'Update';
+    return 'Open';
   };
 
+  const resolveSeverityInfo = (severity) => {
+    const s = String(severity || 'info').toLowerCase();
+    if (s === 'urgent' || s === 'now') {
+      return { label: 'Now', color: 'var(--cmp-danger)', bg: 'color-mix(in srgb, var(--cmp-danger) 12%, transparent)' };
+    }
+    if (s === 'soon') {
+      return { label: 'Soon', color: 'var(--cmp-warning)', bg: 'color-mix(in srgb, var(--cmp-warning) 12%, transparent)' };
+    }
+    return { label: 'Today', color: 'var(--cmp-brand)', bg: 'color-mix(in srgb, var(--cmp-brand) 12%, transparent)' };
+  };
+
+  // User display name
+  const userFullName = account?.fullName || agency?.currentUser?.name || 'Layla';
+  const userFirstName = userFullName.split(' ')[0];
+
+  // Enquiries 30d
+  const enquiries30d = homeData?.leads30d ?? 34;
+  const enquiriesPrev30d = homeData?.leadsPrev30d ?? 28;
+
+  // Credits info
+  const creditsBalance = homeData?.credits?.balance ?? (agency?.credits ?? 850);
+  const creditsDaysLeft = homeData?.credits?.daysLeft ?? 42;
+
+  // Setup items
+  const setupItems = setupProgress?.steps || [
+    { done: true, label: 'Create your agency account', href: '/account' },
+    { done: true, label: 'Add your brand watermark', href: '/properties/brand-kit' },
+    { done: true, label: 'Turn on two-step verification', href: '/account/security' },
+    { done: (teamStats?.active ?? 6) >= 5, label: 'Invite your whole team', href: '/team/members' },
+    { done: (stats?.live ?? 4) >= 1, label: 'Boost your best property', href: '/properties' }
+  ];
+
+  const activeFollowUps = mockFollowUps.filter((f) => !f.done);
+
   return (
-    <div>
+    <>
       {/* Security Banner */}
       <div
         role="note"
         className="row"
         style={{
-          gap: '12px',
+          gap: 12,
           padding: '12px 18px',
-          marginBottom: '20px',
+          marginBottom: 20,
           borderRadius: 'var(--cmp-radius-lg)',
           background: 'var(--cmp-accent-subtle)',
           border: '1px solid var(--cmp-accent-border)',
@@ -144,38 +197,41 @@ export default function DashboardPage() {
         </span>
       </div>
 
-      {/* Greeting & Quick Actions */}
+      {/* Greeting Header */}
       <div
         className="row"
         style={{
           justifyContent: 'space-between',
-          gap: '16px',
+          gap: 16,
           flexWrap: 'wrap',
-          marginBottom: '22px'
+          marginBottom: 20
         }}
       >
         <div>
-          <h1 style={{ fontSize: '26px', margin: 0, letterSpacing: '-0.02em' }}>
-            {timeGreeting}, {agency.currentUser.name ? agency.currentUser.name.split(' ')[0] : 'User'}
+          <h1 style={{ fontSize: 26, letterSpacing: '-0.02em', margin: 0 }}>
+            {timeGreeting}, {userFirstName}
           </h1>
           <p className="muted" style={{ margin: '4px 0 0', fontSize: '13.5px' }}>
-            {todayFormatted} · {needsYouList.length} {needsYouList.length === 1 ? 'thing needs' : 'things need'} your attention today
+            {todayFormatted} · {needsYouList.length ? `${needsYouList.length} ${needsYouList.length === 1 ? 'thing needs' : 'things need'} you` : 'Nothing urgent'}
           </p>
         </div>
-
-        <div className="row" style={{ gap: '8px', flexWrap: 'wrap' }}>
+        <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+          <NavLink to="/clients/regular" className="btn btn-outline btn-sm">
+            <Users size={16} />
+            <span>Add contact</span>
+          </NavLink>
           <NavLink to="/properties/new" className="btn btn-primary btn-sm">
-            <Plus size={15} />
-            <span>List new property</span>
+            <Plus size={16} />
+            <span>Add property</span>
           </NavLink>
         </div>
       </div>
 
-      {/* Setup Progress Card */}
-      {!setupHidden && (
-        <section className="card setup-card" style={{ marginBottom: '22px' }}>
-          <div className="row" style={{ gap: '18px', flexWrap: 'wrap' }}>
-            {/* SVG Circular Progress Ring */}
+      {/* Setup Card */}
+      {!setupHidden && setupDone < setupTotal && (
+        <section className="card setup-card">
+          <div className="row" style={{ gap: 16, flexWrap: 'wrap' }}>
+            {/* SVG Circular Ring */}
             <span
               role="img"
               aria-label={`${setupPct}%`}
@@ -183,8 +239,8 @@ export default function DashboardPage() {
                 position: 'relative',
                 display: 'inline-grid',
                 placeItems: 'center',
-                width: '64px',
-                height: '64px',
+                width: 64,
+                height: 64,
                 flexShrink: 0
               }}
             >
@@ -201,18 +257,17 @@ export default function DashboardPage() {
                   strokeDasharray={`${(setupPct / 100) * 179.07} 179.07`}
                 />
               </svg>
-              <span style={{ position: 'absolute', fontSize: '14px', fontWeight: 800 }}>
+              <span style={{ position: 'absolute', fontSize: 14, fontWeight: 800 }}>
                 {setupDone}/{setupTotal}
               </span>
             </span>
 
-            <div style={{ flex: '1 1 220px' }}>
-              <h2 style={{ fontSize: '17px', margin: 0 }}>Finish setting up CMP Connect</h2>
-              <p className="muted" style={{ margin: '3px 0 0', fontSize: '13.5px' }}>
-                Essential compliance and branding steps to unlock instant approvals and buyer trust.
+            <div style={{ flex: 1, minWidth: 220 }}>
+              <h2 style={{ fontSize: 17, margin: 0 }}>Finish setting up CMP Connect</h2>
+              <p className="muted" style={{ margin: '2px 0 0', fontSize: 14 }}>
+                A few steps that make listings safer, faster to manage and easier to find.
               </p>
             </div>
-
             <button
               type="button"
               className="btn btn-ghost btn-sm"
@@ -222,246 +277,126 @@ export default function DashboardPage() {
             </button>
           </div>
 
-          <ul className="setup-list" style={{ marginTop: '16px' }}>
-            {setupProgress?.steps ? (
-              setupProgress.steps.map((st) => {
-                const targetLink =
-                  st.key === 'logo' || st.key === 'account'
-                    ? '/account'
-                    : st.key === 'watermark'
-                    ? '/properties/brand-kit'
-                    : st.key === 'team' || st.key === 'brn'
-                    ? '/team/members'
-                    : '/properties/new';
-
-                return (
-                  <li key={st.key}>
-                    <NavLink to={targetLink} data-done={st.done ? 'true' : undefined}>
-                      <span className="setup-check">{st.done && <Check size={13} />}</span>
-                      <span>{st.label}</span>
-                    </NavLink>
-                  </li>
-                );
-              })
-            ) : (
-              <>
-                <li>
-                  <NavLink to="/account" data-done="true">
-                    <span className="setup-check"><Check size={13} /></span>
-                    <span>Create your agency account</span>
-                  </NavLink>
-                </li>
-                <li>
-                  <NavLink to="/properties/brand-kit" data-done="true">
-                    <span className="setup-check"><Check size={13} /></span>
-                    <span>Add brand photo watermark</span>
-                  </NavLink>
-                </li>
-                <li>
-                  <NavLink to="/team/members" data-done="true">
-                    <span className="setup-check"><Check size={13} /></span>
-                    <span>Invite your whole team</span>
-                  </NavLink>
-                </li>
-                <li>
-                  <NavLink to="/properties/new">
-                    <span className="setup-check"></span>
-                    <span>Add your first property</span>
-                  </NavLink>
-                </li>
-              </>
-            )}
+          <ul className="setup-list">
+            {setupItems.map((s) => (
+              <li key={s.label}>
+                <NavLink to={s.href || '/account'} data-done={s.done ? 'true' : undefined}>
+                  <span className="setup-check" aria-hidden>
+                    {s.done ? <Check size={14} /> : null}
+                  </span>
+                  <span>{s.label}</span>
+                </NavLink>
+              </li>
+            ))}
           </ul>
         </section>
       )}
 
-      {/* 4 KPI Cards */}
-      <div className="stat-grid" style={{ marginBottom: '22px' }}>
-        {/* Live Properties */}
-        <NavLink className="card" to="/properties" style={{ display: 'flex', gap: '14px', padding: '16px' }}>
-          <span
-            style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '12px',
-              display: 'grid',
-              placeItems: 'center',
-              background: 'var(--cmp-brand-subtle)',
-              color: 'var(--cmp-brand)',
-              flexShrink: 0
-            }}
-          >
-            <Building size={20} />
+      {/* 4 KPI Grid */}
+      <div className="kpi-grid">
+        <NavLink to="/properties" className="card kpi-tile">
+          <span className="kpi-icon">
+            <Building size={18} />
           </span>
-          <span style={{ display: 'grid', gap: '2px' }}>
-            <span className="muted" style={{ fontSize: '12.5px', fontWeight: 600 }}>Live properties</span>
-            <span style={{ fontSize: '26px', fontWeight: 800, color: 'var(--cmp-text)' }}>{liveListingsCount}</span>
-            <span className="faint" style={{ fontSize: '12px' }}>
-              {isLiveData && stats
-                ? `${totalListingsCount} in portfolio (${stats.pendingApproval} in review)`
-                : `${mockListings.length} in your portfolio`}
+          <span style={{ display: 'grid', gap: 2 }}>
+            <span className="muted" style={{ fontSize: 13, fontWeight: 600 }}>Live properties</span>
+            <span style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--cmp-text)' }}>
+              {liveListingsCount}
+            </span>
+            <span className="faint" style={{ fontSize: 12 }}>
+              {totalListingsCount} in your portfolio
             </span>
           </span>
         </NavLink>
 
-        {/* Team Members */}
-        <NavLink className="card" to="/team/members" style={{ display: 'flex', gap: '14px', padding: '16px' }}>
-          <span
-            style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '12px',
-              display: 'grid',
-              placeItems: 'center',
-              background: 'var(--cmp-brand-subtle)',
-              color: 'var(--cmp-brand)',
-              flexShrink: 0
-            }}
-          >
-            <Users size={20} />
+        <NavLink to="/growth/lead-insights" className="card kpi-tile">
+          <span className="kpi-icon">
+            <Phone size={18} />
           </span>
-          <span style={{ display: 'grid', gap: '2px' }}>
-            <span className="muted" style={{ fontSize: '12.5px', fontWeight: 600 }}>Team Members</span>
-            <span style={{ fontSize: '26px', fontWeight: 800, color: 'var(--cmp-text)' }}>
-              {isLiveData && teamStats ? teamStats.active : 6}
+          <span style={{ display: 'grid', gap: 2 }}>
+            <span className="muted" style={{ fontSize: 13, fontWeight: 600 }}>Enquiries, 30 days</span>
+            <span style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--cmp-text)' }}>
+              {enquiries30d}
             </span>
-            <span className="faint" style={{ fontSize: '12px' }}>
-              {isLiveData && teamStats
-                ? `${teamStats.invited} invited · ${teamStats.brnPending} pending BRN`
-                : 'Active verified brokers'}
+            <span style={{ fontSize: 12, fontWeight: 700, color: enquiries30d >= enquiriesPrev30d ? 'var(--cmp-success)' : 'var(--cmp-danger)' }}>
+              {enquiries30d >= enquiriesPrev30d ? '▲' : '▼'} {enquiriesPrev30d ? Math.round(Math.abs((enquiries30d - enquiriesPrev30d) / enquiriesPrev30d) * 100) : 12}% vs last 30 days
             </span>
           </span>
         </NavLink>
 
-        {/* Pending Approval / Fixes */}
-        <NavLink className="card" to="/properties?status=PENDING_APPROVAL" style={{ display: 'flex', gap: '14px', padding: '16px' }}>
-          <span
-            style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '12px',
-              display: 'grid',
-              placeItems: 'center',
-              background: 'rgba(180, 116, 12, 0.12)',
-              color: 'var(--cmp-warning)',
-              flexShrink: 0
-            }}
-          >
-            <Clock size={20} />
+        <NavLink to="/clients/pipeline" className="card kpi-tile">
+          <span className="kpi-icon">
+            <Users size={18} />
           </span>
-          <span style={{ display: 'grid', gap: '2px' }}>
-            <span className="muted" style={{ fontSize: '12.5px', fontWeight: 600 }}>In Review / Drafts</span>
-            <span style={{ fontSize: '26px', fontWeight: 800, color: 'var(--cmp-text)' }}>
-              {isLiveData && stats ? stats.pendingApproval + stats.drafts : 2}
+          <span style={{ display: 'grid', gap: 2 }}>
+            <span className="muted" style={{ fontSize: 13, fontWeight: 600 }}>Qualified clients</span>
+            <span style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--cmp-text)' }}>
+              {qualifiedClientsCount}
             </span>
-            <span className="faint" style={{ fontSize: '12px' }}>
-              {isLiveData && stats && stats.expiringSoon > 0
-                ? `${stats.expiringSoon} listings expiring soon`
-                : 'Waiting compliance / edits'}
+            <span className="faint" style={{ fontSize: 12 }}>
+              {mockClients.filter((c) => c.stage === 'New').length || 2} new enquiries waiting
             </span>
           </span>
         </NavLink>
 
-        {/* Quality Score & Status */}
-        <NavLink className="card" to="/properties/brand-kit" style={{ display: 'flex', gap: '14px', padding: '16px' }}>
-          <span
-            style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '12px',
-              display: 'grid',
-              placeItems: 'center',
-              background: 'var(--cmp-accent-subtle)',
-              color: 'var(--cmp-accent)',
-              flexShrink: 0
-            }}
-          >
-            <Sparkles size={20} />
+        <NavLink to="/wallet/credits" className="card kpi-tile">
+          <span className="kpi-icon">
+            <Coins size={18} />
           </span>
-          <span style={{ display: 'grid', gap: '2px' }}>
-            <span className="muted" style={{ fontSize: '12.5px', fontWeight: 600 }}>Brand & Watermark</span>
-            <span style={{ fontSize: '26px', fontWeight: 800, color: 'var(--cmp-text)' }}>
-              Active
+          <span style={{ display: 'grid', gap: 2 }}>
+            <span className="muted" style={{ fontSize: 13, fontWeight: 600 }}>Credits</span>
+            <span style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--cmp-text)' }}>
+              {Number(creditsBalance).toLocaleString('en-AE')}
             </span>
-            <span className="faint" style={{ fontSize: '12px' }}>
-              Automatic listing watermark
+            <span className="faint" style={{ fontSize: 12 }}>
+              Expire in {creditsDaysLeft} days
             </span>
           </span>
         </NavLink>
       </div>
 
-      {/* Main Grid: Needs You + Follow-ups */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.6fr) minmax(320px, 1fr)', gap: '18px', alignItems: 'start' }}>
-        {/* Needs You Feed */}
+      {/* Today Grid: Needs You + My Follow-ups */}
+      <div className="today-grid">
+        {/* Needs You Card */}
         <section className="card" style={{ padding: 0 }}>
-          <div className="row" style={{ justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--cmp-border)' }}>
-            <div className="row" style={{ gap: '10px' }}>
-              <h2 style={{ fontSize: '16.5px', margin: 0 }}>Needs you</h2>
-              <span className="count-badge">{needsYouList.length}</span>
-            </div>
+          <div className="section-head">
+            <h2>Needs you</h2>
+            <span className="count-badge">{needsYouList.length}</span>
           </div>
 
           {isLoading && !homeData ? (
-            <div style={{ padding: '36px 20px', textAlign: 'center' }} className="muted">
-              <Loader2 size={24} className="spin" style={{ color: 'var(--cmp-brand)', margin: '0 auto 8px' }} />
-              <p style={{ margin: 0, fontSize: '13px' }}>Loading action items...</p>
+            <div style={{ padding: '24px 20px', textAlign: 'center' }} className="muted">
+              <Loader2 size={22} className="spin" style={{ color: 'var(--cmp-brand)', margin: '0 auto 8px' }} />
+              <p style={{ margin: 0, fontSize: 13 }}>Getting your day ready…</p>
             </div>
           ) : needsYouList.length === 0 ? (
-            <div style={{ padding: '36px 20px', textAlign: 'center' }} className="muted">
-              Nothing needs your attention right now. All listings and team items are up to date.
-            </div>
+            <p className="muted" style={{ padding: '0 20px 20px' }}>You’re all caught up.</p>
           ) : (
-            <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-              {needsYouList.slice(0, 7).map((item, idx) => {
-                const isNow = item.severity === 'NOW' || item.severity === 'Now';
-                const isSoon = item.severity === 'SOON' || item.severity === 'Soon';
-
+            <ul className="priority-list">
+              {needsYouList.slice(0, 12).map((item, idx) => {
+                const sev = resolveSeverityInfo(item.severity);
                 return (
-                  <li
-                    key={item.id || idx}
-                    className="row"
-                    style={{
-                      gap: '12px',
-                      padding: '14px 20px',
-                      borderBottom: '1px solid var(--cmp-border)'
-                    }}
-                  >
+                  <li key={item.id || idx}>
                     <span
-                      style={{
-                        width: '34px',
-                        height: '34px',
-                        borderRadius: '10px',
-                        display: 'grid',
-                        placeItems: 'center',
-                        flexShrink: 0,
-                        color: isNow ? 'var(--cmp-danger)' : isSoon ? 'var(--cmp-warning)' : 'var(--cmp-brand)',
-                        background: isNow ? 'rgba(179, 38, 30, 0.12)' : isSoon ? 'rgba(180, 116, 12, 0.12)' : 'var(--cmp-brand-subtle)'
-                      }}
+                      className="priority-icon"
+                      style={{ color: sev.color, background: sev.bg }}
                     >
-                      <AlertTriangle size={16} />
+                      <AlertTriangle size={17} />
                     </span>
 
                     <span style={{ flex: 1, minWidth: 0 }}>
-                      <span style={{ display: 'block', fontWeight: 600, fontSize: '13.5px' }}>
-                        {item.text || item.title}
+                      <span style={{ display: 'block', fontWeight: 600, fontSize: 14 }}>
+                        {item.title || item.text}
                       </span>
                       {item.detail && (
-                        <span className="muted" style={{ display: 'block', fontSize: '12.5px', marginTop: '2px' }}>
+                        <span className="muted" style={{ display: 'block', fontSize: 13 }}>
                           {item.detail}
                         </span>
                       )}
                     </span>
 
-                    <span
-                      style={{
-                        fontSize: '11px',
-                        fontWeight: 800,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.06em',
-                        color: isNow ? 'var(--cmp-danger)' : isSoon ? 'var(--cmp-warning)' : 'var(--cmp-brand)'
-                      }}
-                    >
-                      {item.severity}
+                    <span className="severity" style={{ color: sev.color }}>
+                      {sev.label}
                     </span>
 
                     <NavLink to={resolveNeedsYouUrl(item)} className="btn btn-outline btn-sm">
@@ -472,185 +407,150 @@ export default function DashboardPage() {
               })}
             </ul>
           )}
+          {needsYouList.length > 12 && (
+            <p className="faint" style={{ padding: '0 20px 16px', margin: 0, fontSize: 13 }}>
+              And {needsYouList.length - 12} more.
+            </p>
+          )}
         </section>
 
         {/* My Follow-ups Card */}
-        <div style={{ display: 'grid', gap: '18px' }}>
+        <div style={{ display: 'grid', gap: 16, alignContent: 'start' }}>
           <section className="card" style={{ padding: 0 }}>
-            <div className="row" style={{ justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--cmp-border)' }}>
-              <div className="row" style={{ gap: '10px' }}>
-                <h2 style={{ fontSize: '16.5px', margin: 0 }}>My follow-ups</h2>
-                <span className="count-badge">
-                  {mockFollowUps.filter((f) => !f.done).length}
-                </span>
-              </div>
+            <div className="section-head">
+              <h2>My follow-ups</h2>
+              <span className="count-badge">{activeFollowUps.length}</span>
             </div>
 
-            {/* Quick Add Follow-up Form */}
-            <form onSubmit={handleFollowUpSubmit} style={{ display: 'flex', gap: '8px', padding: '14px 18px 10px' }}>
+            <form
+              className="row"
+              style={{ gap: 6, padding: '0 16px 12px' }}
+              onSubmit={handleFollowUpSubmit}
+            >
+              <label htmlFor="task-title" className="visually-hidden">New follow-up</label>
               <input
-                placeholder="Add a follow-up task…"
+                id="task-title"
                 value={newFollowUpText}
                 onChange={(e) => setNewFollowUpText(e.target.value)}
-                style={{ height: '36px', fontSize: '13px' }}
+                placeholder="Add a follow-up…"
+                style={{ height: 38 }}
+              />
+              <label htmlFor="task-due" className="visually-hidden">Due date</label>
+              <input
+                id="task-due"
+                type="date"
+                value={newDue}
+                onChange={(e) => setNewDue(e.target.value)}
+                style={{ height: 38, width: 140 }}
               />
               <button
                 type="submit"
                 className="btn btn-primary btn-sm"
+                aria-label="Add follow-up"
                 disabled={!newFollowUpText.trim()}
               >
-                <Plus size={15} />
+                <Plus size={16} />
               </button>
             </form>
 
-            {mockFollowUps.length === 0 ? (
-              <div style={{ padding: '24px 20px', textAlign: 'center', fontSize: '13px' }} className="muted">
-                No follow-ups scheduled.
-              </div>
-            ) : (
-              <ul style={{ listStyle: 'none', margin: 0, padding: '4px 10px 12px' }}>
-                {mockFollowUps.map((task) => (
-                  <li
-                    key={task.id}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'flex-start',
-                      gap: '10px',
-                      padding: '8px 10px',
-                      borderRadius: '8px',
-                      transition: 'background var(--cmp-duration-fast) var(--cmp-ease)'
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={task.done}
-                      onChange={() => toggleFollowUp(task.id)}
+            <ul style={{ listStyle: 'none', margin: 0, padding: '0 8px 10px' }}>
+              {mockFollowUps.map((t) => (
+                <li key={t.id} className="task-row">
+                  <input
+                    type="checkbox"
+                    checked={t.done}
+                    aria-label={`Mark done: ${t.text}`}
+                    onChange={() => toggleFollowUp(t.id)}
+                  />
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span
                       style={{
-                        width: '18px',
-                        height: '18px',
-                        marginTop: '3px',
-                        accentColor: 'var(--cmp-brand)',
-                        cursor: 'pointer'
+                        display: 'block',
+                        fontSize: 14,
+                        textDecoration: t.done ? 'line-through' : 'none',
+                        color: t.done ? 'var(--cmp-text-faint)' : 'var(--cmp-text)'
                       }}
-                    />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <span
-                        style={{
-                          display: 'block',
-                          fontSize: '13.5px',
-                          textDecoration: task.done ? 'line-through' : 'none',
-                          color: task.done ? 'var(--cmp-text-faint)' : 'var(--cmp-text)'
-                        }}
-                      >
-                        {task.text}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: '11.5px',
-                          fontWeight: 600,
-                          color: task.status.includes('Overdue') ? 'var(--cmp-danger)' : 'var(--cmp-text-faint)'
-                        }}
-                      >
-                        {task.status} · {task.agent}
-                      </span>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
+                    >
+                      {t.text}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 12,
+                        color: t.status?.includes('Overdue') ? 'var(--cmp-danger)' : 'var(--cmp-text-faint)',
+                        fontWeight: t.status?.includes('Overdue') ? 700 : 500
+                      }}
+                    >
+                      {t.status} · {t.agent}
+                    </span>
+                  </span>
+                </li>
+              ))}
+              {mockFollowUps.length === 0 && (
+                <li className="muted" style={{ padding: 10, fontSize: 14 }}>
+                  No follow-ups. Nice.
+                </li>
+              )}
+            </ul>
           </section>
         </div>
       </div>
 
-      {/* Best Performing Properties Showcase */}
-      <section style={{ marginTop: '28px' }}>
-        <div className="row" style={{ justifyContent: 'space-between', marginBottom: '14px' }}>
-          <h2 style={{ fontSize: '18px', margin: 0 }}>Best performing properties</h2>
+      {/* Best Performing Properties */}
+      <section style={{ marginTop: 24 }}>
+        <div className="row" style={{ justifyContent: 'space-between', marginBottom: 12 }}>
+          <h2 style={{ fontSize: 18, margin: 0 }}>Best performing properties</h2>
           <NavLink to="/properties" className="btn btn-ghost btn-sm">
-            <span>All properties</span>
-            <ArrowRight size={14} />
+            All properties
           </NavLink>
         </div>
 
-        {topProperties.length === 0 ? (
-          <div className="card" style={{ padding: '36px 20px', textAlign: 'center' }}>
-            <p style={{ margin: 0, fontWeight: 600, fontSize: '14px' }} className="muted">
-              No live properties recorded yet
-            </p>
-            <p className="faint" style={{ margin: '4px 0 0', fontSize: '12px' }}>
-              Once you add and publish listings, their compliance and performance ranking will appear here.
-            </p>
-          </div>
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '14px' }}>
-            {topProperties.map((prop, idx) => (
+        <div className="top-properties">
+          {topProperties.slice(0, 4).map((l, i) => {
+            const photoUrl = l.coverImageWatermarked || l.coverImage || l.image || l.photo;
+            const price = l.price;
+            const leads = l.leads30d ?? l.leads ?? 14;
+            const views = l.views30d ?? l.views ?? 1240;
+
+            return (
               <NavLink
-                key={prop.id}
-                to={`/properties/${prop.id}/edit`}
-                className="card"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  padding: '12px',
-                  position: 'relative'
-                }}
+                key={l.id}
+                to={`/properties/${l.id}/edit`}
+                className="card top-property"
               >
-                <span
-                  style={{
-                    position: 'absolute',
-                    top: '8px',
-                    left: '8px',
-                    width: '22px',
-                    height: '22px',
-                    borderRadius: '50%',
-                    background: 'var(--cmp-accent)',
-                    color: 'var(--cmp-text-on-accent)',
-                    fontSize: '12px',
-                    fontWeight: 800,
-                    display: 'grid',
-                    placeItems: 'center',
-                    zIndex: 2
-                  }}
-                >
-                  {idx + 1}
-                </span>
-
-                <img
-                  src={prop.coverImageWatermarked || prop.coverImage || prop.image || 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=300&q=70'}
-                  alt={prop.title}
-                  style={{
-                    width: '78px',
-                    height: '66px',
-                    borderRadius: '10px',
-                    objectFit: 'cover',
-                    flexShrink: 0
-                  }}
-                />
-
-                <div style={{ display: 'grid', gap: '3px', minWidth: 0, flex: 1 }}>
+                <span className="rank">{i + 1}</span>
+                {photoUrl ? (
+                  <img src={photoUrl} alt="" loading="lazy" />
+                ) : (
+                  <span className="img-fallback" />
+                )}
+                <span style={{ display: 'grid', gap: 2, minWidth: 0 }}>
                   <strong
                     style={{
-                      fontSize: '13.5px',
+                      fontSize: 14,
                       whiteSpace: 'nowrap',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis'
                     }}
                   >
-                    {prop.title || 'Untitled Property'}
+                    {l.title || 'Untitled Property'}
                   </strong>
-                  <span className="muted" style={{ fontSize: '12.5px' }}>
-                    {prop.location || prop.community}
+                  <span className="muted" style={{ fontSize: 13 }}>
+                    {l.location || l.community || 'Dubai'} · {formatPriceCompact(price)}
                   </span>
-                  <span style={{ fontSize: '12px', color: 'var(--cmp-brand)', fontWeight: 700 }}>
-                    Quality score: {prop.qualityScore || 0}/100
+                  <span style={{ fontSize: 13 }}>
+                    <strong>{leads}</strong> enquiries · <strong>{Number(views).toLocaleString('en-AE')}</strong> views
                   </span>
-                </div>
+                </span>
               </NavLink>
-            ))}
-          </div>
-        )}
+            );
+          })}
+        </div>
       </section>
-    </div>
+
+      {/* Footer Team info */}
+      <p className="faint" style={{ fontSize: 12, marginTop: 20 }}>
+        Agents on your team: {homeData?.teamAgents ? homeData.teamAgents.join(', ') : 'Layla, Karim Saleh, Arjun Mehta, Emma Clarke'}.
+      </p>
+    </>
   );
 }
