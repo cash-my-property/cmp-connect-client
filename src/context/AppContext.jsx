@@ -136,6 +136,7 @@ export function AppProvider({ children }) {
         if (acc) {
           setAccount(acc);
           setMustChangePassword(Boolean(acc.mustChangePassword));
+          setAuthTokenState((prev) => prev || 'cookie_session_active');
           setAgency((prev) => ({
             ...prev,
             name: acc.organization?.companyName || prev.name,
@@ -144,7 +145,7 @@ export function AppProvider({ children }) {
               ...prev.currentUser,
               name: acc.fullName || prev.currentUser.name,
               email: acc.email || prev.currentUser.email,
-              role: acc.role || prev.currentUser.role,
+              role: acc.role?.name || acc.role || prev.currentUser.role,
               initials: acc.fullName
                 ? acc.fullName.split(' ').map((n) => n[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
                 : prev.currentUser.initials
@@ -218,10 +219,11 @@ export function AppProvider({ children }) {
   }, [account?.id, isAuthLoading, dataMode]);
 
   const loginUser = ({ token, account: acc, mustChangePassword: mcp, rememberMe = false }) => {
+    const effectiveToken = token || (acc ? 'cookie_session_active' : null);
     if (token) {
       setAuthToken(token, rememberMe);
-      setAuthTokenState(token);
     }
+    setAuthTokenState(effectiveToken);
     setAccount(acc);
     setMustChangePassword(Boolean(mcp));
     if (acc) {
@@ -233,7 +235,7 @@ export function AppProvider({ children }) {
           ...prev.currentUser,
           name: acc.fullName || prev.currentUser.name,
           email: acc.email || prev.currentUser.email,
-          role: acc.role || prev.currentUser.role,
+          role: acc.role?.name || acc.role || prev.currentUser.role,
           initials: acc.fullName
             ? acc.fullName.split(' ').map((n) => n[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
             : prev.currentUser.initials
@@ -373,7 +375,7 @@ export function AppProvider({ children }) {
         isLiveData,
         isMockData,
         isAuthenticated,
-        authToken,
+        authToken: authToken || (account ? 'cookie_session_active' : null),
         account,
         mustChangePassword,
         isAuthLoading,

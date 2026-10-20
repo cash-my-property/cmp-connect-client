@@ -147,7 +147,7 @@ async function apiRequest(endpoint, options = {}) {
 
   // If token is provided explicitly (e.g. mobile or legacy), attach Bearer header
   const token = options.token || getAuthToken();
-  if (token && !headers['Authorization']) {
+  if (token && token !== 'cookie_session_active' && !headers['Authorization']) {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
