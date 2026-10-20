@@ -1,5 +1,6 @@
 import React from 'react';
-import { Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, Outlet, useLocation, NavLink } from 'react-router-dom';
+import { ShieldAlert } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 import DashboardPage from '../pages/home/DashboardPage';
@@ -57,6 +58,7 @@ import UploadPortalPage from '../pages/onboarding/UploadPortalPage';
 import CmpConnectLoginPage from '../pages/onboarding/CmpConnectLoginPage';
 import ChangePasswordPage from '../pages/onboarding/ChangePasswordPage';
 import AcceptInvitePage from '../pages/onboarding/AcceptInvitePage';
+import ResetPasswordPage from '../pages/onboarding/ResetPasswordPage';
 
 function ProtectedLayout() {
   const { isAuthenticated, mustChangePassword, isAuthLoading } = useApp();
@@ -76,6 +78,52 @@ function ProtectedLayout() {
 
   if (mustChangePassword) {
     return <Navigate to="/cmp-connect/change-password" replace />;
+  }
+
+  return <Outlet />;
+}
+
+function PermissionGuard({ required, label = 'this section' }) {
+  const { can, isMockData } = useApp();
+
+  if (isMockData) {
+    return <Outlet />;
+  }
+
+  const hasAccess = Array.isArray(required) ? can(...required) : can(required);
+
+  if (!hasAccess) {
+    return (
+      <div style={{ maxWidth: '640px', margin: '40px auto', padding: '32px 24px', textAlign: 'center' }}>
+        <div className="card" style={{ padding: '36px 28px', display: 'grid', placeItems: 'center', gap: '14px' }}>
+          <div
+            style={{
+              width: '56px',
+              height: '56px',
+              borderRadius: '50%',
+              background: 'var(--cmp-danger-subtle, rgba(220, 38, 38, 0.1))',
+              color: 'var(--cmp-danger)',
+              display: 'grid',
+              placeItems: 'center'
+            }}
+          >
+            <ShieldAlert size={28} />
+          </div>
+          <h2 style={{ margin: 0, fontSize: '20px', color: 'var(--cmp-text)' }}>Access Restricted</h2>
+          <p className="muted" style={{ margin: 0, fontSize: '14px', maxWidth: '420px', lineHeight: 1.5 }}>
+            You do not have permission to access {label}. If you require access, please contact your company administrator.
+          </p>
+          <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+            <NavLink to="/" className="btn btn-primary btn-sm">
+              Back to Dashboard
+            </NavLink>
+            <NavLink to="/properties" className="btn btn-outline btn-sm">
+              View Properties
+            </NavLink>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return <Outlet />;
@@ -120,6 +168,10 @@ export default function AppRoutes() {
       <Route path="/cmp-connect/accept-invite/:token" element={<AcceptInvitePage />} />
       <Route path="/accept-invite/:token" element={<AcceptInvitePage />} />
 
+      {/* Public Password Reset (Token Auth - Public) */}
+      <Route path="/cmp-connect/reset-password/:token" element={<ResetPasswordPage />} />
+      <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
+
       {/* Protected Internal Portal Hubs */}
       <Route element={<ProtectedLayout />}>
         {/* Home Hub */}
@@ -128,12 +180,16 @@ export default function AppRoutes() {
 
         {/* Properties Hub */}
         <Route path="/properties" element={<PortfolioPage />} />
-        <Route path="/properties/new" element={<AddPropertyPage />} />
-        <Route path="/properties/add" element={<AddPropertyPage />} />
+        <Route element={<PermissionGuard required="listings.create" label="Add New Property" />}>
+          <Route path="/properties/new" element={<AddPropertyPage />} />
+          <Route path="/properties/add" element={<AddPropertyPage />} />
+        </Route>
         <Route path="/properties/:id/edit" element={<EditPropertyPage />} />
         <Route path="/properties/edit" element={<EditPropertyPage />} />
         <Route path="/properties/compliance" element={<CompliancePage />} />
-        <Route path="/properties/brand-kit" element={<BrandKitPage />} />
+        <Route element={<PermissionGuard required="company.watermark" label="Company Brand Kit" />}>
+          <Route path="/properties/brand-kit" element={<BrandKitPage />} />
+        </Route>
         <Route path="/properties/archive" element={<ArchivePage />} />
 
         {/* Clients Hub */}
@@ -154,19 +210,25 @@ export default function AppRoutes() {
         <Route path="/growth/spotlighted" element={<SpotlightedPage />} />
 
         {/* Wallet Hub */}
-        <Route path="/wallet" element={<WalletPage />} />
-        <Route path="/wallet/activity" element={<CreditActivityPage />} />
-        <Route path="/wallet/refunds" element={<RefundsPage />} />
-        <Route path="/wallet/contract" element={<ContractPage />} />
-        <Route path="/wallet/invoices" element={<InvoicesPage />} />
+        <Route element={<PermissionGuard required="contracts.view" label="Wallet & Invoices" />}>
+          <Route path="/wallet" element={<WalletPage />} />
+          <Route path="/wallet/activity" element={<CreditActivityPage />} />
+          <Route path="/wallet/refunds" element={<RefundsPage />} />
+          <Route path="/wallet/contract" element={<ContractPage />} />
+          <Route path="/wallet/invoices" element={<InvoicesPage />} />
+        </Route>
 
         {/* Team Hub */}
-        <Route path="/team" element={<TeamPage />} />
-        <Route path="/team/members" element={<MembersPage />} />
-        <Route path="/team/members/:id" element={<MemberProfilePage />} />
-        <Route path="/team/agents/:id" element={<AgentSummaryPage />} />
-        <Route path="/team/summary" element={<AgentSummaryPage />} />
-        <Route path="/team/roles" element={<RolesPage />} />
+        <Route element={<PermissionGuard required="team.view" label="Team Directory" />}>
+          <Route path="/team" element={<TeamPage />} />
+          <Route path="/team/members" element={<MembersPage />} />
+          <Route path="/team/members/:id" element={<MemberProfilePage />} />
+          <Route path="/team/agents/:id" element={<AgentSummaryPage />} />
+          <Route path="/team/summary" element={<AgentSummaryPage />} />
+        </Route>
+        <Route element={<PermissionGuard required="roles.view" label="Roles & Access" />}>
+          <Route path="/team/roles" element={<RolesPage />} />
+        </Route>
 
         {/* Account Hub */}
         <Route path="/account" element={<AgencyProfilePage />} />

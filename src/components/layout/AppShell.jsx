@@ -7,6 +7,8 @@ import CommandPalette from './CommandPalette';
 import AskCmpDrawer from './AskCmpDrawer';
 import NotificationsDrawer from './NotificationsDrawer';
 
+import BrnComplianceBanner from './BrnComplianceBanner';
+
 export default function AppShell({ children }) {
   const { isAuthenticated } = useApp();
   const location = useLocation();
@@ -42,6 +44,7 @@ export default function AppShell({ children }) {
       <AppRail />
       <div className="portal-column">
         <HubBar />
+        <BrnComplianceBanner />
         <main className="portal-main">
           {children}
         </main>

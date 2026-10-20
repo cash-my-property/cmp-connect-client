@@ -38,22 +38,48 @@ function resolveApiUrl(path) {
   return `${base}${cleanPath}`;
 }
 
+const DEVICE_ID_KEY = 'cmpc_device_id';
 const AUTH_TOKEN_KEY = 'cmp_connect_auth_token';
 
+/**
+ * Returns or generates a unique persistent device ID for x-device-id header
+ */
+export function getDeviceId() {
+  try {
+    let id = localStorage.getItem(DEVICE_ID_KEY);
+    if (!id) {
+      if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+        id = crypto.randomUUID();
+      } else {
+        id = 'dev_' + Math.random().toString(36).substring(2, 12) + Date.now().toString(36);
+      }
+      localStorage.setItem(DEVICE_ID_KEY, id);
+    }
+    return id;
+  } catch {
+    return 'cmpc_device_default';
+  }
+}
+
+// Backward compatibility helpers for token storage (cookies are primary)
 export function getAuthToken() {
   try {
-    return sessionStorage.getItem(AUTH_TOKEN_KEY) || null;
+    return localStorage.getItem(AUTH_TOKEN_KEY) || sessionStorage.getItem(AUTH_TOKEN_KEY) || null;
   } catch {
     return null;
   }
 }
 
-export function setAuthToken(token) {
+export function setAuthToken(token, rememberMe = null) {
   try {
     if (token) {
-      sessionStorage.setItem(AUTH_TOKEN_KEY, token);
+      if (rememberMe) {
+        localStorage.setItem(AUTH_TOKEN_KEY, token);
+      } else {
+        sessionStorage.setItem(AUTH_TOKEN_KEY, token);
+      }
     } else {
-      sessionStorage.removeItem(AUTH_TOKEN_KEY);
+      clearAuthToken();
     }
   } catch (e) {
     console.error('[cmpConnectApi] Failed to set auth token:', e);
@@ -62,20 +88,64 @@ export function setAuthToken(token) {
 
 export function clearAuthToken() {
   try {
+    localStorage.removeItem(AUTH_TOKEN_KEY);
     sessionStorage.removeItem(AUTH_TOKEN_KEY);
   } catch (e) {
     console.error('[cmpConnectApi] Failed to clear auth token:', e);
   }
 }
 
+// Single in-flight token refresh promise (shared across concurrent requests)
+let activeRefreshPromise = null;
+
+async function executeTokenRefresh() {
+  if (activeRefreshPromise) {
+    return activeRefreshPromise;
+  }
+
+  activeRefreshPromise = (async () => {
+    try {
+      const url = resolveApiUrl('/api/cmpConnect/auth/refresh');
+      const res = await fetch(url, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-device-id': getDeviceId()
+        }
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        const err = new Error(data?.message || 'Session refresh failed');
+        err.status = res.status;
+        throw err;
+      }
+
+      const data = await res.json();
+      return data;
+    } finally {
+      activeRefreshPromise = null;
+    }
+  })();
+
+  return activeRefreshPromise;
+}
+
 /**
- * Generic request helper with robust error handling
+ * Generic request helper with credentials: 'include' (httpOnly cookies) and single in-flight 401 refresh
  */
 async function apiRequest(endpoint, options = {}) {
   const url = resolveApiUrl(endpoint);
   const headers = { ...options.headers };
 
-  // If token is provided or exists in storage, attach Bearer auth header
+  // Always send device ID for session tracking and new device alerts
+  const deviceId = getDeviceId();
+  if (deviceId && !headers['x-device-id']) {
+    headers['x-device-id'] = deviceId;
+  }
+
+  // If token is provided explicitly (e.g. mobile or legacy), attach Bearer header
   const token = options.token || getAuthToken();
   if (token && !headers['Authorization']) {
     headers['Authorization'] = `Bearer ${token}`;
@@ -87,8 +157,10 @@ async function apiRequest(endpoint, options = {}) {
   }
 
   try {
+    // Every call sends httpOnly cookies via credentials: 'include'
     const response = await fetch(url, {
       ...options,
+      credentials: 'include',
       headers
     });
 
@@ -101,17 +173,46 @@ async function apiRequest(endpoint, options = {}) {
     }
 
     if (!response.ok) {
-      // Backend error format: { "status": "error", "message": "..." } or rate limit: { "status": false, "message": "..." }
       const errorMsg = data?.message || data?.error || (typeof data === 'string' ? data : `HTTP ${response.status}`);
       const err = new Error(errorMsg);
       err.status = response.status;
       err.data = data;
+
+      // Handle 401: Auto-refresh once if not already retried and not an auth entry point
+      const isAuthPath =
+        endpoint.includes('/auth/login') ||
+        endpoint.includes('/auth/refresh') ||
+        endpoint.includes('/auth/forgot-password') ||
+        endpoint.includes('/auth/reset-password') ||
+        endpoint.includes('/auth/logout') ||
+        endpoint.includes('/auth/invite');
+
+      if (response.status === 401 && !isAuthPath && !options._retry) {
+        try {
+          await executeTokenRefresh();
+          // Retry the original request once
+          return await apiRequest(endpoint, { ...options, _retry: true });
+        } catch (refreshErr) {
+          clearAuthToken();
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent('cmp_connect_unauthorized', {
+                detail: { message: errorMsg || 'Your session has ended. Please log in again.' }
+              })
+            );
+          }
+          throw err;
+        }
+      }
+
       throw err;
     }
 
     return data;
   } catch (error) {
-    console.error(`[cmpConnectApi] Error on ${options.method || 'GET'} ${url}:`, error);
+    if (!options._silent && error.status !== 401) {
+      console.error(`[cmpConnectApi] Error on ${options.method || 'GET'} ${url}:`, error);
+    }
     throw error;
   }
 }
@@ -217,6 +318,120 @@ export const cmpConnectApi = {
   },
 
   /**
+   * Refresh session tokens (httpOnly cookies)
+   * POST /api/cmpConnect/auth/refresh
+   */
+  async refresh() {
+    return executeTokenRefresh();
+  },
+
+  /**
+   * Logout current session & clear cookies
+   * POST /api/cmpConnect/auth/logout
+   */
+  async logout() {
+    try {
+      return await apiRequest('/api/cmpConnect/auth/logout', {
+        method: 'POST',
+        _silent: true
+      });
+    } finally {
+      clearAuthToken();
+    }
+  },
+
+  /**
+   * Logout all devices / revoke all sessions
+   * POST /api/cmpConnect/auth/logout-all
+   */
+  async logoutAll() {
+    return apiRequest('/api/cmpConnect/auth/logout-all', {
+      method: 'POST'
+    });
+  },
+
+  /**
+   * List active sessions and devices
+   * GET /api/cmpConnect/auth/sessions
+   */
+  async listSessions() {
+    return apiRequest('/api/cmpConnect/auth/sessions', {
+      method: 'GET'
+    });
+  },
+
+  /**
+   * Revoke a specific session
+   * DELETE /api/cmpConnect/auth/sessions/:sessionId
+   */
+  async deleteSession(sessionId) {
+    return apiRequest(`/api/cmpConnect/auth/sessions/${sessionId}`, {
+      method: 'DELETE'
+    });
+  },
+
+  /**
+   * Forgot password request (always returns 200 with standard message)
+   * POST /api/cmpConnect/auth/forgot-password
+   */
+  async forgotPassword({ email }) {
+    return apiRequest('/api/cmpConnect/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({
+        email: email ? email.trim().toLowerCase() : ''
+      })
+    });
+  },
+
+  /**
+   * Verify reset password token on page load
+   * GET /api/cmpConnect/auth/reset-password/:token
+   */
+  async verifyResetToken(token) {
+    return apiRequest(`/api/cmpConnect/auth/reset-password/${encodeURIComponent(token)}`, {
+      method: 'GET'
+    });
+  },
+
+  /**
+   * Submit new password with reset token
+   * POST /api/cmpConnect/auth/reset-password
+   */
+  async resetPassword({ token, password }) {
+    return apiRequest('/api/cmpConnect/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({
+        token,
+        password
+      })
+    });
+  },
+
+  /**
+   * Team invite details (public verification)
+   * GET /api/cmpConnect/auth/invite/:token
+   */
+  async getInviteDetails(token) {
+    return apiRequest(`/api/cmpConnect/auth/invite/${encodeURIComponent(token)}`, {
+      method: 'GET'
+    });
+  },
+
+  /**
+   * Accept team invite and set initial password
+   * POST /api/cmpConnect/auth/accept-invite
+   */
+  async acceptInvite({ token, password }) {
+    return apiRequest('/api/cmpConnect/auth/accept-invite', {
+      method: 'POST',
+      body: JSON.stringify({
+        token,
+        password
+      })
+    });
+  },
+
+  /**
    * 9. CMP Connect Change Password (Mandatory on first login or user request)
    * POST /api/cmpConnect/auth/change-password
    */
@@ -235,10 +450,11 @@ export const cmpConnectApi = {
    * 10. CMP Connect Current Session
    * GET /api/cmpConnect/auth/me
    */
-  async getMe(token) {
+  async getMe(token, options = {}) {
     return apiRequest('/api/cmpConnect/auth/me', {
       method: 'GET',
-      token
+      token,
+      ...options
     });
   },
 

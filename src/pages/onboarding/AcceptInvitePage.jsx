@@ -83,11 +83,11 @@ export default function AcceptInvitePage() {
       setIsSubmitting(true);
       const res = await cmpConnectApi.acceptInvite({ token, password });
 
-      if (res?.data?.token) {
+      if (res?.data?.token || res?.data?.account) {
         // Automatically sign in the user
         loginUser({
-          token: res.data.token,
-          account: res.data.account,
+          token: res.data?.token || null,
+          account: res.data?.account,
           mustChangePassword: false
         });
         navigate('/', { replace: true });

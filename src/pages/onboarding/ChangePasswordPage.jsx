@@ -58,12 +58,11 @@ export default function ChangePasswordPage() {
       );
 
       const data = response?.data;
-      if (!data?.token) {
-        throw new Error(response?.message || 'Password update failed.');
+      if (data?.token) {
+        updateToken(data.token);
+      } else {
+        updateToken(null);
       }
-
-      // Replace the stored token (old token is revoked)
-      updateToken(data.token);
 
       // Navigate to dashboard
       navigate('/', { replace: true });

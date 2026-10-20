@@ -126,15 +126,11 @@ export function AppProvider({ children }) {
     }
   }, [dataMode, account]);
 
-  // Validate session on app mount
+  // Validate session on app mount (supports httpOnly cookies & hybrid tokens)
   useEffect(() => {
     const token = getAuthToken();
-    if (!token) {
-      setIsAuthLoading(false);
-      return;
-    }
 
-    cmpConnectApi.getMe(token)
+    cmpConnectApi.getMe(token, { _silent: true })
       .then((res) => {
         const acc = res?.data;
         if (acc) {
@@ -157,7 +153,7 @@ export function AppProvider({ children }) {
         }
       })
       .catch((err) => {
-        console.warn('[AppContext] Session expired or invalid:', err.message);
+        // Not logged in or session expired
         clearAuthToken();
         setAuthTokenState(null);
         setAccount(null);
@@ -168,9 +164,64 @@ export function AppProvider({ children }) {
       });
   }, []);
 
-  const loginUser = ({ token, account: acc, mustChangePassword: mcp }) => {
-    setAuthToken(token);
-    setAuthTokenState(token);
+  // Listen for global 401 Unauthorized events from apiRequest
+  useEffect(() => {
+    const handleUnauthorized = (e) => {
+      console.warn('[AppContext] Unauthorized 401 received:', e.detail?.message);
+      clearAuthToken();
+      setAuthTokenState(null);
+      setAccount(null);
+      setMustChangePassword(false);
+      try {
+        sessionStorage.setItem(
+          'cmp_connect_auth_notice',
+          e.detail?.message || 'Your session has expired. Please sign in again.'
+        );
+      } catch {}
+    };
+
+    window.addEventListener('cmp_connect_unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('cmp_connect_unauthorized', handleUnauthorized);
+  }, []);
+
+  // Multi-tab session synchronization on document visibility change
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (document.hidden || !account?.id || isAuthLoading || dataMode === 'mock') {
+        return;
+      }
+
+      try {
+        const res = await cmpConnectApi.getMe(undefined, { _silent: true });
+        const freshAcc = res?.data;
+        if (!freshAcc) {
+          // Session ended in another tab
+          logout();
+          return;
+        }
+
+        if (freshAcc.id !== account.id) {
+          // User switched accounts in another tab -> sync account and reload
+          setAccount(freshAcc);
+          setMustChangePassword(Boolean(freshAcc.mustChangePassword));
+          window.location.reload();
+        }
+      } catch (err) {
+        if (err.status === 401) {
+          logout();
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [account?.id, isAuthLoading, dataMode]);
+
+  const loginUser = ({ token, account: acc, mustChangePassword: mcp, rememberMe = false }) => {
+    if (token) {
+      setAuthToken(token, rememberMe);
+      setAuthTokenState(token);
+    }
     setAccount(acc);
     setMustChangePassword(Boolean(mcp));
     if (acc) {
@@ -192,22 +243,30 @@ export function AppProvider({ children }) {
   };
 
   const updateToken = (newToken) => {
-    setAuthToken(newToken);
-    setAuthTokenState(newToken);
+    if (newToken) {
+      setAuthToken(newToken);
+      setAuthTokenState(newToken);
+    }
     setMustChangePassword(false);
     if (account) {
       setAccount((prev) => (prev ? { ...prev, mustChangePassword: false } : prev));
     }
   };
 
-  const logout = () => {
-    clearAuthToken();
-    setAuthTokenState(null);
-    setAccount(null);
-    setMustChangePassword(false);
+  const logout = async () => {
+    try {
+      await cmpConnectApi.logout();
+    } catch (err) {
+      // Ignore network errors on logout
+    } finally {
+      clearAuthToken();
+      setAuthTokenState(null);
+      setAccount(null);
+      setMustChangePassword(false);
+    }
   };
 
-  const isAuthenticated = Boolean(authToken && account && !mustChangePassword) || dataMode === 'mock';
+  const isAuthenticated = Boolean(account && !mustChangePassword) || dataMode === 'mock';
 
   // Sync data attributes to HTML root element
   useEffect(() => {
