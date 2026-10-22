@@ -85,6 +85,62 @@ const TYPE_TABS = [
   { label: 'Company', value: 'COMPANY' }
 ];
 
+const ACTION_DESCRIPTIONS = {
+  CREATED: 'created the draft',
+  EDITED: 'edited the listing',
+  SUBMITTED: 'sent the listing for approval',
+  SUBMITTED_AND_APPROVED: 'published the listing',
+  APPROVED: 'approved the listing',
+  REJECTED: 'sent the listing back',
+  PUBLISHED: 'published the listing',
+  REPUBLISHED: 'published the expired listing again',
+  UNPUBLISHED: 'unpublished the listing',
+  REFRESHED: 'refreshed the listing',
+  ARCHIVED: 'archived the listing',
+  RESTORED: 'restored the listing as a draft',
+  DELETED: 'deleted the listing',
+  ASSIGNED: 'changed the agent',
+  EXPIRED: 'listing expired',
+  EDITED_BY_CMP: 'edited the listing',
+  HELD_BY_CMP: 'put the listing on hold',
+  RELEASED_BY_CMP: 'removed the hold',
+  DELETED_BY_CMP: 'deleted the listing',
+  RESTORED_BY_CMP: 'restored the listing',
+  VERIFIED_BY_CMP: 'verified the listing',
+  UNVERIFIED_BY_CMP: 'could not verify the listing',
+  MEMBER_INVITED: 'invited team member',
+  INVITE_RESENT: 'resent the invite',
+  INVITE_ACCEPTED: 'joined the team',
+  MEMBER_ROLE_CHANGED: 'changed member role',
+  MEMBER_DEACTIVATED: 'deactivated member',
+  MEMBER_REACTIVATED: 'reactivated member',
+  BRN_VERIFICATION_REQUESTED: 'asked CMP to verify BRN',
+  BRN_VERIFIED: 'verified the BRN',
+  BRN_REJECTED: 'rejected the BRN',
+  ROLE_CREATED: 'created role',
+  ROLE_UPDATED: 'changed role',
+  ROLE_DELETED: 'deleted role',
+  BRAND_KIT_UPDATED: 'updated brand kit',
+  MARKED_SOLD: 'marked the listing as closed',
+  CONTRACT_SUBMITTED: 'submitted the contract for the closed deal',
+  CONTRACT_SUBMITTED_AGAIN: 'submitted the contract again',
+  CONTRACT_SENT_BACK: 'sent the contract back',
+  DEAL_CLAIMED: 'claimed the deal (transaction complete)',
+  MOVED_TO_DRAFT: 'moved the listing to drafts'
+};
+
+function formatActionText(act, actorName) {
+  if (act.action && ACTION_DESCRIPTIONS[act.action]) {
+    return ACTION_DESCRIPTIONS[act.action];
+  }
+  if (act.text) {
+    const stripped = act.text.replace(new RegExp(`^${actorName.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}\\s*`, 'i'), '').trim();
+    if (stripped) return stripped;
+    return act.text;
+  }
+  return act.action?.toLowerCase().replace(/_/g, ' ') || 'performed an action';
+}
+
 export default function ActivityLogPage() {
   const { isLiveData, authToken } = useApp();
   const [selectedType, setSelectedType] = useState('ALL');
@@ -126,9 +182,13 @@ export default function ActivityLogPage() {
   }, [fetchLiveActivities]);
 
   // Resolve entity link
-  const resolveEntityLink = (entity) => {
+  const resolveEntityLink = (entity, action) => {
+    if (['CONTRACT_SUBMITTED', 'CONTRACT_SUBMITTED_AGAIN', 'CONTRACT_SENT_BACK', 'DEAL_CLAIMED'].includes(action)) {
+      return '/transactions';
+    }
     if (!entity?.id) return '/';
     if (entity.type === 'LISTING') return `/properties/${entity.id}/edit`;
+    if (entity.type === 'TRANSACTION') return `/transactions`;
     if (entity.type === 'MEMBER') return `/team/members`;
     if (entity.type === 'ROLE') return `/team/roles`;
     if (entity.type === 'COMPANY') return `/properties/brand-kit`;
@@ -260,12 +320,12 @@ export default function ActivityLogPage() {
 
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: '13.5px', lineHeight: 1.4 }}>
-                      <strong>{actorName}</strong>: {act.text || act.action}
+                      <strong>{actorName}</strong>: {formatActionText(act, actorName)}
                       {act.entity?.label && (
                         <>
                           {' — '}
                           <Link
-                            to={resolveEntityLink(act.entity)}
+                            to={resolveEntityLink(act.entity, act.action)}
                             style={{ color: 'var(--cmp-brand)', fontWeight: 600, textDecoration: 'underline' }}
                           >
                             {act.entity.label}
@@ -283,7 +343,15 @@ export default function ActivityLogPage() {
                     </span>
                   </div>
 
-                  {act.status && (
+                  {act.action === 'DEAL_CLAIMED' ? (
+                    <span className="badge badge-brand">CLAIMED</span>
+                  ) : act.action === 'CONTRACT_SENT_BACK' ? (
+                    <span className="badge badge-danger">SENT BACK</span>
+                  ) : act.action === 'CONTRACT_SUBMITTED' || act.action === 'CONTRACT_SUBMITTED_AGAIN' ? (
+                    <span className="badge badge-warning">SUBMITTED</span>
+                  ) : act.action === 'MARKED_SOLD' ? (
+                    <span className="badge badge-neutral">CLOSED</span>
+                  ) : act.status ? (
                     <span
                       className={`badge ${
                         act.status === 'LIVE'
@@ -295,10 +363,10 @@ export default function ActivityLogPage() {
                     >
                       {act.status}
                     </span>
-                  )}
+                  ) : null}
 
                   {act.entity?.id && (
-                    <Link to={resolveEntityLink(act.entity)} className="btn btn-ghost btn-sm">
+                    <Link to={resolveEntityLink(act.entity, act.action)} className="btn btn-ghost btn-sm">
                       View
                     </Link>
                   )}

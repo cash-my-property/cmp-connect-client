@@ -135,6 +135,14 @@ export default function PortfolioPage() {
   });
   const [activeTeamMembers, setActiveTeamMembers] = useState([]);
 
+  // For AGENCY accounts, only members with a BRN can be assigned listings
+  const eligibleAssigneeMembers = useMemo(() => {
+    if (account?.accountType === 'AGENCY') {
+      return activeTeamMembers.filter((m) => Boolean(m.compliance?.brn));
+    }
+    return activeTeamMembers;
+  }, [activeTeamMembers, account?.accountType]);
+
   const debouncedSearch = useDebounce(searchQuery, 300);
 
   // Compute pending actions for any listing
@@ -498,7 +506,7 @@ export default function PortfolioPage() {
       listing.id,
       async () => {
         if (isLiveData) {
-          await cmpConnectApi.markListingSold(listing.id, closedDate, authToken).catch(() => {});
+          await cmpConnectApi.markListingSold(listing.id, closedDate, authToken);
         }
 
         // Cache as UNCLAIMED in local storage so Transactions page shows it
@@ -1235,7 +1243,7 @@ export default function PortfolioPage() {
             const canPublish = listing.can ? Boolean(listing.can.publish) : ((status === 'UNPUBLISHED' || status === 'EXPIRED') && can('listings.publish'));
             const canUnpublish = listing.can ? Boolean(listing.can.unpublish) : (status === 'LIVE' && can('listings.unpublish'));
             const canMoveToDraft = listing.can ? Boolean(listing.can.moveToDraft) : (['PENDING_APPROVAL', 'REJECTED', 'UNPUBLISHED', 'EXPIRED'].includes(status) && can('listings.update'));
-            const canMarkSold = listing.can ? Boolean(listing.can.markSold || listing.can.recordDeal) : (!['ARCHIVED', 'CLOSED', 'SOLD', 'RENTED'].includes(status));
+            const canMarkSold = listing.can ? Boolean(listing.can.markSold) : (!['ARCHIVED', 'CLOSED', 'SOLD', 'RENTED'].includes(status));
             const canAssign = listing.can ? Boolean(listing.can.assign) : (can('listings.assign') && status !== 'ARCHIVED');
             const canRefresh = listing.can ? Boolean(listing.can.refresh) : (status === 'LIVE' && can('listings.update'));
             const canArchive = listing.can ? Boolean(listing.can.archive) : (status !== 'ARCHIVED' && status !== 'PENDING_APPROVAL' && can('listings.archive'));
@@ -2132,11 +2140,20 @@ export default function PortfolioPage() {
                 const statusDisplay = isClosed ? (isRent ? 'RENTED' : 'SOLD') : (status === 'PENDING_APPROVAL' ? 'IN REVIEW' : status);
 
                 const canEdit = listing.can ? Boolean(listing.can.edit) : can('listings.update');
+                const canAssign = listing.can ? Boolean(listing.can.assign) : (can('listings.assign') && status !== 'ARCHIVED');
                 const canSubmit = listing.can ? Boolean(listing.can.submit) : (['DRAFT', 'REJECTED'].includes(status) && can('listings.create'));
+                const canApprove = listing.can ? Boolean(listing.can.approve) : (status === 'PENDING_APPROVAL' && can('listings.approve'));
+                const canReject = listing.can ? Boolean(listing.can.reject) : (status === 'PENDING_APPROVAL' && can('listings.approve'));
                 const canPublish = listing.can ? Boolean(listing.can.publish) : ((status === 'UNPUBLISHED' || status === 'EXPIRED') && can('listings.publish'));
-                const canMoveToDraft = listing.can ? Boolean(listing.can.moveToDraft) : (['PENDING_APPROVAL', 'REJECTED', 'UNPUBLISHED', 'EXPIRED'].includes(status) && can('listings.update'));
-                const canMarkSold = listing.can ? Boolean(listing.can.markSold || listing.can.recordDeal) : (!['ARCHIVED', 'CLOSED', 'SOLD', 'RENTED'].includes(status));
+                const canUnpublish = listing.can ? Boolean(listing.can.unpublish) : (status === 'LIVE' && can('listings.unpublish'));
                 const canRefresh = listing.can ? Boolean(listing.can.refresh) : (status === 'LIVE' && can('listings.update'));
+                const canArchive = listing.can ? Boolean(listing.can.archive) : (status !== 'ARCHIVED' && status !== 'PENDING_APPROVAL' && can('listings.archive'));
+                const canRestore = listing.can ? Boolean(listing.can.restore) : (status === 'ARCHIVED' && can('listings.archive'));
+                const canDelete = listing.can ? Boolean(listing.can.delete) : (status !== 'LIVE' && can('listings.delete'));
+                const canMarkSold = listing.can ? Boolean(listing.can.markSold) : (!['ARCHIVED', 'CLOSED', 'SOLD', 'RENTED'].includes(status));
+                const canMoveToDraft = listing.can ? Boolean(listing.can.moveToDraft) : (['PENDING_APPROVAL', 'REJECTED', 'UNPUBLISHED', 'EXPIRED'].includes(status) && can('listings.update'));
+                const isActionBusy = actionLoadingId === listing.id;
+                const isMenuOpen = openActionMenuId === listing.id;
 
                 return (
                   <tr key={listing.id} style={{ background: isSelected ? 'rgba(30,123,89,0.06)' : undefined }}>
@@ -2204,67 +2221,223 @@ export default function PortfolioPage() {
                     <td>
                       <span style={{ fontSize: '13px', fontWeight: 600 }}>{agentName}</span>
                     </td>
-                    <td style={{ textAlign: 'end' }}>
-                      <div className="row" style={{ justifyContent: 'flex-end', gap: '6px' }}>
-                        {canRefresh && (
-                          <button
-                            type="button"
-                            className="btn btn-ghost btn-sm"
-                            title="Refresh / Bump Listing"
-                            onClick={() => handleRefresh(listing)}
-                          >
-                            <RotateCw size={13} />
-                          </button>
-                        )}
-                        {canSubmit && (
-                          <button
-                            type="button"
-                            className="btn btn-outline btn-sm"
-                            title="Submit for approval"
-                            onClick={() => handleSubmitForApproval(listing)}
-                          >
-                            <Send size={13} />
-                            <span>Submit</span>
-                          </button>
-                        )}
-                        {canMoveToDraft && (
-                          <button
-                            type="button"
-                            className="btn btn-ghost btn-sm"
-                            title="Move to draft"
-                            onClick={() => handleMoveToDraft(listing)}
-                          >
-                            <RotateCcw size={13} />
-                          </button>
-                        )}
-                        {canPublish && (
-                          <button
-                            type="button"
-                            className="btn btn-outline btn-sm"
-                            title="Publish again"
-                            onClick={() => handlePublish(listing)}
-                          >
-                            <CheckCircle2 size={13} />
-                            <span>Publish</span>
-                          </button>
-                        )}
-                        {canMarkSold && (
-                          <button
-                            type="button"
-                            className="btn btn-outline btn-sm"
-                            title={isRent ? 'Mark as Rented' : 'Mark as Sold'}
-                            onClick={() => handleMarkSold(listing)}
-                          >
-                            <Tag size={13} />
-                            <span>{isRent ? 'Rented' : 'Sold'}</span>
-                          </button>
-                        )}
+                    <td style={{ textAlign: 'end', position: 'relative' }}>
+                      <div className="row" style={{ justifyContent: 'flex-end', gap: '6px', alignItems: 'center' }}>
                         {canEdit && (
                           <NavLink to={`/properties/${listing.id}/edit`} className="btn btn-outline btn-sm">
                             <Edit2 size={13} />
                             <span>Edit</span>
                           </NavLink>
                         )}
+                        {canMarkSold && (
+                          <button
+                            type="button"
+                            className="btn btn-outline btn-sm"
+                            title={isRent ? 'Mark as rented' : 'Mark as sold'}
+                            onClick={() => handleMarkSold(listing)}
+                            style={{ color: 'var(--cmp-accent, #c88228)', borderColor: 'var(--cmp-accent, #c88228)' }}
+                          >
+                            <Tag size={13} />
+                            <span>{isRent ? 'Mark as rented' : 'Mark as sold'}</span>
+                          </button>
+                        )}
+                        {/* Three-dots Menu Trigger in Table View */}
+                        <div style={{ position: 'relative' }}>
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm"
+                            disabled={isActionBusy}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenActionMenuId(isMenuOpen ? null : listing.id);
+                            }}
+                            style={{
+                              width: '30px',
+                              height: '30px',
+                              padding: 0,
+                              display: 'grid',
+                              placeItems: 'center'
+                            }}
+                            title="More actions"
+                          >
+                            {isActionBusy ? <Loader2 size={13} className="spin" /> : <MoreVertical size={14} />}
+                          </button>
+
+                          {isMenuOpen && (
+                            <div
+                              style={{
+                                position: 'absolute',
+                                top: '34px',
+                                right: 0,
+                                zIndex: 100,
+                                minWidth: '205px',
+                                background: 'var(--cmp-surface)',
+                                border: '1px solid var(--cmp-border)',
+                                borderRadius: '10px',
+                                boxShadow: '0 12px 32px rgba(0,0,0,0.25)',
+                                padding: '6px 0',
+                                display: 'grid',
+                                textAlign: 'start'
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {canEdit && (
+                                <NavLink
+                                  to={`/properties/${listing.id}/edit`}
+                                  className="btn btn-ghost btn-sm"
+                                  style={{ justifyContent: 'flex-start', borderRadius: 0, width: '100%', padding: '8px 14px' }}
+                                  onClick={() => setOpenActionMenuId(null)}
+                                >
+                                  <Edit2 size={14} />
+                                  <span>Edit Details</span>
+                                </NavLink>
+                              )}
+
+                              {canRefresh && (
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost btn-sm"
+                                  style={{ justifyContent: 'flex-start', borderRadius: 0, width: '100%', padding: '8px 14px', color: 'var(--cmp-brand)' }}
+                                  onClick={() => handleRefresh(listing)}
+                                >
+                                  <RotateCw size={14} />
+                                  <span>Refresh (Bump listing)</span>
+                                </button>
+                              )}
+
+                              {canSubmit && (
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost btn-sm"
+                                  style={{ justifyContent: 'flex-start', borderRadius: 0, width: '100%', padding: '8px 14px', color: 'var(--cmp-brand)' }}
+                                  onClick={() => handleSubmitForApproval(listing)}
+                                >
+                                  <Send size={14} />
+                                  <span>Submit for approval</span>
+                                </button>
+                              )}
+
+                              {canMoveToDraft && (
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost btn-sm"
+                                  style={{ justifyContent: 'flex-start', borderRadius: 0, width: '100%', padding: '8px 14px' }}
+                                  onClick={() => handleMoveToDraft(listing)}
+                                >
+                                  <RotateCcw size={14} />
+                                  <span>Move to draft</span>
+                                </button>
+                              )}
+
+                              {canApprove && (
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost btn-sm"
+                                  style={{ justifyContent: 'flex-start', borderRadius: 0, width: '100%', padding: '8px 14px', color: 'var(--cmp-success)' }}
+                                  onClick={() => handleApprove(listing)}
+                                >
+                                  <CheckCircle2 size={14} />
+                                  <span>Approve &amp; Publish</span>
+                                </button>
+                              )}
+                              {canReject && (
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost btn-sm"
+                                  style={{ justifyContent: 'flex-start', borderRadius: 0, width: '100%', padding: '8px 14px', color: 'var(--cmp-danger)' }}
+                                  onClick={() => handleOpenRejectModal(listing)}
+                                >
+                                  <XCircle size={14} />
+                                  <span>Reject with reason</span>
+                                </button>
+                              )}
+
+                              {canUnpublish && (
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost btn-sm"
+                                  style={{ justifyContent: 'flex-start', borderRadius: 0, width: '100%', padding: '8px 14px' }}
+                                  onClick={() => handleUnpublish(listing)}
+                                >
+                                  <XCircle size={14} />
+                                  <span>Unpublish</span>
+                                </button>
+                              )}
+
+                              {canPublish && (
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost btn-sm"
+                                  style={{ justifyContent: 'flex-start', borderRadius: 0, width: '100%', padding: '8px 14px', color: 'var(--cmp-brand)' }}
+                                  onClick={() => handlePublish(listing)}
+                                >
+                                  <CheckCircle2 size={14} />
+                                  <span>Publish</span>
+                                </button>
+                              )}
+
+                              {canAssign && (
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost btn-sm"
+                                  style={{ justifyContent: 'flex-start', borderRadius: 0, width: '100%', padding: '8px 14px' }}
+                                  onClick={() => handleOpenAssignModal(listing)}
+                                >
+                                  <UserCheck size={14} />
+                                  <span>Change Agent</span>
+                                </button>
+                              )}
+
+                              {canMarkSold && (
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost btn-sm"
+                                  style={{ justifyContent: 'flex-start', borderRadius: 0, width: '100%', padding: '8px 14px', color: 'var(--cmp-accent, #c88228)' }}
+                                  onClick={() => handleMarkSold(listing)}
+                                >
+                                  <Tag size={14} />
+                                  <span>{isRent ? 'Mark as rented' : 'Mark as sold'}</span>
+                                </button>
+                              )}
+
+                              {canArchive && (
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost btn-sm"
+                                  style={{ justifyContent: 'flex-start', borderRadius: 0, width: '100%', padding: '8px 14px' }}
+                                  onClick={() => handleArchive(listing)}
+                                >
+                                  <Archive size={14} />
+                                  <span>Archive</span>
+                                </button>
+                              )}
+
+                              {canRestore && (
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost btn-sm"
+                                  style={{ justifyContent: 'flex-start', borderRadius: 0, width: '100%', padding: '8px 14px', color: 'var(--cmp-brand)' }}
+                                  onClick={() => handleRestore(listing)}
+                                >
+                                  <RotateCcw size={14} />
+                                  <span>Restore to Draft</span>
+                                </button>
+                              )}
+
+                              {canDelete && (
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost btn-sm"
+                                  style={{ justifyContent: 'flex-start', borderRadius: 0, width: '100%', padding: '8px 14px', color: 'var(--cmp-danger)' }}
+                                  onClick={() => handleDelete(listing)}
+                                >
+                                  <Trash2 size={14} />
+                                  <span>Delete listing</span>
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </td>
                   </tr>
@@ -2347,7 +2520,7 @@ export default function PortfolioPage() {
                 style={{ width: '100%' }}
               >
                 <option value="">-- Choose active agent --</option>
-                {activeTeamMembers.map((m) => (
+                {eligibleAssigneeMembers.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.fullName} {m.compliance?.brn ? `(BRN: ${m.compliance.brn})` : ''} - {m.role?.name || m.role}
                   </option>
@@ -2400,7 +2573,7 @@ export default function PortfolioPage() {
                 style={{ width: '100%' }}
               >
                 <option value="">-- Choose active agent --</option>
-                {activeTeamMembers.map((m) => (
+                {eligibleAssigneeMembers.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.fullName} {m.compliance?.brn ? `(BRN: ${m.compliance.brn})` : ''} - {m.role?.name || m.role}
                   </option>

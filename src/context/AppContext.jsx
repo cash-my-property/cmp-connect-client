@@ -17,7 +17,9 @@ const AppContext = createContext();
 
 export function AppProvider({ children }) {
   const [platform, setPlatform] = useState('listings'); // 'listings' | 'auctions'
-  const [theme, setTheme] = useState('light'); // 'light' | 'dark'
+  const [theme, setTheme] = useState(() => {
+    return (typeof localStorage !== 'undefined' && localStorage.getItem('cmp_theme')) || 'light';
+  });
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -270,11 +272,14 @@ export function AppProvider({ children }) {
 
   const isAuthenticated = Boolean(account && !mustChangePassword) || dataMode === 'mock';
 
-  // Sync data attributes to HTML root element
+  // Sync data attributes to HTML root element & persist to localStorage
   useEffect(() => {
     const root = document.documentElement;
     root.setAttribute('data-theme', theme);
     root.setAttribute('data-platform', platform);
+    try {
+      localStorage.setItem('cmp_theme', theme);
+    } catch {}
   }, [theme, platform]);
 
   // Global Ctrl + K shortcut
@@ -294,8 +299,84 @@ export function AppProvider({ children }) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const toggleTheme = () => {
-    setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
+  // Soft circular sweep theme toggle:
+  // Light -> Dark: originates at Top-Right corner (window.innerWidth, 0) and expands to Bottom-Left corner
+  // Dark -> Light: originates at Bottom-Left corner (0, window.innerHeight) and expands to Top-Right corner (vice versa)
+  const toggleTheme = (e) => {
+    const nextTheme = theme === 'light' ? 'dark' : 'light';
+    const isGoingDark = nextTheme === 'dark';
+
+    const startX = isGoingDark ? window.innerWidth : 0;
+    const startY = isGoingDark ? 0 : window.innerHeight;
+    const endRadius = Math.ceil(Math.hypot(window.innerWidth, window.innerHeight) * 1.05);
+
+    const prefersReducedMotion =
+      typeof window !== 'undefined' &&
+      window.matchMedia &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (prefersReducedMotion) {
+      setTheme(nextTheme);
+      return;
+    }
+
+    // Modern Native View Transitions API
+    if (typeof document !== 'undefined' && document.startViewTransition) {
+      const transition = document.startViewTransition(() => {
+        setTheme(nextTheme);
+        document.documentElement.setAttribute('data-theme', nextTheme);
+      });
+
+      transition.ready
+        .then(() => {
+          document.documentElement.animate(
+            {
+              clipPath: [
+                `circle(0px at ${startX}px ${startY}px)`,
+                `circle(${endRadius}px at ${startX}px ${startY}px)`
+              ]
+            },
+            {
+              duration: 750,
+              easing: 'cubic-bezier(0.4, 0, 0.2, 1)',
+              pseudoElement: '::view-transition-new(root)'
+            }
+          );
+        })
+        .catch(() => {
+          setTheme(nextTheme);
+        });
+      return;
+    }
+
+    // High-fidelity fallback overlay for browsers without View Transitions API
+    try {
+      const overlay = document.createElement('div');
+      overlay.setAttribute('aria-hidden', 'true');
+      overlay.style.position = 'fixed';
+      overlay.style.inset = '0';
+      overlay.style.zIndex = '9999999';
+      overlay.style.pointerEvents = 'none';
+      overlay.style.backgroundColor = isGoingDark ? '#04150E' : '#FFFFFF';
+      overlay.style.clipPath = `circle(0px at ${startX}px ${startY}px)`;
+      overlay.style.transition = 'clip-path 750ms cubic-bezier(0.4, 0, 0.2, 1), opacity 250ms ease';
+      document.body.appendChild(overlay);
+
+      requestAnimationFrame(() => {
+        overlay.style.clipPath = `circle(${endRadius}px at ${startX}px ${startY}px)`;
+      });
+
+      setTimeout(() => {
+        setTheme(nextTheme);
+        document.documentElement.setAttribute('data-theme', nextTheme);
+        overlay.style.opacity = '0';
+        setTimeout(() => {
+          overlay.remove();
+        }, 300);
+      }, 500);
+    } catch {
+      setTheme(nextTheme);
+    }
   };
 
   const addListing = (newListing) => {

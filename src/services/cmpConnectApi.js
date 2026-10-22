@@ -885,25 +885,6 @@ export const cmpConnectApi = {
     });
   },
 
-  /**
-   * Mark Listing as Sold / Rented
-   * POST /api/cmpConnect/listings/:id/sold or PATCH /api/cmpConnect/listings/:id
-   */
-  async markListingSold(id, token, status = 'SOLD') {
-    try {
-      return await apiRequest(`/api/cmpConnect/listings/${id}/sold`, {
-        method: 'POST',
-        token,
-        body: JSON.stringify({ status })
-      });
-    } catch {
-      return await apiRequest(`/api/cmpConnect/listings/${id}`, {
-        method: 'PATCH',
-        token,
-        body: JSON.stringify({ status })
-      });
-    }
-  },
 
   // ─────────────────────────────────────────────────────────────
   // 8. HOME ("Today"), ACTIVITY & GLOBAL SEARCH

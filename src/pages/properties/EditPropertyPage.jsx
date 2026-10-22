@@ -50,6 +50,14 @@ export default function EditPropertyPage() {
   const [options, setOptions] = useState(null);
   const [activeMembers, setActiveMembers] = useState([]);
 
+  // For AGENCY accounts, only members with a BRN can be assigned
+  const brnEligibleMembers = useMemo(() => {
+    if (account?.accountType === 'AGENCY') {
+      return activeMembers.filter((m) => Boolean(m.compliance?.brn));
+    }
+    return activeMembers;
+  }, [activeMembers, account?.accountType]);
+
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -200,8 +208,8 @@ export default function EditPropertyPage() {
         });
       }
 
-      // Load active members if assignable
-      if (can('listings.assign')) {
+      // Load active members if assignable or if agency user
+      if (can('listings.assign') || (account?.accountType === 'AGENCY' && !account?.compliance?.brn)) {
         const memRes = await cmpConnectApi.listMembers({ status: 'ACTIVE' }, authToken);
         if (Array.isArray(memRes?.data)) {
           setActiveMembers(memRes.data);
@@ -213,7 +221,7 @@ export default function EditPropertyPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [isLiveData, authToken, id, can, mockListings]);
+  }, [isLiveData, authToken, id, can, mockListings, account]);
 
   useEffect(() => {
     loadListingDetails();
@@ -557,8 +565,13 @@ export default function EditPropertyPage() {
     setErrorBanner(null);
 
     try {
-      if (currentStep === 1 && !formData.propertyTitle.trim()) {
-        throw new Error('Listing title is required.');
+      if (currentStep === 1) {
+        if (!formData.propertyTitle.trim()) {
+          throw new Error('Listing title is required.');
+        }
+        if (account?.accountType === 'AGENCY' && !account?.compliance?.brn && !formData.listedBy) {
+          throw new Error('As an agency administrator without a broker licence (BRN), you must assign this listing to an agent.');
+        }
       }
 
       const stepPayload = getStepPayload(currentStep);
@@ -681,14 +694,14 @@ export default function EditPropertyPage() {
   };
 
   const handleAgentChange = async (newAgentId) => {
-    if (!newAgentId) return;
+    if (!newAgentId || onHold) return;
     try {
       const res = await cmpConnectApi.assignListing(listingData.id, newAgentId, authToken);
       if (res?.data) setListingData(res.data);
       setFormData((prev) => ({ ...prev, listedBy: newAgentId }));
       setSuccessBanner('Agent assignment updated.');
     } catch (err) {
-      setErrorBanner(err.message || 'Failed to change agent.');
+      setErrorBanner(err.response?.data?.message || err.message || 'Failed to change agent.');
     }
   };
 
@@ -1045,10 +1058,13 @@ export default function EditPropertyPage() {
           </div>
 
           {/* Listed Agent Box */}
-          {can('listings.assign') && (
+          {(can('listings.assign') || (account?.accountType === 'AGENCY' && !account?.compliance?.brn)) && (
             <div className="card" style={{ padding: '16px' }}>
               <label style={{ margin: '0 0 6px', fontSize: '12px', fontWeight: 700 }}>
-                Listing Assignment
+                Listing Assignment ("Listed under")
+                {account?.accountType === 'AGENCY' && !account?.compliance?.brn && (
+                  <span style={{ color: 'var(--cmp-danger)', marginLeft: '4px' }}>*</span>
+                )}
               </label>
               <select
                 disabled={onHold}
@@ -1056,13 +1072,22 @@ export default function EditPropertyPage() {
                 onChange={(e) => handleAgentChange(e.target.value)}
                 style={{ width: '100%' }}
               >
-                <option value="">-- Unassigned / Current user --</option>
-                {activeMembers.map((m) => (
+                {account?.accountType === 'AGENCY' && !account?.compliance?.brn ? (
+                  <option value="">-- Choose an agent with BRN (Required) --</option>
+                ) : (
+                  <option value="">-- Current user --</option>
+                )}
+                {brnEligibleMembers.map((m) => (
                   <option key={m.id} value={m.id}>
-                    {m.fullName} {m.compliance?.brn ? `(BRN: ${m.compliance.brn})` : ''}
+                    {m.fullName} (BRN: {m.compliance?.brn})
                   </option>
                 ))}
               </select>
+              {account?.accountType === 'AGENCY' && !account?.compliance?.brn && (
+                <p className="faint" style={{ fontSize: '11px', margin: '6px 0 0', color: 'var(--cmp-warning)' }}>
+                  As an agency administrator without a BRN, you must assign this listing to a licensed agent.
+                </p>
+              )}
             </div>
           )}
         </aside>

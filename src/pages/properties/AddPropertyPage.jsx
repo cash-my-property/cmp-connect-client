@@ -42,7 +42,7 @@ const PURPOSE_OPTIONS = [
 ];
 
 export default function AddPropertyPage() {
-  const { addListing, isLiveData, authToken, can, team } = useApp();
+  const { addListing, isLiveData, authToken, can, team, account } = useApp();
   const navigate = useNavigate();
 
   const [currentStep, setCurrentStep] = useState(1);
@@ -52,6 +52,14 @@ export default function AddPropertyPage() {
   // Options from API
   const [options, setOptions] = useState(null);
   const [activeMembers, setActiveMembers] = useState([]);
+
+  // For AGENCY accounts, only members with a BRN can have listings under them
+  const brnEligibleMembers = useMemo(() => {
+    if (account?.accountType === 'AGENCY') {
+      return activeMembers.filter((m) => Boolean(m.compliance?.brn));
+    }
+    return activeMembers;
+  }, [activeMembers, account?.accountType]);
 
   // Loading / saving states
   const [isOptionsLoading, setIsOptionsLoading] = useState(false);
@@ -129,8 +137,8 @@ export default function AddPropertyPage() {
           setIsOptionsLoading(false);
         });
 
-      // Fetch team members if user has assign permission
-      if (can('listings.assign')) {
+      // Fetch team members if user has assign permission or is an agency user
+      if (can('listings.assign') || (account?.accountType === 'AGENCY' && !account?.compliance?.brn)) {
         cmpConnectApi.listMembers({ status: 'ACTIVE' }, authToken)
           .then((res) => {
             if (Array.isArray(res?.data)) {
@@ -140,7 +148,7 @@ export default function AddPropertyPage() {
           .catch(() => {});
       }
     }
-  }, [isLiveData, authToken, can]);
+  }, [isLiveData, authToken, can, account]);
 
   // Derived available property types based on options rules
   const availableTypes = useMemo(() => {
@@ -397,6 +405,11 @@ export default function AddPropertyPage() {
         // Validation
         if (!formData.propertyTitle.trim()) {
           throw new Error('Listing title is required.');
+        }
+
+        // Agency without BRN must assign listing to an agent with BRN
+        if (account?.accountType === 'AGENCY' && !account?.compliance?.brn && !formData.listedBy) {
+          throw new Error('As an agency administrator without a broker licence (BRN), you must assign this listing to an agent.');
         }
 
         const step1Payload = {
@@ -719,23 +732,36 @@ export default function AddPropertyPage() {
                 Step 1: Purpose & Type
               </h2>
 
-              {/* Responsible Agent (only if listings.assign) */}
-              {can('listings.assign') && (
+              {/* Responsible Agent ("Listed under") */}
+              {(can('listings.assign') || (account?.accountType === 'AGENCY' && !account?.compliance?.brn)) && (
                 <div>
-                  <label>Responsible Agent ("Listed under")</label>
+                  <label>
+                    Responsible Agent ("Listed under")
+                    {account?.accountType === 'AGENCY' && !account?.compliance?.brn && (
+                      <span style={{ color: 'var(--cmp-danger)', marginLeft: '4px' }}>*</span>
+                    )}
+                  </label>
                   <select
                     value={formData.listedBy}
                     onChange={(e) => setFormData({ ...formData, listedBy: e.target.value })}
                   >
-                    <option value="">-- Current user (Default) --</option>
-                    {activeMembers.map((m) => (
+                    {account?.accountType === 'AGENCY' && !account?.compliance?.brn ? (
+                      <option value="">-- Select an agent with BRN (Required) --</option>
+                    ) : (
+                      <option value="">
+                        -- Current user ({account?.fullName || 'Myself'}) {account?.compliance?.brn ? `(BRN: ${account.compliance.brn})` : ''} --
+                      </option>
+                    )}
+                    {brnEligibleMembers.map((m) => (
                       <option key={m.id} value={m.id}>
-                        {m.fullName} {m.compliance?.brn ? `(BRN: ${m.compliance.brn})` : ''} - {m.role?.name || m.role}
+                        {m.fullName} (BRN: {m.compliance?.brn}) - {m.role?.name || m.role}
                       </option>
                     ))}
                   </select>
                   <p className="faint" style={{ fontSize: '12px', margin: '4px 0 0' }}>
-                    Agent must have an in-date, CMP-verified BRN to publish live.
+                    {account?.accountType === 'AGENCY' && !account?.compliance?.brn
+                      ? 'As an agency administrator without a broker licence (BRN), you must assign this listing to an agent.'
+                      : 'Agent must have an in-date, CMP-verified BRN to publish live.'}
                   </p>
                 </div>
               )}

@@ -625,3 +625,37 @@ table.data tr:hover td {
   padding: 24px 0;
   margin: 0;
 }
+
+/* ==========================================================================
+   Smooth Screen-wide Theme Reveal Transition (Top-Right to Bottom-Left & Vice Versa)
+   ========================================================================== */
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+  display: block;
+}
+
+::view-transition-old(root) {
+  z-index: 1;
+}
+
+::view-transition-new(root) {
+  z-index: 999999;
+}
+
+/* Smooth color transitions for UI surfaces and text elements */
+body,
+.hub-bar,
+.app-rail,
+.card,
+.modal,
+.data-table,
+.btn,
+.icon-button {
+  transition: background-color 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+              color 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+}
+

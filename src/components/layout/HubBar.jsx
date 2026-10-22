@@ -302,8 +302,18 @@ export default function HubBar() {
             aria-label="Toggle dark mode"
             onClick={toggleTheme}
             title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            style={{ position: 'relative' }}
           >
-            {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)'
+              }}
+            >
+              {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+            </span>
           </button>
 
           {/* Help Button */}

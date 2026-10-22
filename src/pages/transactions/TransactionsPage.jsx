@@ -148,11 +148,14 @@ const TransactionRow = memo(function TransactionRow({
     status === 'SENT_BACK' ? 'Sent back' :
     'Pending contract';
 
-  const can = item.can || {
-    submit: status === 'PENDING_CONTRACT' || status === 'SENT_BACK',
-    claim: status === 'SUBMITTED',
-    sendBack: status === 'SUBMITTED'
-  };
+  const { isLiveData } = useApp();
+  const can = isLiveData
+    ? (item.can || {})
+    : (item.can || {
+        submit: status === 'PENDING_CONTRACT' || status === 'SENT_BACK',
+        claim: status === 'SUBMITTED',
+        sendBack: status === 'SUBMITTED'
+      });
 
   return (
     <tr>
