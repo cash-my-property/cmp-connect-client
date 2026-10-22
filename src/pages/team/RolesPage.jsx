@@ -6,7 +6,6 @@ import {
   Lock,
   AlertTriangle,
   Info,
-  Plus,
   Edit2,
   Trash2,
   Loader2
@@ -308,18 +307,6 @@ export default function RolesPage() {
             Company roles and the exact permissions each user type has on listings, leads, wallet and team.
           </p>
         </div>
-
-        {can('roles.manage') && (
-          <button
-            type="button"
-            className="btn btn-accent btn-sm"
-            onClick={openCreateModal}
-            style={{ gap: '6px' }}
-          >
-            <Plus size={16} />
-            <span>Create custom role</span>
-          </button>
-        )}
       </div>
 
       {/* Notice Banner */}

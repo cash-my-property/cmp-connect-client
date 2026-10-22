@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { cmpConnectApi } from '../../services/cmpConnectApi';
+import UpdateDocumentsModal from '../../components/properties/UpdateDocumentsModal';
 import {
   ShieldAlert,
   ShieldCheck,
@@ -16,7 +17,8 @@ import {
   Building,
   User,
   ExternalLink,
-  RefreshCw
+  RefreshCw,
+  X
 } from 'lucide-react';
 
 export default function CompliancePage() {
@@ -28,6 +30,11 @@ export default function CompliancePage() {
   const [onlyProblems, setOnlyProblems] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [apiError, setApiError] = useState(null);
+
+  // Modal & Toast state
+  const [selectedPropertyForModal, setSelectedPropertyForModal] = useState(null);
+  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
 
   // Live state
   const [rawListings, setRawListings] = useState([]);
@@ -71,17 +78,20 @@ export default function CompliancePage() {
   }, [fetchComplianceData]);
 
   // Demo fallback when in mock mode
-  const mockProperties = useMemo(() => [
+  const DEFAULT_MOCK_PROPERTIES = useMemo(() => [
     {
       id: 'CMP-S-001001',
       title: 'Full marina view 2 bed in Marina Gate',
       location: 'Dubai Marina',
       status: 'LIVE',
       permitNumber: 'DLD-7128394',
+      permitExpiry: '2026-12-24',
       permitStatus: 'Valid · 64 days left',
       permitSeverity: 'success',
       formAFileName: 'form-a-marina-gate.pdf',
+      formAExpiry: '2027-05-19',
       formAStatus: 'Valid · 210 days left',
+      formAActive: 'active',
       formASeverity: 'success',
       agent: 'Karim Saleh',
       hasProblem: false
@@ -92,10 +102,13 @@ export default function CompliancePage() {
       location: 'Downtown Dubai',
       status: 'LIVE',
       permitNumber: 'DLD-7284410',
+      permitExpiry: '2026-11-12',
       permitStatus: 'Expires in 22 days',
       permitSeverity: 'warning',
       formAFileName: 'form-a-the-address.pdf',
+      formAExpiry: '2027-01-24',
       formAStatus: 'Valid · 95 days left',
+      formAActive: 'active',
       formASeverity: 'success',
       agent: 'Layla Haddad',
       hasProblem: true
@@ -106,10 +119,13 @@ export default function CompliancePage() {
       location: 'Palm Jumeirah',
       status: 'LIVE',
       permitNumber: 'DLD-6880412',
+      permitExpiry: '2026-10-18',
       permitStatus: 'Expired 3 days ago',
       permitSeverity: 'danger',
       formAFileName: 'form-a-palm-penthouse.pdf',
+      formAExpiry: '2026-11-02',
       formAStatus: 'Expires in 12 days',
+      formAActive: 'active',
       formASeverity: 'warning',
       agent: 'Layla Haddad',
       hasProblem: true
@@ -120,10 +136,13 @@ export default function CompliancePage() {
       location: 'Dubai Hills Estate',
       status: 'LIVE',
       permitNumber: 'DLD-7388120',
+      permitExpiry: '2027-03-10',
       permitStatus: 'Valid · 140 days left',
       permitSeverity: 'success',
       formAFileName: null,
+      formAExpiry: '',
       formAStatus: 'Expired / Missing',
+      formAActive: 'expired',
       formASeverity: 'danger',
       agent: 'Arjun Mehta',
       hasProblem: true
@@ -134,10 +153,13 @@ export default function CompliancePage() {
       location: 'Jumeirah Lake Towers',
       status: 'PENDING_APPROVAL',
       permitNumber: 'DLD-7455901',
+      permitExpiry: '2027-04-09',
       permitStatus: 'Valid · 170 days left',
       permitSeverity: 'success',
       formAFileName: 'form-a-jlt.pdf',
+      formAExpiry: '2027-08-17',
       formAStatus: 'Valid · 300 days left',
+      formAActive: 'active',
       formASeverity: 'success',
       agent: 'Emma Clarke',
       hasProblem: false
@@ -148,15 +170,123 @@ export default function CompliancePage() {
       location: 'Business Bay',
       status: 'DRAFT',
       permitNumber: null,
+      permitExpiry: '',
       permitStatus: 'Not on file',
       permitSeverity: 'muted',
       formAFileName: null,
+      formAExpiry: '',
       formAStatus: 'Overdue since 16 Sep',
+      formAActive: 'expired',
       formASeverity: 'danger',
       agent: 'Emma Clarke',
       hasProblem: true
     }
   ], []);
+
+  const [mockProperties, setMockProperties] = useState(() => {
+    const saved = localStorage.getItem('cmp-compliance-mock-properties');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {}
+    }
+    return DEFAULT_MOCK_PROPERTIES;
+  });
+
+  // Handle saving documents from modal
+  const handleSaveDocuments = useCallback(async (updatedData) => {
+    if (isLiveData) {
+      await fetchComplianceData();
+      setToastMessage(`Documents updated successfully.`);
+      setTimeout(() => setToastMessage(''), 4000);
+      return;
+    }
+
+    setMockProperties((prev) => {
+      const next = prev.map((item) => {
+        if (item.id === updatedData.id) {
+          const permitDays = updatedData.permitExpiry
+            ? Math.ceil((new Date(updatedData.permitExpiry).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+            : null;
+          let permitStatus = 'Not on file';
+          let permitSeverity = 'muted';
+          if (updatedData.permitNumber) {
+            if (permitDays != null) {
+              if (permitDays < 0) {
+                permitStatus = `Expired ${Math.abs(permitDays)} days ago`;
+                permitSeverity = 'danger';
+              } else if (permitDays <= 30) {
+                permitStatus = `Expires in ${permitDays} days`;
+                permitSeverity = 'warning';
+              } else {
+                permitStatus = `Valid · ${permitDays} days left`;
+                permitSeverity = 'success';
+              }
+            } else {
+              permitStatus = updatedData.permitNumber;
+              permitSeverity = 'success';
+            }
+          }
+
+          const formADays = updatedData.formAExpiry
+            ? Math.ceil((new Date(updatedData.formAExpiry).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+            : null;
+          let formAStatus = 'Not on file';
+          let formASeverity = 'muted';
+          if (updatedData.formAStatus === 'expired') {
+            formAStatus = 'Expired';
+            formASeverity = 'danger';
+          } else if (updatedData.formAFileName) {
+            if (formADays != null) {
+              if (formADays < 0) {
+                formAStatus = `Expired ${Math.abs(formADays)} days ago`;
+                formASeverity = 'danger';
+              } else if (formADays <= 30) {
+                formAStatus = `Expires in ${formADays} days`;
+                formASeverity = 'warning';
+              } else {
+                formAStatus = `Valid · ${formADays} days left`;
+                formASeverity = 'success';
+              }
+            } else {
+              formAStatus = 'Valid on file';
+              formASeverity = 'success';
+            }
+          }
+
+          const hasProblem =
+            permitSeverity === 'danger' ||
+            permitSeverity === 'warning' ||
+            formASeverity === 'danger' ||
+            formASeverity === 'warning' ||
+            item.status === 'REJECTED';
+
+          return {
+            ...item,
+            permitNumber: updatedData.permitNumber,
+            permitExpiry: updatedData.permitExpiry,
+            permitStatus,
+            permitSeverity,
+            formAFileName: updatedData.formAFileName,
+            formAExpiry: updatedData.formAExpiry,
+            formAStatus,
+            formAActive: updatedData.formAStatus,
+            formASeverity,
+            hasProblem
+          };
+        }
+        return item;
+      });
+
+      try {
+        localStorage.setItem('cmp-compliance-mock-properties', JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+
+    setToastMessage(`Documents saved for ${updatedData.id}.`);
+    setTimeout(() => setToastMessage(''), 4000);
+  }, [isLiveData, fetchComplianceData]);
 
   const mockAgents = useMemo(() => [
     {
@@ -248,17 +378,20 @@ export default function CompliancePage() {
       const hasProblem = permitSeverity === 'danger' || permitSeverity === 'warning' || formASeverity === 'danger' || formASeverity === 'warning' || status === 'REJECTED';
 
       return {
-        id: l.id,
+        id: l.id || l._id,
         ref,
         title,
         location,
         status,
         permitNumber,
+        permitExpiry: l.permitExpiry || '',
         permitStatus,
         permitSeverity,
         formAFileName,
+        formAExpiry: formADoc?.expiryDate || '',
         formAStatus,
         formASeverity,
+        formAActive: formADoc ? 'active' : 'expired',
         agent: l.listedBy?.fullName || '—',
         hasProblem
       };
@@ -729,14 +862,18 @@ export default function CompliancePage() {
                       <span style={{ fontSize: '13px' }}>{p.agent}</span>
                     </td>
                     <td style={{ textAlign: 'right' }}>
-                      <NavLink
-                        to={`/properties/${p.id}/edit`}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedPropertyForModal(p);
+                          setIsUpdateModalOpen(true);
+                        }}
                         className={`btn btn-sm ${p.hasProblem ? 'btn-primary' : 'btn-outline'}`}
-                        style={{ height: '32px', padding: '0 10px', gap: '4px' }}
+                        style={{ height: '32px', padding: '0 10px', gap: '4px', cursor: 'pointer' }}
                       >
                         <span>Update</span>
                         <ArrowRight size={13} />
-                      </NavLink>
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -839,6 +976,60 @@ export default function CompliancePage() {
           </div>
         )
       )}
+
+      {/* Success Toast Notice */}
+      {toastMessage && (
+        <div
+          role="status"
+          style={{
+            position: 'fixed',
+            bottom: '24px',
+            right: '24px',
+            padding: '12px 18px',
+            borderRadius: '10px',
+            background: 'var(--cmp-surface)',
+            border: '1px solid var(--cmp-success)',
+            color: 'var(--cmp-text)',
+            fontSize: '13.5px',
+            fontWeight: 600,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            boxShadow: 'var(--cmp-shadow-lg, 0 10px 25px rgba(0,0,0,0.3))',
+            zIndex: 1200
+          }}
+        >
+          <CheckCircle2 size={18} style={{ color: 'var(--cmp-success)' }} />
+          <span>{toastMessage}</span>
+          <button
+            type="button"
+            onClick={() => setToastMessage('')}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--cmp-text-muted)',
+              cursor: 'pointer',
+              padding: '2px',
+              marginLeft: '8px'
+            }}
+          >
+            <X size={15} />
+          </button>
+        </div>
+      )}
+
+      {/* Update Documents Modal */}
+      <UpdateDocumentsModal
+        isOpen={isUpdateModalOpen}
+        onClose={() => {
+          setIsUpdateModalOpen(false);
+          setSelectedPropertyForModal(null);
+        }}
+        property={selectedPropertyForModal}
+        onSave={handleSaveDocuments}
+        isLiveData={isLiveData}
+        authToken={authToken}
+      />
     </div>
   );
 }

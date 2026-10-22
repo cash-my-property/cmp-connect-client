@@ -9,10 +9,21 @@ import {
   Calendar,
   Building,
   User,
-  DollarSign
+  DollarSign,
+  AlertTriangle
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import cmpConnectApi from '../../services/cmpConnectApi';
+
+function formatListingOptionLabel(l) {
+  const ref = l.listingRef ? `[${l.listingRef}] ` : '';
+  const purpose = l.purpose ? ` (${l.purpose})` : '';
+  const rawTitle = String(l.title || l.propertyTitle || 'Listing').trim();
+  const maxTitleLength = 32;
+  const shortTitle =
+    rawTitle.length > maxTitleLength ? `${rawTitle.slice(0, maxTitleLength).trim()}…` : rawTitle;
+  return `${ref}${shortTitle}${purpose}`;
+}
 
 export default function RecordDealModal({
   isOpen,
@@ -21,14 +32,13 @@ export default function RecordDealModal({
   listing = null,
   initialData = null
 }) {
-  const { account, can, isLiveData } = useApp();
+  const { account, isLiveData } = useApp();
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   // Form fields
   const [selectedListingId, setSelectedListingId] = useState('');
-  const [agentId, setAgentId] = useState('');
   const [transactionDate, setTransactionDate] = useState(
     new Date().toISOString().split('T')[0]
   );
@@ -38,77 +48,95 @@ export default function RecordDealModal({
   const [proofDoc, setProofDoc] = useState(null); // { url, public_id, fileName }
   const [declared, setDeclared] = useState(false);
 
-  // Dynamic lists if listing or agent not pre-selected
+  // Dynamic lists if listing not pre-selected
   const [availableListings, setAvailableListings] = useState([]);
-  const [activeAgents, setActiveAgents] = useState([]);
   const [isUploadingProof, setIsUploadingProof] = useState(false);
 
-  // Initialize or prefill state when modal opens
+  // Pre-fill state when modal opens
   useEffect(() => {
     if (!isOpen) return;
 
     setError(null);
-    if (listing) {
-      setSelectedListingId(listing.id || listing._id || '');
-      setFinalPrice(listing.price || '');
-      if (listing.listedBy?.id) {
-        setAgentId(listing.listedBy.id);
-      }
-    } else if (initialData) {
+    if (initialData) {
       const initListing = initialData.listing || initialData;
       setSelectedListingId(initListing.id || initListing._id || initialData.listingId || '');
       setFinalPrice(initialData.finalPrice || initListing.price || initListing.askingPrice || '');
-      setAgentId(initialData.agent?.id || initListing.listedBy?.id || initListing.agentId || account?.id || '');
       setCounterpartyName(initialData.counterpartyName || '');
       setNotes(initialData.notes || '');
+      if (initialData.transactionDate) {
+        setTransactionDate(new Date(initialData.transactionDate).toISOString().split('T')[0]);
+      } else if (initialData.closedAt) {
+        setTransactionDate(new Date(initialData.closedAt).toISOString().split('T')[0]);
+      }
+      if (initialData.document?.url) {
+        setProofDoc(initialData.document);
+      } else {
+        setProofDoc(null);
+      }
+      setDeclared(false);
+    } else if (listing) {
+      setSelectedListingId(listing.id || listing._id || '');
+      setFinalPrice(listing.price || listing.askingPrice || '');
+      setCounterpartyName('');
+      setNotes('');
+      setProofDoc(null);
+      setDeclared(false);
     } else {
       setSelectedListingId('');
       setFinalPrice('');
-      setAgentId(account?.id || '');
+      setCounterpartyName('');
+      setNotes('');
+      setProofDoc(null);
+      setDeclared(false);
     }
 
-    // Load active agents for assignment
-    if (isLiveData && (can('listings.assign') || can('team.view'))) {
-      cmpConnectApi.listMembers({ status: 'ACTIVE', limit: 100 })
-        .then((res) => {
-          if (res?.data) setActiveAgents(res.data);
-        })
-        .catch(() => {});
-    }
-
-    // Load listings if not opened from a specific listing
+    // Load listings if not opened from a specific deal/listing
     if (!listing && !initialData && isLiveData) {
       cmpConnectApi.listListings({ limit: 50 })
         .then((res) => {
           if (res?.data) {
-            // Filter to only LIVE, UNPUBLISHED, or EXPIRED listings that can be closed
             const eligible = res.data.filter((l) =>
-              ['LIVE', 'UNPUBLISHED', 'EXPIRED'].includes(l.status)
+              ['LIVE', 'UNPUBLISHED', 'EXPIRED', 'CLOSED'].includes(l.status)
             );
             setAvailableListings(eligible);
           }
         })
         .catch(() => {});
     }
-  }, [isOpen, listing, initialData, isLiveData, account, can]);
+  }, [isOpen, listing, initialData, isLiveData]);
 
   if (!isOpen) return null;
 
-  // Determine current active listing object
   const activeListing =
+    initialData?.listing ||
     listing ||
-    (initialData?.listing ? initialData.listing : (initialData?.title ? initialData : null)) ||
+    (initialData?.title ? initialData : null) ||
     availableListings.find((l) => (l.id || l._id) === selectedListingId) ||
     null;
 
   const isRental =
     activeListing?.purpose === 'RENT' ||
     activeListing?.listingPurpose === 'RENT' ||
-    activeListing?.offering?.includes('RENT');
+    activeListing?.offering?.includes('RENT') ||
+    initialData?.outcome === 'RENTED';
 
-  const docLabel = isRental
-    ? 'Tenancy contract (Ejari proof)'
-    : 'Form F (Sale agreement) or Title Transfer';
+  const docTitle = isRental ? 'Tenancy contract (Ejari)' : 'Form F (Sale agreement)';
+  const docSubtitle = isRental ? 'Tenancy contract or registered Ejari proof' : 'Signed Form F or DLD title transfer document';
+
+  const isSentBack = initialData?.status === 'SENT_BACK' || initialData?.status === 'REJECTED';
+  const reviewNote = initialData?.reviewNote;
+  const dealAgent = initialData?.agent || (activeListing?.listedBy?.fullName ? activeListing.listedBy : null) || account;
+
+  const handleSelectListing = (e) => {
+    const val = e.target.value;
+    setSelectedListingId(val);
+    const chosen = availableListings.find((l) => (l.id || l._id) === val);
+    if (chosen) {
+      if (chosen.price && !finalPrice) {
+        setFinalPrice(chosen.price);
+      }
+    }
+  };
 
   const handleFileUpload = async (e) => {
     const file = e.target.files?.[0];
@@ -129,7 +157,7 @@ export default function RecordDealModal({
       const uploaded = await cmpConnectApi.uploadTransactionProof(file, sig);
       setProofDoc(uploaded);
     } catch (err) {
-      setError(err.message || 'Failed to upload proof document. Please try again.');
+      setError(err.message || 'Failed to upload contract document. Please try again.');
     } finally {
       setIsUploadingProof(false);
     }
@@ -139,14 +167,14 @@ export default function RecordDealModal({
     e.preventDefault();
     setError(null);
 
-    const lid = selectedListingId || listing?.id || listing?._id;
-    if (!lid) {
-      setError('Please select a listing to record the closed deal.');
+    const lid = selectedListingId || listing?.id || listing?._id || initialData?.listingId;
+    if (!lid && !initialData?.id) {
+      setError('Please select a listing to submit the contract.');
       return;
     }
 
     if (!finalPrice || Number(finalPrice) <= 0) {
-      setError('Please enter a valid final closing price.');
+      setError('Please enter a valid closing price.');
       return;
     }
 
@@ -156,20 +184,18 @@ export default function RecordDealModal({
     }
 
     if (!proofDoc && isLiveData) {
-      setError(`Please upload the required proof document (${docLabel}).`);
+      setError(`Please upload the required contract document (${docTitle}).`);
       return;
     }
 
     if (!declared) {
-      setError('Please confirm that your agency took part in this transaction.');
+      setError('Please confirm that the contract details and documents are correct.');
       return;
     }
 
     setLoading(true);
     try {
       const payload = {
-        listingId: lid,
-        ...(agentId ? { agentId } : {}),
         transactionDate,
         finalPrice: Number(finalPrice),
         counterpartyName: counterpartyName.trim() || undefined,
@@ -177,34 +203,32 @@ export default function RecordDealModal({
         document: proofDoc || {
           url: 'https://res.cloudinary.com/demo/image/upload/sample.pdf',
           public_id: 'sample_doc',
-          fileName: 'proof.pdf'
+          fileName: 'contract.pdf'
         },
         declared: true
       };
 
       if (isLiveData) {
         const txId = initialData?.id || initialData?._id;
-        if (txId && (initialData?.status === 'UNCLAIMED' || initialData?.claimStatus === 'Not claimed')) {
-          await cmpConnectApi.claimTransaction(txId, payload);
+        if (txId) {
+          await cmpConnectApi.submitTransactionContract(txId, payload);
         } else {
-          await cmpConnectApi.recordClosedDeal(payload);
+          // If initiated as a brand new deal, mark listing sold first then submit contract
+          const markRes = await cmpConnectApi.markListingSold(lid, transactionDate);
+          const newTxId = markRes?.data?.transaction?.id;
+          if (newTxId) {
+            await cmpConnectApi.submitTransactionContract(newTxId, payload);
+          }
         }
       }
 
-      // Clear from unclaimed localStorage store if present
-      try {
-        const stored = JSON.parse(localStorage.getItem('cmp_unclaimed_transactions') || '[]');
-        const updated = stored.filter((t) => t.listingId !== lid && t.id !== initialData?.id && t.id !== initialData?._id);
-        localStorage.setItem('cmp_unclaimed_transactions', JSON.stringify(updated));
-      } catch (e) {}
-
       onSuccess?.({
-        message: 'Deal claimed and submitted for CMP verification.',
+        message: 'Contract submitted. Your company will claim the deal.',
         listingId: lid
       });
       onClose();
     } catch (err) {
-      setError(err.message || 'Failed to submit deal claim. Please check your inputs.');
+      setError(err.message || 'Failed to submit contract. Please check your inputs.');
     } finally {
       setLoading(false);
     }
@@ -217,7 +241,7 @@ export default function RecordDealModal({
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'var(--cmp-overlay)',
+        background: 'var(--cmp-overlay, rgba(0, 0, 0, 0.7))',
         display: 'grid',
         placeItems: 'center',
         zIndex: 1000,
@@ -229,13 +253,13 @@ export default function RecordDealModal({
       <div
         className="card"
         style={{
-          width: 'min(580px, 100%)',
+          width: 'min(620px, 95vw)',
           maxHeight: '90vh',
           display: 'flex',
           flexDirection: 'column',
-          background: 'var(--cmp-surface)',
-          border: '1px solid var(--cmp-border)',
-          borderRadius: 'var(--cmp-radius-xl, 16px)',
+          background: 'var(--cmp-surface, #0b1a15)',
+          border: '1px solid var(--cmp-border, #1f382f)',
+          borderRadius: '16px',
           boxShadow: 'var(--cmp-shadow-lg)',
           overflow: 'hidden'
         }}
@@ -245,19 +269,19 @@ export default function RecordDealModal({
         <div
           style={{
             padding: '18px 24px',
-            borderBottom: '1px solid var(--cmp-border)',
+            borderBottom: '1px solid var(--cmp-border, #1f382f)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            background: 'var(--cmp-surface-sunken)'
+            background: 'var(--cmp-surface-sunken, #06130f)'
           }}
         >
           <div>
-            <h2 style={{ fontSize: '18px', fontWeight: 800, margin: 0 }}>
-              Record a closed deal
+            <h2 style={{ fontSize: '18px', fontWeight: 800, margin: 0, color: 'var(--cmp-text, #fff)' }}>
+              {isSentBack ? 'Submit contract again' : 'Submit contract'}
             </h2>
-            <p style={{ margin: '3px 0 0', fontSize: '13px', color: 'var(--cmp-text-muted)' }}>
-              Mark this property as {isRental ? 'rented' : 'sold'} and submit proof for CMP verification.
+            <p style={{ margin: '3px 0 0', fontSize: '13px', color: 'var(--cmp-text-muted, #8ea399)' }}>
+              Upload your {docTitle} and finalize details. Your company will claim the deal.
             </p>
           </div>
           <button
@@ -281,9 +305,9 @@ export default function RecordDealModal({
                 gap: '8px',
                 padding: '10px 14px',
                 borderRadius: '8px',
-                background: 'var(--cmp-danger-subtle, rgba(220, 38, 38, 0.1))',
-                border: '1px solid var(--cmp-danger)',
-                color: 'var(--cmp-danger)',
+                background: 'rgba(239, 68, 68, 0.12)',
+                border: '1px solid var(--cmp-danger, #ef4444)',
+                color: 'var(--cmp-danger, #ef4444)',
                 fontSize: '13px'
               }}
             >
@@ -292,166 +316,175 @@ export default function RecordDealModal({
             </div>
           )}
 
-          {/* 1. Target Listing Info */}
+          {/* Sent Back Banner if applicable */}
+          {isSentBack && reviewNote && (
+            <div
+              style={{
+                display: 'flex',
+                gap: '12px',
+                padding: '12px 14px',
+                borderRadius: '8px',
+                background: 'rgba(245, 158, 11, 0.1)',
+                border: '1px solid var(--cmp-warning, #f59e0b)',
+                color: 'var(--cmp-warning, #f59e0b)',
+                fontSize: '13px',
+                lineHeight: 1.5
+              }}
+            >
+              <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: '2px' }} />
+              <div>
+                <strong style={{ display: 'block', marginBottom: '2px' }}>Review note from company:</strong>
+                <span>{reviewNote}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Target Listing & Locked Agent Info */}
           {activeListing ? (
             <div
               style={{
                 padding: '12px 14px',
                 borderRadius: '10px',
-                background: 'var(--cmp-surface-sunken)',
-                border: '1px solid var(--cmp-border)',
+                background: 'var(--cmp-surface-sunken, #06130f)',
+                border: '1px solid var(--cmp-border, #1f382f)',
                 display: 'flex',
+                justifyContent: 'space-between',
                 alignItems: 'center',
-                gap: '12px'
+                gap: '12px',
+                flexWrap: 'wrap'
               }}
             >
-              <Building size={20} style={{ color: 'var(--cmp-brand)', flexShrink: 0 }} />
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <p style={{ margin: 0, fontWeight: 700, fontSize: '14px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {activeListing.title || activeListing.propertyTitle || 'Listing'}
-                </p>
-                <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'var(--cmp-text-muted)' }}>
-                  Ref: <strong style={{ color: 'var(--cmp-brand)' }}>{activeListing.listingRef || activeListing.id}</strong> · {activeListing.location || activeListing.propertyLocation || 'Dubai'} · {isRental ? 'Rent' : 'Sale'}
-                </p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
+                <Building size={20} style={{ color: 'var(--cmp-brand, #28a745)', flexShrink: 0 }} />
+                <div style={{ minWidth: 0 }}>
+                  <p style={{ margin: 0, fontWeight: 700, fontSize: '14px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--cmp-text, #fff)' }}>
+                    {activeListing.title || activeListing.propertyTitle || 'Listing'}
+                  </p>
+                  <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'var(--cmp-text-muted, #8ea399)' }}>
+                    Ref: <strong style={{ color: 'var(--cmp-brand, #28a745)' }}>{activeListing.listingRef || activeListing.id}</strong> · {activeListing.location || 'Dubai'} · {isRental ? 'Rent' : 'Sale'}
+                  </p>
+                </div>
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '4px 10px',
+                  borderRadius: '6px',
+                  background: 'var(--cmp-surface, #0b1a15)',
+                  border: '1px solid var(--cmp-border, #1f382f)',
+                  fontSize: '12px',
+                  color: 'var(--cmp-text-muted, #8ea399)'
+                }}
+              >
+                <User size={13} style={{ color: 'var(--cmp-brand, #28a745)' }} />
+                <span>Agent: <strong style={{ color: 'var(--cmp-text, #fff)' }}>{dealAgent?.fullName || 'Assigned agent'}</strong></span>
+                {dealAgent?.brn && <span style={{ opacity: 0.7 }}>({dealAgent.brn})</span>}
               </div>
             </div>
           ) : (
             <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
-                Select Listing <span style={{ color: 'var(--cmp-danger)' }}>*</span>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px', color: 'var(--cmp-text, #fff)' }}>
+                Select Listing <span style={{ color: 'var(--cmp-danger, #ef4444)' }}>*</span>
               </label>
               <select
                 value={selectedListingId}
-                onChange={(e) => setSelectedListingId(e.target.value)}
+                onChange={handleSelectListing}
                 required
                 style={{
                   width: '100%',
-                  height: '40px',
+                  height: '42px',
                   borderRadius: '8px',
-                  border: '1px solid var(--cmp-border)',
+                  border: '1px solid var(--cmp-border, #1f382f)',
                   padding: '0 12px',
-                  background: 'var(--cmp-surface)',
-                  color: 'var(--cmp-text)',
-                  fontSize: '14px'
+                  background: 'var(--cmp-surface-sunken, #06130f)',
+                  color: 'var(--cmp-text, #fff)',
+                  fontSize: '14px',
+                  outline: 'none',
+                  boxSizing: 'border-box'
                 }}
               >
-                <option value="">-- Choose an active property --</option>
+                <option value="">-- Choose a property --</option>
                 {availableListings.map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.listingRef ? `[${l.listingRef}] ` : ''}{l.title} ({l.purpose})
+                  <option key={l.id || l._id} value={l.id || l._id} title={l.title}>
+                    {formatListingOptionLabel(l)}
                   </option>
                 ))}
               </select>
             </div>
           )}
 
-          {/* 2. Assigned Agent */}
-          {activeAgents.length > 0 && (
-            <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
-                Closing Agent
-              </label>
-              <select
-                value={agentId}
-                onChange={(e) => setAgentId(e.target.value)}
-                style={{
-                  width: '100%',
-                  height: '40px',
-                  borderRadius: '8px',
-                  border: '1px solid var(--cmp-border)',
-                  padding: '0 12px',
-                  background: 'var(--cmp-surface)',
-                  color: 'var(--cmp-text)',
-                  fontSize: '14px'
-                }}
-              >
-                <option value="">Myself ({account?.fullName || 'Current user'})</option>
-                {activeAgents.map((ag) => (
-                  <option key={ag.id} value={ag.id}>
-                    {ag.fullName} {ag.compliance?.brn ? `(BRN: ${ag.compliance.brn})` : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {/* 3. Final Price & Transaction Date Row */}
+          {/* Final Price & Transaction Date Row */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
             <div>
-              <label htmlFor="deal-final-price" style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
-                {isRental ? 'Annual Rent (AED)' : 'Final Sale Price (AED)'} <span style={{ color: 'var(--cmp-danger)' }}>*</span>
+              <label htmlFor="deal-final-price" style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px', color: 'var(--cmp-text, #fff)' }}>
+                {isRental ? 'Annual Rent (AED)' : 'Final Sale Price (AED)'} <span style={{ color: 'var(--cmp-danger, #ef4444)' }}>*</span>
               </label>
-              <input
-                id="deal-final-price"
-                type="number"
-                min="1"
-                placeholder="e.g. 1950000"
-                value={finalPrice}
-                onChange={(e) => setFinalPrice(e.target.value)}
-                required
-                style={{
-                  width: '100%',
-                  height: '40px',
-                  borderRadius: '8px',
-                  border: '1px solid var(--cmp-border)',
-                  padding: '0 12px',
-                  fontSize: '14px'
-                }}
-              />
+              <div style={{ position: 'relative' }}>
+                <DollarSign size={16} style={{ position: 'absolute', left: '12px', top: '13px', color: 'var(--cmp-text-muted, #8ea399)' }} />
+                <input
+                  id="deal-final-price"
+                  type="number"
+                  min="1"
+                  step="any"
+                  placeholder="e.g. 1500000"
+                  value={finalPrice}
+                  onChange={(e) => setFinalPrice(e.target.value)}
+                  required
+                  style={{
+                    width: '100%',
+                    height: '42px',
+                    borderRadius: '8px',
+                    border: '1px solid var(--cmp-border, #1f382f)',
+                    padding: '0 12px 0 34px',
+                    background: 'var(--cmp-surface-sunken, #06130f)',
+                    color: 'var(--cmp-text, #fff)',
+                    fontSize: '14px',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
             </div>
 
             <div>
-              <label htmlFor="deal-date" style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
-                Completion Date <span style={{ color: 'var(--cmp-danger)' }}>*</span>
+              <label htmlFor="deal-date" style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px', color: 'var(--cmp-text, #fff)' }}>
+                Completion Date <span style={{ color: 'var(--cmp-danger, #ef4444)' }}>*</span>
               </label>
-              <input
-                id="deal-date"
-                type="date"
-                max={new Date().toISOString().split('T')[0]}
-                value={transactionDate}
-                onChange={(e) => setTransactionDate(e.target.value)}
-                required
-                style={{
-                  width: '100%',
-                  height: '40px',
-                  borderRadius: '8px',
-                  border: '1px solid var(--cmp-border)',
-                  padding: '0 12px',
-                  fontSize: '14px'
-                }}
-              />
+              <div style={{ position: 'relative' }}>
+                <Calendar size={16} style={{ position: 'absolute', left: '12px', top: '13px', color: 'var(--cmp-text-muted, #8ea399)' }} />
+                <input
+                  id="deal-date"
+                  type="date"
+                  max={new Date().toISOString().split('T')[0]}
+                  value={transactionDate}
+                  onChange={(e) => setTransactionDate(e.target.value)}
+                  required
+                  style={{
+                    width: '100%',
+                    height: '42px',
+                    borderRadius: '8px',
+                    border: '1px solid var(--cmp-border, #1f382f)',
+                    padding: '0 12px 0 34px',
+                    background: 'var(--cmp-surface-sunken, #06130f)',
+                    color: 'var(--cmp-text, #fff)',
+                    fontSize: '14px',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
             </div>
           </div>
 
-          {/* 4. Counterparty Name (Buyer / Tenant) */}
+          {/* Document Upload */}
           <div>
-            <label htmlFor="deal-counterparty" style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
-              {isRental ? 'Tenant Full Name' : 'Buyer Full Name'} <span style={{ color: 'var(--cmp-text-faint)', fontWeight: 400 }}>(Optional)</span>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '4px', color: 'var(--cmp-text, #fff)' }}>
+              {docTitle} <span style={{ color: 'var(--cmp-danger, #ef4444)' }}>*</span>
             </label>
-            <input
-              id="deal-counterparty"
-              type="text"
-              placeholder="e.g. Tariq Al Mansoori"
-              value={counterpartyName}
-              onChange={(e) => setCounterpartyName(e.target.value)}
-              style={{
-                width: '100%',
-                height: '40px',
-                borderRadius: '8px',
-                border: '1px solid var(--cmp-border)',
-                padding: '0 12px',
-                fontSize: '14px'
-              }}
-            />
-          </div>
-
-          {/* 5. Proof Document Upload */}
-          <div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
-              Upload Proof Document <span style={{ color: 'var(--cmp-danger)' }}>*</span>
-            </label>
-            <p style={{ margin: '0 0 8px', fontSize: '12px', color: 'var(--cmp-text-muted)' }}>
-              {docLabel}. PDF, JPG, PNG up to 10 MB.
+            <p style={{ margin: '0 0 8px', fontSize: '12px', color: 'var(--cmp-text-muted, #8ea399)' }}>
+              {docSubtitle} (PDF, JPG, PNG up to 10 MB)
             </p>
 
             {proofDoc ? (
@@ -460,107 +493,155 @@ export default function RecordDealModal({
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  padding: '10px 14px',
+                  padding: '12px 14px',
                   borderRadius: '8px',
-                  background: 'var(--cmp-brand-subtle)',
-                  border: '1px solid var(--cmp-brand-border)'
+                  background: 'var(--cmp-surface-sunken, #06130f)',
+                  border: '1px solid var(--cmp-brand, #28a745)'
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-                  <FileText size={18} style={{ color: 'var(--cmp-brand)', flexShrink: 0 }} />
-                  <span style={{ fontSize: '13px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {proofDoc.fileName || 'Proof Document'}
-                  </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <FileText size={20} style={{ color: 'var(--cmp-brand, #28a745)' }} />
+                  <div>
+                    <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--cmp-text, #fff)' }}>
+                      {proofDoc.fileName || 'Contract Document'}
+                    </span>
+                    <span style={{ display: 'block', fontSize: '11px', color: 'var(--cmp-success, #10b981)' }}>
+                      Ready to submit
+                    </span>
+                  </div>
                 </div>
                 <button
                   type="button"
+                  className="btn btn-outline btn-sm"
                   onClick={() => setProofDoc(null)}
-                  style={{
-                    border: 'none',
-                    background: 'transparent',
-                    cursor: 'pointer',
-                    color: 'var(--cmp-danger)',
-                    padding: '2px',
-                    display: 'inline-flex'
-                  }}
-                  title="Remove document"
+                  style={{ fontSize: '12px', padding: '4px 10px' }}
                 >
-                  <X size={16} />
+                  Replace
                 </button>
               </div>
             ) : (
               <label
                 style={{
+                  border: '2px dashed var(--cmp-border, #1f382f)',
+                  borderRadius: '10px',
+                  padding: '24px 16px',
+                  textAlign: 'center',
+                  background: 'var(--cmp-surface-sunken, #06130f)',
+                  cursor: isUploadingProof ? 'wait' : 'pointer',
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  padding: '20px',
-                  border: '2px dashed var(--cmp-border)',
-                  borderRadius: '10px',
-                  cursor: isUploadingProof ? 'not-allowed' : 'pointer',
-                  background: 'var(--cmp-surface-sunken)',
-                  transition: 'border-color 0.15s ease'
+                  gap: '8px',
+                  transition: 'border-color 0.2s ease'
                 }}
               >
                 <input
                   type="file"
-                  accept=".pdf,image/png,image/jpeg,image/webp"
+                  accept=".pdf,image/jpeg,image/png,image/jpg"
                   onChange={handleFileUpload}
                   disabled={isUploadingProof}
                   style={{ display: 'none' }}
                 />
                 {isUploadingProof ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--cmp-brand)' }}>
-                    <Loader2 size={20} className="animate-spin" />
-                    <span style={{ fontSize: '13px', fontWeight: 600 }}>Uploading proof to Cloudinary...</span>
-                  </div>
+                  <>
+                    <Loader2 size={24} className="animate-spin" style={{ color: 'var(--cmp-brand, #28a745)' }} />
+                    <span style={{ fontSize: '13px', color: 'var(--cmp-text-muted, #8ea399)' }}>
+                      Uploading document securely...
+                    </span>
+                  </>
                 ) : (
                   <>
-                    <UploadCloud size={24} style={{ color: 'var(--cmp-brand)', marginBottom: '6px' }} />
-                    <span style={{ fontSize: '13px', fontWeight: 600 }}>Click to browse proof file</span>
-                    <span style={{ fontSize: '11px', color: 'var(--cmp-text-faint)', marginTop: '2px' }}>
-                      Form F, Title Transfer, or Tenancy Contract (PDF/Image)
-                    </span>
+                    <div
+                      style={{
+                        width: '38px',
+                        height: '38px',
+                        borderRadius: '50%',
+                        background: 'rgba(40, 167, 69, 0.1)',
+                        display: 'grid',
+                        placeItems: 'center',
+                        color: 'var(--cmp-brand, #28a745)'
+                      }}
+                    >
+                      <UploadCloud size={20} />
+                    </div>
+                    <div>
+                      <span style={{ color: 'var(--cmp-brand, #28a745)', fontWeight: 600, fontSize: '13px' }}>
+                        Click to browse file
+                      </span>
+                      <span style={{ color: 'var(--cmp-text-muted, #8ea399)', fontSize: '13px' }}> or drag and drop</span>
+                    </div>
                   </>
                 )}
               </label>
             )}
           </div>
 
-          {/* 6. Notes */}
-          <div>
-            <label htmlFor="deal-notes" style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
-              Notes <span style={{ color: 'var(--cmp-text-faint)', fontWeight: 400 }}>(Optional)</span>
-            </label>
-            <textarea
-              id="deal-notes"
-              rows={2}
-              placeholder="Any additional deal or closing notes for CMP compliance..."
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              style={{
-                width: '100%',
-                borderRadius: '8px',
-                border: '1px solid var(--cmp-border)',
-                padding: '8px 12px',
-                fontSize: '13px',
-                fontFamily: 'inherit',
-                resize: 'vertical'
-              }}
-            />
+          {/* Counterparty Name & Notes */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '14px' }}>
+            <div>
+              <label htmlFor="deal-counterparty" style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px', color: 'var(--cmp-text, #fff)' }}>
+                {isRental ? 'Tenant Name' : 'Buyer Name'} <span style={{ fontSize: '12px', fontWeight: 400, color: 'var(--cmp-text-muted, #8ea399)' }}>(optional)</span>
+              </label>
+              <input
+                id="deal-counterparty"
+                type="text"
+                placeholder="e.g. John Doe or Real Estate LLC"
+                value={counterpartyName}
+                onChange={(e) => setCounterpartyName(e.target.value)}
+                maxLength={120}
+                style={{
+                  width: '100%',
+                  height: '42px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--cmp-border, #1f382f)',
+                  padding: '0 12px',
+                  background: 'var(--cmp-surface-sunken, #06130f)',
+                  color: 'var(--cmp-text, #fff)',
+                  fontSize: '14px',
+                  outline: 'none',
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
+
+            <div>
+              <label htmlFor="deal-notes" style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px', color: 'var(--cmp-text, #fff)' }}>
+                Notes <span style={{ fontSize: '12px', fontWeight: 400, color: 'var(--cmp-text-muted, #8ea399)' }}>(optional)</span>
+              </label>
+              <textarea
+                id="deal-notes"
+                rows={2}
+                placeholder="Any special remarks regarding payment terms, commission, or transfer details..."
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                maxLength={500}
+                style={{
+                  width: '100%',
+                  borderRadius: '8px',
+                  border: '1px solid var(--cmp-border, #1f382f)',
+                  padding: '10px 12px',
+                  background: 'var(--cmp-surface-sunken, #06130f)',
+                  color: 'var(--cmp-text, #fff)',
+                  fontSize: '13.5px',
+                  lineHeight: 1.5,
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                  resize: 'vertical'
+                }}
+              />
+            </div>
           </div>
 
-          {/* 7. Declaration Checkbox */}
+          {/* Declaration Checkbox */}
           <label
             style={{
               display: 'flex',
               alignItems: 'flex-start',
               gap: '10px',
-              padding: '10px 12px',
+              padding: '12px 14px',
               borderRadius: '8px',
-              background: 'var(--cmp-surface-sunken)',
-              border: '1px solid var(--cmp-border)',
+              background: 'var(--cmp-surface-sunken, #06130f)',
+              border: '1px solid var(--cmp-border, #1f382f)',
               cursor: 'pointer'
             }}
           >
@@ -568,22 +649,23 @@ export default function RecordDealModal({
               type="checkbox"
               checked={declared}
               onChange={(e) => setDeclared(e.target.checked)}
-              style={{ width: '16px', height: '16px', marginTop: '2px', accentColor: 'var(--cmp-brand)' }}
+              required
+              style={{ marginTop: '3px', cursor: 'pointer', accentColor: 'var(--cmp-brand, #28a745)' }}
             />
-            <span style={{ fontSize: '12.5px', lineHeight: 1.4, color: 'var(--cmp-text)' }}>
-              I confirm that our agency was directly involved in closing this transaction and the uploaded document is authentic.
+            <span style={{ fontSize: '13px', lineHeight: 1.5, color: 'var(--cmp-text, #fff)' }}>
+              I confirm that the contract details and documents are accurate and represent an authentic completed deal.
             </span>
           </label>
 
-          {/* Modal Actions */}
+          {/* Form Actions */}
           <div
             style={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'flex-end',
               gap: '10px',
-              paddingTop: '12px',
-              borderTop: '1px solid var(--cmp-border)'
+              paddingTop: '10px',
+              borderTop: '1px solid var(--cmp-border, #1f382f)'
             }}
           >
             <button
@@ -597,20 +679,15 @@ export default function RecordDealModal({
             <button
               type="submit"
               className="btn btn-primary btn-sm"
-              disabled={loading || isUploadingProof}
-              style={{ minWidth: '130px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+              disabled={loading || isUploadingProof || !declared || (!proofDoc && isLiveData)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
             >
-              {loading ? (
-                <>
-                  <Loader2 size={15} className="animate-spin" />
-                  <span>Submitting...</span>
-                </>
-              ) : (
-                <>
-                  <Check size={15} />
-                  <span>Submit Deal</span>
-                </>
-              )}
+              {loading && <Loader2 size={14} className="animate-spin" />}
+              <span>{isSentBack ? 'Submit again' : 'Submit contract'}</span>
             </button>
           </div>
         </form>

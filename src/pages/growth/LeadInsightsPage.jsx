@@ -1,16 +1,56 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Phone, MessageSquare, Mail, MessageCircle, TrendingUp, Calendar, ArrowUpRight } from 'lucide-react';
+import {
+  Phone,
+  MessageSquare,
+  Mail,
+  MessageCircle,
+  TrendingUp,
+  Calendar,
+  ArrowUpRight,
+  Info,
+  RefreshCw,
+  AlertCircle
+} from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { cmpConnectApi } from '../../services/cmpConnectApi';
 
 export default function LeadInsightsPage() {
   const { isLiveData } = useApp();
   const [period, setPeriod] = useState('7d'); // '7d' | '30d' | '90d'
   const [channelFilter, setChannelFilter] = useState('all'); // 'all' | 'whatsapp' | 'calls' | 'email'
   const [callChartTab, setCallChartTab] = useState('calls'); // 'calls' | 'rate'
+  const [apiData, setApiData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const fetchEnquiriesData = useCallback(async () => {
+    if (!isLiveData) return;
+    try {
+      setLoading(true);
+      setError(null);
+      const res = await cmpConnectApi.getInsightsEnquiries({
+        range: period.replace('d', '')
+      });
+      if (res && res.data) {
+        setApiData(res.data);
+      }
+    } catch (err) {
+      console.error('Error fetching enquiry insights:', err);
+      setError(err.message || 'Failed to fetch enquiry insights.');
+    } finally {
+      setLoading(false);
+    }
+  }, [isLiveData, period]);
+
+  useEffect(() => {
+    fetchEnquiriesData();
+  }, [fetchEnquiriesData]);
+
+  const isAvailable = !isLiveData || (apiData && apiData.available === true);
 
   return (
-    <div>
+    <div style={{ display: 'grid', gap: '20px' }}>
       {/* Title & Filter */}
       <div
         className="row"
@@ -18,42 +58,95 @@ export default function LeadInsightsPage() {
           justifyContent: 'space-between',
           alignItems: 'flex-start',
           gap: '16px',
-          flexWrap: 'wrap',
-          marginBottom: '20px'
+          flexWrap: 'wrap'
         }}
       >
         <div>
-          <h1 style={{ fontSize: '26px' }}>Enquiry insights</h1>
+          <h1 style={{ fontSize: '26px', margin: 0, fontWeight: 700, letterSpacing: '-0.02em' }}>
+            Enquiry insights
+          </h1>
           <p className="muted" style={{ margin: '6px 0 0', fontSize: '14px' }}>
             Where your enquiries originate across WhatsApp, phone calls, portal forms and instant chat.
           </p>
         </div>
 
-        <div style={{ width: '180px' }}>
-          <select
-            value={period}
-            onChange={(e) => setPeriod(e.target.value)}
-            style={{ width: '100%', height: '40px', fontSize: '13px' }}
-          >
-            <option value="7d">Last 7 days</option>
-            <option value="30d">Last 30 days</option>
-            <option value="90d">Last 90 days</option>
-          </select>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ width: '160px' }}>
+            <select
+              value={period}
+              onChange={(e) => setPeriod(e.target.value)}
+              style={{ width: '100%', height: '38px', fontSize: '13px' }}
+            >
+              <option value="7d">Last 7 days</option>
+              <option value="30d">Last 30 days</option>
+              <option value="90d">Last 90 days</option>
+            </select>
+          </div>
+          {isLiveData && (
+            <button
+              type="button"
+              onClick={fetchEnquiriesData}
+              className="btn btn-outline btn-sm"
+              disabled={loading}
+              title="Refresh enquiry data"
+            >
+              <RefreshCw size={14} className={loading ? 'spin' : ''} />
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Offline Notice Banner for Live Data */}
+      {isLiveData && (
+        <div
+          className="card"
+          style={{
+            padding: '14px 18px',
+            background: 'var(--cmp-surface-sunken)',
+            borderColor: 'var(--cmp-border)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            fontSize: '13px'
+          }}
+        >
+          <Info size={18} style={{ color: 'var(--cmp-brand)', flexShrink: 0 }} />
+          <span style={{ color: 'var(--cmp-text-muted)' }}>
+            <strong>Consumer Enquiry Tracking:</strong> Enquiries will automatically begin tracking once your CMP Connect listings are active and synced on the consumer Cash My Property web portal and mobile app.
+          </span>
+        </div>
+      )}
+
+      {error && (
+        <div
+          className="card"
+          style={{
+            padding: '14px 18px',
+            background: 'var(--cmp-danger-subtle, rgba(220, 38, 38, 0.08))',
+            borderColor: 'var(--cmp-danger)',
+            color: 'var(--cmp-danger)',
+            fontSize: '13px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px'
+          }}
+        >
+          <AlertCircle size={18} />
+          <span>{error}</span>
+        </div>
+      )}
 
       {/* Row 1: Source Donut + Over Time Line Chart */}
       <div
         style={{
           display: 'grid',
           gridTemplateColumns: 'minmax(280px, 1fr) minmax(0, 2.2fr)',
-          gap: '16px',
-          marginBottom: '28px'
+          gap: '16px'
         }}
       >
         {/* Source Donut Card */}
         <section className="card" style={{ padding: '20px', display: 'grid', gap: '16px', alignContent: 'start' }}>
-          <h2 style={{ fontSize: '16px', margin: 0 }}>Direct leads source</h2>
+          <h2 style={{ fontSize: '16px', margin: 0, fontWeight: 700 }}>Direct leads source</h2>
 
           <div style={{ position: 'relative', width: '170px', height: '170px', margin: '0 auto' }}>
             <svg width="170" height="170" style={{ transform: 'rotate(-90deg)' }} aria-hidden="true">
@@ -108,7 +201,9 @@ export default function LeadInsightsPage() {
               )}
             </svg>
             <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', alignContent: 'center', textAlign: 'center' }}>
-              <span style={{ fontSize: '28px', fontWeight: 800 }}>{isLiveData ? 0 : 43}</span>
+              <span style={{ fontSize: '26px', fontWeight: 800, color: 'var(--cmp-text)' }}>
+                {isLiveData ? 'N/A' : 43}
+              </span>
               <span className="faint" style={{ fontSize: '12px' }}>Total Leads</span>
             </div>
           </div>
@@ -117,22 +212,22 @@ export default function LeadInsightsPage() {
             <li className="row" style={{ gap: '6px' }}>
               <span style={{ width: '10px', height: '10px', borderRadius: '2px', background: 'var(--cmp-brand)' }} />
               <span className="muted">WhatsApp</span>
-              <strong>{isLiveData ? 0 : 22}</strong>
+              <strong>{isLiveData ? 'N/A' : 22}</strong>
             </li>
             <li className="row" style={{ gap: '6px' }}>
               <span style={{ width: '10px', height: '10px', borderRadius: '2px', background: 'var(--cmp-accent)' }} />
               <span className="muted">Calls</span>
-              <strong>{isLiveData ? 0 : 9}</strong>
+              <strong>{isLiveData ? 'N/A' : 9}</strong>
             </li>
             <li className="row" style={{ gap: '6px' }}>
               <span style={{ width: '10px', height: '10px', borderRadius: '2px', background: 'var(--cmp-info)' }} />
               <span className="muted">Email</span>
-              <strong>{isLiveData ? 0 : 7}</strong>
+              <strong>{isLiveData ? 'N/A' : 7}</strong>
             </li>
             <li className="row" style={{ gap: '6px' }}>
               <span style={{ width: '10px', height: '10px', borderRadius: '2px', background: 'var(--cmp-warning)' }} />
               <span className="muted">Chat</span>
-              <strong>{isLiveData ? 0 : 5}</strong>
+              <strong>{isLiveData ? 'N/A' : 5}</strong>
             </li>
           </ul>
 
@@ -144,65 +239,31 @@ export default function LeadInsightsPage() {
         {/* Over Time Line Chart Card */}
         <section className="card" style={{ padding: '20px' }}>
           <div className="row" style={{ justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap', marginBottom: '14px' }}>
-            <h2 style={{ fontSize: '16px', margin: 0 }}>Direct leads over time</h2>
+            <h2 style={{ fontSize: '16px', margin: 0, fontWeight: 700 }}>Direct leads over time</h2>
 
             <div className="row" style={{ border: '1px solid var(--cmp-border)', borderRadius: '8px', overflow: 'hidden' }}>
-              <button
-                type="button"
-                className="chip"
-                style={{
-                  borderRadius: 0,
-                  border: 'none',
-                  background: channelFilter === 'all' ? 'var(--cmp-brand-subtle)' : 'transparent',
-                  color: channelFilter === 'all' ? 'var(--cmp-brand)' : 'var(--cmp-text-muted)',
-                  fontWeight: channelFilter === 'all' ? 700 : 500
-                }}
-                onClick={() => setChannelFilter('all')}
-              >
-                All leads
-              </button>
-              <button
-                type="button"
-                className="chip"
-                style={{
-                  borderRadius: 0,
-                  border: 'none',
-                  background: channelFilter === 'whatsapp' ? 'var(--cmp-brand-subtle)' : 'transparent',
-                  color: channelFilter === 'whatsapp' ? 'var(--cmp-brand)' : 'var(--cmp-text-muted)',
-                  fontWeight: channelFilter === 'whatsapp' ? 700 : 500
-                }}
-                onClick={() => setChannelFilter('whatsapp')}
-              >
-                WhatsApp
-              </button>
-              <button
-                type="button"
-                className="chip"
-                style={{
-                  borderRadius: 0,
-                  border: 'none',
-                  background: channelFilter === 'calls' ? 'var(--cmp-brand-subtle)' : 'transparent',
-                  color: channelFilter === 'calls' ? 'var(--cmp-brand)' : 'var(--cmp-text-muted)',
-                  fontWeight: channelFilter === 'calls' ? 700 : 500
-                }}
-                onClick={() => setChannelFilter('calls')}
-              >
-                Calls
-              </button>
-              <button
-                type="button"
-                className="chip"
-                style={{
-                  borderRadius: 0,
-                  border: 'none',
-                  background: channelFilter === 'email' ? 'var(--cmp-brand-subtle)' : 'transparent',
-                  color: channelFilter === 'email' ? 'var(--cmp-brand)' : 'var(--cmp-text-muted)',
-                  fontWeight: channelFilter === 'email' ? 700 : 500
-                }}
-                onClick={() => setChannelFilter('email')}
-              >
-                Email
-              </button>
+              {[
+                { key: 'all', label: 'All leads' },
+                { key: 'whatsapp', label: 'WhatsApp' },
+                { key: 'calls', label: 'Calls' },
+                { key: 'email', label: 'Email' }
+              ].map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  className="chip"
+                  style={{
+                    borderRadius: 0,
+                    border: 'none',
+                    background: channelFilter === tab.key ? 'var(--cmp-brand-subtle)' : 'transparent',
+                    color: channelFilter === tab.key ? 'var(--cmp-brand)' : 'var(--cmp-text-muted)',
+                    fontWeight: channelFilter === tab.key ? 700 : 500
+                  }}
+                  onClick={() => setChannelFilter(tab.key)}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -216,12 +277,16 @@ export default function LeadInsightsPage() {
                 background: 'var(--cmp-surface-sunken)',
                 borderRadius: 'var(--cmp-radius-md)',
                 border: '1px dashed var(--cmp-border)',
-                padding: '16px'
+                padding: '24px'
               }}
             >
-              <div>
-                <p style={{ margin: 0, fontWeight: 700, fontSize: '14px' }}>No enquiry trends recorded</p>
-                <p className="muted" style={{ margin: '4px 0 0', fontSize: '12px' }}>Direct leads across all channels over time will be charted here.</p>
+              <div style={{ maxWidth: '360px' }}>
+                <p style={{ margin: 0, fontWeight: 700, fontSize: '14.5px', color: 'var(--cmp-text)' }}>
+                  Enquiry tracking offline (N/A)
+                </p>
+                <p className="muted" style={{ margin: '6px 0 0', fontSize: '12.5px', lineHeight: 1.4 }}>
+                  Day-by-day conversion across WhatsApp, direct phone calls, email forms and live chat will be charted here once web tracking is connected.
+                </p>
               </div>
             </div>
           ) : (
@@ -271,7 +336,7 @@ export default function LeadInsightsPage() {
       </div>
 
       {/* Row 2: Call Insights */}
-      <h2 style={{ fontSize: '18px', margin: '28px 0 14px', display: 'flex', gap: '10px', alignItems: 'center' }}>
+      <h2 style={{ fontSize: '18px', margin: '12px 0 0', display: 'flex', gap: '10px', alignItems: 'center', fontWeight: 700 }}>
         <span aria-hidden="true" style={{ width: '4px', height: '18px', borderRadius: '2px', background: 'var(--cmp-accent)' }} />
         Call insights
       </h2>
@@ -286,16 +351,16 @@ export default function LeadInsightsPage() {
         <section className="card" style={{ padding: '20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', alignContent: 'start' }}>
           <div>
             <p className="muted" style={{ margin: 0, fontSize: '13px' }}>Total calls</p>
-            <p style={{ margin: '6px 0 0', fontSize: '30px', fontWeight: 800 }}>{isLiveData ? 0 : 9}</p>
-            <p style={{ margin: '4px 0 0', fontSize: '13px', fontWeight: 600, color: isLiveData ? 'var(--cmp-text-faint)' : 'var(--cmp-danger)' }}>
-              {isLiveData ? 'No earlier period' : '↓ 10% vs prev 7 days'}
+            <p style={{ margin: '6px 0 0', fontSize: '28px', fontWeight: 800 }}>{isLiveData ? 'N/A' : 9}</p>
+            <p style={{ margin: '4px 0 0', fontSize: '12px', fontWeight: 600, color: 'var(--cmp-text-faint)' }}>
+              {isLiveData ? 'Tracking starts on sync' : '↓ 10% vs prev 7 days'}
             </p>
           </div>
           <div>
             <p className="muted" style={{ margin: 0, fontSize: '13px' }}>Answering rate</p>
-            <p style={{ margin: '6px 0 0', fontSize: '30px', fontWeight: 800 }}>{isLiveData ? '—' : '100%'}</p>
-            <p className="faint" style={{ margin: '4px 0 0', fontSize: '13px' }}>
-              {isLiveData ? 'No calls recorded' : '+10 points'}
+            <p style={{ margin: '6px 0 0', fontSize: '28px', fontWeight: 800 }}>{isLiveData ? 'N/A' : '100%'}</p>
+            <p className="faint" style={{ margin: '4px 0 0', fontSize: '12px' }}>
+              {isLiveData ? 'Requires phone telemetry' : '+10 points'}
             </p>
           </div>
         </section>
@@ -355,9 +420,11 @@ export default function LeadInsightsPage() {
                 padding: '16px'
               }}
             >
-              <div>
-                <p style={{ margin: 0, fontWeight: 700, fontSize: '14px' }}>No call activity recorded</p>
-                <p className="muted" style={{ margin: '4px 0 0', fontSize: '12px' }}>Call volume and answering rates will appear here once calls are tracked.</p>
+              <div style={{ maxWidth: '340px' }}>
+                <p style={{ margin: 0, fontWeight: 700, fontSize: '14px' }}>No call activity recorded (N/A)</p>
+                <p className="muted" style={{ margin: '4px 0 0', fontSize: '12px' }}>
+                  Call volume and answering rates will appear here once phone forwarding & call metrics are integrated.
+                </p>
               </div>
             </div>
           ) : (

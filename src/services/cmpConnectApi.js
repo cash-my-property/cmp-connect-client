@@ -1159,36 +1159,156 @@ export const cmpConnectApi = {
    * POST /api/cmpConnect/listings/:id/mark-sold
    * Moves listing to CLOSED and adds UNCLAIMED deal in Transactions
    */
-  async markListingSold(listingId, token) {
+  async markListingSold(listingId, closedAt, token) {
+    let body = undefined;
+    let actualToken = token;
+    if (typeof closedAt === 'string') {
+      body = JSON.stringify({ closedAt });
+    } else if (typeof closedAt === 'object' && closedAt?.closedAt) {
+      body = JSON.stringify(closedAt);
+    } else if (closedAt && !token) {
+      actualToken = closedAt;
+    }
+
     return apiRequest(`/api/cmpConnect/listings/${listingId}/mark-sold`, {
+      method: 'POST',
+      token: actualToken,
+      body
+    });
+  },
+
+  /**
+   * 52. Submit Contract (Step 2 - Agent)
+   * POST /api/cmpConnect/transactions/:id/submit
+   * Payload: { transactionDate, finalPrice, counterpartyName, notes, document, declared: true }
+   */
+  async submitTransactionContract(transactionId, payload, token) {
+    return apiRequest(`/api/cmpConnect/transactions/${transactionId}/submit`, {
+      method: 'POST',
+      token,
+      body: JSON.stringify(payload)
+    });
+  },
+
+  /**
+   * 53. Claim Deal (Step 3a - Company Manager / Accounts)
+   * POST /api/cmpConnect/transactions/:id/claim
+   * Finalises and marks deal as CLAIMED (no body)
+   */
+  async claimTransaction(transactionId, token) {
+    return apiRequest(`/api/cmpConnect/transactions/${transactionId}/claim`, {
       method: 'POST',
       token
     });
   },
 
   /**
-   * 52. Claim a Transaction (Step 2)
-   * POST /api/cmpConnect/transactions/:id/claim
-   * Submits proof document and details for CMP review
+   * 54. Send Back Deal (Step 3b - Company Manager / Accounts)
+   * POST /api/cmpConnect/transactions/:id/send-back
+   * Payload: { reason: string } (3-500 chars)
    */
-  async claimTransaction(transactionId, payload, token) {
-    try {
-      return await apiRequest(`/api/cmpConnect/transactions/${transactionId}/claim`, {
-        method: 'POST',
-        token,
-        body: JSON.stringify(payload)
-      });
-    } catch (err) {
-      if (err?.status === 404) {
-        return apiRequest('/api/cmpConnect/transactions', {
-          method: 'POST',
-          token,
-          body: JSON.stringify({ ...payload, transactionId })
-        });
-      }
-      throw err;
+  async sendBackTransaction(transactionId, reason, token) {
+    return apiRequest(`/api/cmpConnect/transactions/${transactionId}/send-back`, {
+      method: 'POST',
+      token,
+      body: JSON.stringify(typeof reason === 'object' ? reason : { reason })
+    });
+  },
+
+  /**
+   * 53. Insights - Performance figures (Section 11)
+   * GET /api/cmpConnect/insights/performance?agentId=&propertyType=&offering=&location=&range=
+   */
+  async getInsightsPerformance(params = {}, token) {
+    const query = new URLSearchParams();
+    if (params.agentId) {
+      query.set('agentId', Array.isArray(params.agentId) ? params.agentId.join(',') : params.agentId);
     }
+    if (params.propertyType) {
+      query.set('propertyType', Array.isArray(params.propertyType) ? params.propertyType.join(',') : params.propertyType);
+    }
+    if (params.offering && params.offering !== 'all') {
+      query.set('offering', params.offering);
+    }
+    if (params.location) {
+      query.set('location', Array.isArray(params.location) ? params.location.join('|') : params.location);
+    }
+    if (params.range) {
+      query.set('range', params.range);
+    }
+
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    return apiRequest(`/api/cmpConnect/insights/performance${qs}`, {
+      method: 'GET',
+      token
+    });
+  },
+
+  /**
+   * 54. Insights - Views, leads and locations overview (Section 11)
+   * GET /api/cmpConnect/insights/overview?range=
+   */
+  async getInsightsOverview(params = {}, token) {
+    const query = new URLSearchParams();
+    if (params.range) {
+      query.set('range', params.range);
+    }
+
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    return apiRequest(`/api/cmpConnect/insights/overview${qs}`, {
+      method: 'GET',
+      token
+    });
+  },
+
+  /**
+   * 55. Insights - Market Standing (Section 11)
+   * GET /api/cmpConnect/insights/market?offering=all&search=
+   */
+  async getInsightsMarket(params = {}, token) {
+    const query = new URLSearchParams();
+    if (params.offering && params.offering !== 'all') {
+      query.set('offering', params.offering);
+    }
+    if (params.search) {
+      query.set('search', params.search);
+    }
+
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    return apiRequest(`/api/cmpConnect/insights/market${qs}`, {
+      method: 'GET',
+      token
+    });
+  },
+
+  /**
+   * 56. Insights - Enquiry Insights (Section 11)
+   * GET /api/cmpConnect/insights/enquiries?range=7
+   */
+  async getInsightsEnquiries(params = {}, token) {
+    const query = new URLSearchParams();
+    if (params.range) {
+      query.set('range', params.range);
+    }
+
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    return apiRequest(`/api/cmpConnect/insights/enquiries${qs}`, {
+      method: 'GET',
+      token
+    });
+  },
+
+  /**
+   * 57. Insights - Spotlighted Properties & Eligibility (Section 11)
+   * GET /api/cmpConnect/insights/spotlight
+   */
+  async getInsightsSpotlight(token) {
+    return apiRequest('/api/cmpConnect/insights/spotlight', {
+      method: 'GET',
+      token
+    });
   }
 };
 
 export default cmpConnectApi;
+

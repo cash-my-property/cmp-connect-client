@@ -24,6 +24,7 @@ import LeadInsightsPage from '../pages/growth/LeadInsightsPage';
 import SmartBoostPage from '../pages/growth/SmartBoostPage';
 import CommunitySpotlightPage from '../pages/growth/CommunitySpotlightPage';
 import SpotlightedPage from '../pages/growth/SpotlightedPage';
+import MarketStandingPage from '../pages/growth/MarketStandingPage';
 
 import WalletPage from '../pages/wallet/WalletPage';
 import InvoicesPage from '../pages/wallet/InvoicesPage';
@@ -203,11 +204,22 @@ export default function AppRoutes() {
         <Route path="/transactions" element={<TransactionsPage />} />
 
         {/* Growth Hub */}
-        <Route path="/growth" element={<PerformancePage />} />
-        <Route path="/growth/insights" element={<LeadInsightsPage />} />
+        <Route element={<PermissionGuard required="insights.listings_view" label="Performance & Market Standing" />}>
+          <Route path="/growth" element={<PerformancePage />} />
+          <Route path="/growth/performance" element={<PerformancePage />} />
+          <Route path="/insights" element={<PerformancePage />} />
+          <Route path="/growth/market" element={<MarketStandingPage />} />
+          <Route path="/market" element={<MarketStandingPage />} />
+        </Route>
+        <Route element={<PermissionGuard required="insights.leads_view" label="Enquiry Insights" />}>
+          <Route path="/growth/insights" element={<LeadInsightsPage />} />
+          <Route path="/growth/enquiries" element={<LeadInsightsPage />} />
+        </Route>
         <Route path="/growth/smart-boost" element={<SmartBoostPage />} />
         <Route path="/growth/spotlight" element={<CommunitySpotlightPage />} />
-        <Route path="/growth/spotlighted" element={<SpotlightedPage />} />
+        <Route element={<PermissionGuard required="listings.spotlight" label="Spotlighted Properties" />}>
+          <Route path="/growth/spotlighted" element={<SpotlightedPage />} />
+        </Route>
 
         {/* Wallet Hub */}
         <Route element={<PermissionGuard required="contracts.view" label="Wallet & Invoices" />}>

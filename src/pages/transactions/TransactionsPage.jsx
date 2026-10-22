@@ -9,7 +9,7 @@ import {
 } from '../../components/ui';
 import { useDebounce } from '../../hooks';
 import cmpConnectApi from '../../services/cmpConnectApi';
-import { RecordDealModal, ViewClaimModal } from '../../components/transactions';
+import { RecordDealModal, ViewClaimModal, SendBackModal } from '../../components/transactions';
 import {
   Clock,
   Copy,
@@ -22,15 +22,17 @@ import {
   AlertTriangle,
   CheckCircle2,
   HelpCircle,
-  X
+  X,
+  RotateCcw,
+  CheckSquare
 } from 'lucide-react';
 
 const STATUS_KEYS = [
   { label: 'All', key: 'all' },
-  { label: 'Not claimed', key: 'UNCLAIMED' },
-  { label: 'Under review', key: 'UNDER_REVIEW' },
-  { label: 'Approved', key: 'APPROVED' },
-  { label: 'Rejected', key: 'REJECTED' }
+  { label: 'Claimed', key: 'CLAIMED' },
+  { label: 'Submitted', key: 'SUBMITTED' },
+  { label: 'Sent back', key: 'SENT_BACK' },
+  { label: 'Pending contract', key: 'PENDING_CONTRACT' }
 ];
 
 const OFFERING_OPTIONS = [
@@ -51,7 +53,17 @@ const PROPERTY_TYPE_OPTIONS = [
 ];
 
 /**
- * Memoized Transaction Table Row matching concept transactions.html & Section 10
+ * Normalise raw deal status into standard Section 10 statuses
+ */
+function normalizeStatus(rawStatus) {
+  if (rawStatus === 'APPROVED' || rawStatus === 'CLAIMED') return 'CLAIMED';
+  if (rawStatus === 'UNDER_REVIEW' || rawStatus === 'SUBMITTED') return 'SUBMITTED';
+  if (rawStatus === 'REJECTED' || rawStatus === 'SENT_BACK') return 'SENT_BACK';
+  return 'PENDING_CONTRACT';
+}
+
+/**
+ * Memoized Transaction Table Row matching Section 10 specs
  */
 const TransactionRow = memo(function TransactionRow({
   item,
@@ -61,12 +73,13 @@ const TransactionRow = memo(function TransactionRow({
 }) {
   const isCopied = copiedId === (item.listing?.listingRef || item.id);
 
-  // Normalise fields between API response and mock data
   const listing = item.listing || {};
   const agent = item.agent || {};
 
   const displayPrice = item.finalPrice
     ? `AED ${Number(item.finalPrice).toLocaleString()}`
+    : listing.askingPrice
+    ? `AED ${Number(listing.askingPrice).toLocaleString()}`
     : item.priceDisplay || '—';
 
   const offeringLabel =
@@ -85,46 +98,60 @@ const TransactionRow = memo(function TransactionRow({
       .slice(0, 2)
       .toUpperCase() || 'AG';
 
-  const status = item.status || (item.claimStatus === 'Not claimed' ? 'UNCLAIMED' : item.claimStatus === 'Approved' ? 'APPROVED' : item.claimStatus === 'Rejected' ? 'REJECTED' : 'UNDER_REVIEW');
-  const isUnclaimed = status === 'UNCLAIMED' || item.claimStatus === 'Not claimed';
+  const status = normalizeStatus(item.status || item.claimStatus);
+
   const completedDate = item.transactionDate
     ? new Date(item.transactionDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+    : item.closedAt
+    ? new Date(item.closedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
     : item.completedDate || '—';
 
   const getStatusDotColor = () => {
-    if (isUnclaimed) return 'var(--cmp-text-muted, #888)';
-    if (status === 'APPROVED') return 'var(--cmp-success)';
-    if (status === 'UNDER_REVIEW') return 'var(--cmp-warning)';
-    return 'var(--cmp-danger)';
+    if (status === 'CLAIMED') return 'var(--cmp-success, #10b981)';
+    if (status === 'SUBMITTED') return 'var(--cmp-warning, #f59e0b)';
+    if (status === 'SENT_BACK') return 'var(--cmp-danger, #ef4444)';
+    return 'var(--cmp-text-muted, #8ea399)';
   };
 
   const getStatusBadgeStyle = () => {
-    if (isUnclaimed) {
+    if (status === 'CLAIMED') {
       return {
-        color: 'var(--cmp-text-muted, #718096)',
-        border: '1px solid var(--cmp-border, #e2e8f0)',
-        background: 'var(--cmp-surface-sunken, #f7fafc)'
+        color: 'var(--cmp-success, #10b981)',
+        border: '1px solid var(--cmp-success, #10b981)',
+        background: 'rgba(16, 185, 129, 0.12)'
       };
     }
-    if (status === 'APPROVED') {
+    if (status === 'SUBMITTED') {
       return {
-        color: 'var(--cmp-success)',
-        border: '1px solid color-mix(in srgb, var(--cmp-success) 55%, transparent)',
-        background: 'color-mix(in srgb, var(--cmp-success) 10%, transparent)'
+        color: 'var(--cmp-warning, #f59e0b)',
+        border: '1px solid var(--cmp-warning, #f59e0b)',
+        background: 'rgba(245, 158, 11, 0.12)'
       };
     }
-    if (status === 'UNDER_REVIEW') {
+    if (status === 'SENT_BACK') {
       return {
-        color: 'var(--cmp-warning)',
-        border: '1px solid color-mix(in srgb, var(--cmp-warning) 55%, transparent)',
-        background: 'color-mix(in srgb, var(--cmp-warning) 10%, transparent)'
+        color: 'var(--cmp-danger, #ef4444)',
+        border: '1px solid var(--cmp-danger, #ef4444)',
+        background: 'rgba(239, 68, 68, 0.12)'
       };
     }
     return {
-      color: 'var(--cmp-danger)',
-      border: '1px solid color-mix(in srgb, var(--cmp-danger) 55%, transparent)',
-      background: 'color-mix(in srgb, var(--cmp-danger) 10%, transparent)'
+      color: 'var(--cmp-text-muted, #8ea399)',
+      border: '1px solid var(--cmp-border, #1f382f)',
+      background: 'rgba(142, 163, 153, 0.12)'
     };
+  };
+
+  const statusLabel =
+    status === 'CLAIMED' ? 'Claimed' :
+    status === 'SUBMITTED' ? 'Submitted' :
+    status === 'SENT_BACK' ? 'Sent back' :
+    'Pending contract';
+
+  const can = item.can || {
+    submit: status === 'PENDING_CONTRACT' || status === 'SENT_BACK',
+    claim: status === 'SUBMITTED',
+    sendBack: status === 'SUBMITTED'
   };
 
   return (
@@ -231,7 +258,7 @@ const TransactionRow = memo(function TransactionRow({
           {completedDate}
         </span>
         <span
-          title={status === 'REJECTED' && item.reviewNote ? item.reviewNote : undefined}
+          title={status === 'SENT_BACK' && item.reviewNote ? item.reviewNote : undefined}
           style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -244,43 +271,55 @@ const TransactionRow = memo(function TransactionRow({
             ...getStatusBadgeStyle()
           }}
         >
-          {isUnclaimed
-            ? 'Not claimed'
-            : status === 'APPROVED'
-            ? 'Approved'
-            : status === 'REJECTED'
-            ? 'Rejected'
-            : 'Under review'}
+          {statusLabel}
         </span>
       </td>
 
-      {/* 6. Actions */}
-      <td>
-        {isUnclaimed ? (
-          <button
-            type="button"
-            className="btn btn-primary btn-sm"
-            onClick={() => onActionClick('claim', item)}
-          >
-            Claim transaction
-          </button>
-        ) : status === 'REJECTED' ? (
-          <button
-            type="button"
-            className="btn btn-outline btn-sm"
-            onClick={() => onActionClick('recordAgain', item)}
-          >
-            Record again
-          </button>
-        ) : (
+      {/* 6. Actions driven by row.can */}
+      <td style={{ whiteSpace: 'nowrap' }}>
+        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+          {can.submit && (
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={() => onActionClick('submit', item)}
+            >
+              {status === 'SENT_BACK' ? 'Submit again' : 'Submit contract'}
+            </button>
+          )}
+
+          {can.claim && (
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={() => onActionClick('claim', item)}
+            >
+              Claim
+            </button>
+          )}
+
+          {can.sendBack && (
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={() => onActionClick('sendBack', item)}
+              style={{
+                color: 'var(--cmp-danger, #ef4444)',
+                borderColor: 'var(--cmp-danger, #ef4444)'
+              }}
+            >
+              Send back
+            </button>
+          )}
+
           <button
             type="button"
             className="btn btn-ghost btn-sm"
             onClick={() => onActionClick('view', item)}
           >
-            View claim
+            View
           </button>
-        )}
+        </div>
       </td>
     </tr>
   );
@@ -290,7 +329,7 @@ export default function TransactionsPage() {
   const { isLiveData, transactions: mockTransactions } = useApp();
 
   const [transactions, setTransactions] = useState([]);
-  const [counts, setCounts] = useState({ all: 0, UNCLAIMED: 0, UNDER_REVIEW: 0, APPROVED: 0, REJECTED: 0 });
+  const [counts, setCounts] = useState({ all: 0, CLAIMED: 0, SUBMITTED: 0, SENT_BACK: 0, PENDING_CONTRACT: 0 });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -307,12 +346,16 @@ export default function TransactionsPage() {
 
   // Modals state
   const [copiedId, setCopiedId] = useState(null);
-  const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
-  const [recordInitialData, setRecordInitialData] = useState(null);
+  const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
+  const [submitInitialData, setSubmitInitialData] = useState(null);
 
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [viewDealId, setViewDealId] = useState(null);
   const [viewInitialDeal, setViewInitialDeal] = useState(null);
+
+  const [sendBackDeal, setSendBackDeal] = useState(null);
+  const [confirmClaimDeal, setConfirmClaimDeal] = useState(null);
+  const [isClaiming, setIsClaiming] = useState(false);
 
   const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
 
@@ -341,11 +384,10 @@ export default function TransactionsPage() {
     } catch {}
 
     if (!isLiveData) {
-      // Mock data filter
       const allDeals = [...localUnclaimed, ...mockTransactions];
       const filtered = allDeals.filter((tx) => {
         if (statusFilter !== 'all') {
-          const s = tx.status || (tx.claimStatus === 'Not claimed' ? 'UNCLAIMED' : tx.claimStatus === 'Approved' ? 'APPROVED' : tx.claimStatus === 'Rejected' ? 'REJECTED' : 'UNDER_REVIEW');
+          const s = normalizeStatus(tx.status || tx.claimStatus);
           if (s !== statusFilter) return false;
         }
         return true;
@@ -353,10 +395,10 @@ export default function TransactionsPage() {
       setTransactions(filtered);
       setCounts({
         all: allDeals.length,
-        UNCLAIMED: allDeals.filter((t) => t.status === 'UNCLAIMED' || t.claimStatus === 'Not claimed').length,
-        APPROVED: allDeals.filter((t) => t.status === 'APPROVED' || t.claimStatus === 'Approved').length,
-        UNDER_REVIEW: allDeals.filter((t) => t.status === 'UNDER_REVIEW' || t.claimStatus === 'Under review').length,
-        REJECTED: allDeals.filter((t) => t.status === 'REJECTED' || t.claimStatus === 'Rejected').length
+        CLAIMED: allDeals.filter((t) => normalizeStatus(t.status || t.claimStatus) === 'CLAIMED').length,
+        SUBMITTED: allDeals.filter((t) => normalizeStatus(t.status || t.claimStatus) === 'SUBMITTED').length,
+        SENT_BACK: allDeals.filter((t) => normalizeStatus(t.status || t.claimStatus) === 'SENT_BACK').length,
+        PENDING_CONTRACT: allDeals.filter((t) => normalizeStatus(t.status || t.claimStatus) === 'PENDING_CONTRACT').length
       });
       return;
     }
@@ -382,18 +424,27 @@ export default function TransactionsPage() {
 
       const visible = statusFilter === 'all'
         ? combined
-        : combined.filter((d) => (d.status === statusFilter) || (statusFilter === 'UNCLAIMED' && d.claimStatus === 'Not claimed'));
+        : combined.filter((d) => normalizeStatus(d.status) === statusFilter);
 
       setTransactions(visible);
 
-      const dynamicCounts = {
-        all: combined.length,
-        UNCLAIMED: combined.filter((t) => t.status === 'UNCLAIMED' || t.claimStatus === 'Not claimed').length,
-        UNDER_REVIEW: combined.filter((t) => t.status === 'UNDER_REVIEW' || t.claimStatus === 'Under review').length,
-        APPROVED: combined.filter((t) => t.status === 'APPROVED' || t.claimStatus === 'Approved').length,
-        REJECTED: combined.filter((t) => t.status === 'REJECTED' || t.claimStatus === 'Rejected').length
-      };
-      setCounts(dynamicCounts);
+      if (res?.counts) {
+        setCounts({
+          all: res.counts.all ?? combined.length,
+          CLAIMED: (res.counts.CLAIMED || 0) + (res.counts.APPROVED || 0),
+          SUBMITTED: (res.counts.SUBMITTED || 0) + (res.counts.UNDER_REVIEW || 0),
+          SENT_BACK: (res.counts.SENT_BACK || 0) + (res.counts.REJECTED || 0),
+          PENDING_CONTRACT: (res.counts.PENDING_CONTRACT || 0) + (res.counts.UNCLAIMED || 0)
+        });
+      } else {
+        setCounts({
+          all: combined.length,
+          CLAIMED: combined.filter((t) => normalizeStatus(t.status) === 'CLAIMED').length,
+          SUBMITTED: combined.filter((t) => normalizeStatus(t.status) === 'SUBMITTED').length,
+          SENT_BACK: combined.filter((t) => normalizeStatus(t.status) === 'SENT_BACK').length,
+          PENDING_CONTRACT: combined.filter((t) => normalizeStatus(t.status) === 'PENDING_CONTRACT').length
+        });
+      }
     } catch (err) {
       setError(err.message || 'Failed to load closed deals.');
     } finally {
@@ -423,9 +474,13 @@ export default function TransactionsPage() {
   }, []);
 
   const handleActionClick = useCallback((type, item) => {
-    if (type === 'claim' || type === 'recordAgain') {
-      setRecordInitialData(item);
-      setIsRecordModalOpen(true);
+    if (type === 'submit') {
+      setSubmitInitialData(item);
+      setIsSubmitModalOpen(true);
+    } else if (type === 'claim') {
+      setConfirmClaimDeal(item);
+    } else if (type === 'sendBack') {
+      setSendBackDeal(item);
     } else if (type === 'view') {
       setViewDealId(item.id || item._id);
       setViewInitialDeal(item);
@@ -433,18 +488,28 @@ export default function TransactionsPage() {
     }
   }, []);
 
-  const handleOpenRecordNew = () => {
-    setRecordInitialData(null);
-    setIsRecordModalOpen(true);
+  const handleExecuteClaim = async () => {
+    if (!confirmClaimDeal) return;
+    setIsClaiming(true);
+    try {
+      await cmpConnectApi.claimTransaction(confirmClaimDeal.id || confirmClaimDeal._id);
+      setConfirmClaimDeal(null);
+      fetchTransactions();
+    } catch (err) {
+      alert(err.message || 'Failed to claim transaction.');
+    } finally {
+      setIsClaiming(false);
+    }
   };
 
-  const handleRecordSuccess = (msg) => {
-    fetchTransactions();
+  const handleOpenRecordNew = () => {
+    setSubmitInitialData(null);
+    setIsSubmitModalOpen(true);
   };
 
   return (
     <div>
-      {/* Top Header matching concept transactions.html & Section 10 */}
+      {/* Top Header */}
       <div
         className="row"
         style={{
@@ -469,7 +534,7 @@ export default function TransactionsPage() {
             Closed deals
           </h1>
           <p style={{ margin: '4px 0 0', fontSize: '14px', color: 'var(--cmp-text-muted)' }}>
-            Record deals you closed on your own Cash My Property listings.
+            Finalise and claim deals closed on your company's Cash My Property listings.
           </p>
         </div>
 
@@ -487,7 +552,7 @@ export default function TransactionsPage() {
               fontSize: '13px'
             }}
           >
-            Learn more about closed deals
+            How closed deals work
           </button>
 
           <button
@@ -502,11 +567,11 @@ export default function TransactionsPage() {
         </div>
       </div>
 
-      {/* Review Status Filter Chips with Counts */}
+      {/* Status Filter Chips with Counts */}
       <div
         className="row"
         role="group"
-        aria-label="Review status"
+        aria-label="Deal status"
         style={{ gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}
       >
         {STATUS_KEYS.map((chip) => {
@@ -522,7 +587,7 @@ export default function TransactionsPage() {
         })}
       </div>
 
-      {/* Filter and Control Bar Grid matching concept */}
+      {/* Filter and Control Bar Grid */}
       <div
         style={{
           display: 'grid',
@@ -600,9 +665,9 @@ export default function TransactionsPage() {
           style={{
             padding: '24px',
             borderRadius: '12px',
-            background: 'var(--cmp-danger-subtle, rgba(220, 38, 38, 0.1))',
-            border: '1px solid var(--cmp-danger)',
-            color: 'var(--cmp-danger)',
+            background: 'rgba(239, 68, 68, 0.1)',
+            border: '1px solid var(--cmp-danger, #ef4444)',
+            color: 'var(--cmp-danger, #ef4444)',
             textAlign: 'center',
             margin: '20px 0'
           }}
@@ -660,15 +725,15 @@ export default function TransactionsPage() {
         />
       )}
 
-      {/* Record a Closed Deal Modal */}
+      {/* Submit Contract Modal (Agent Step 2) */}
       <RecordDealModal
-        isOpen={isRecordModalOpen}
+        isOpen={isSubmitModalOpen}
         onClose={() => {
-          setIsRecordModalOpen(false);
-          setRecordInitialData(null);
+          setIsSubmitModalOpen(false);
+          setSubmitInitialData(null);
         }}
-        onSuccess={handleRecordSuccess}
-        initialData={recordInitialData}
+        onSuccess={() => fetchTransactions()}
+        initialData={submitInitialData}
       />
 
       {/* View Claim Details Modal */}
@@ -681,11 +746,101 @@ export default function TransactionsPage() {
           setViewDealId(null);
           setViewInitialDeal(null);
         }}
-        onRecordAgain={(deal) => {
-          setRecordInitialData(deal);
-          setIsRecordModalOpen(true);
+        onSubmitContract={(deal) => {
+          setSubmitInitialData(deal);
+          setIsSubmitModalOpen(true);
+        }}
+        onClaim={(deal) => setConfirmClaimDeal(deal)}
+        onSendBack={(deal) => setSendBackDeal(deal)}
+      />
+
+      {/* Send Back Modal (Company Step 3b) */}
+      <SendBackModal
+        isOpen={Boolean(sendBackDeal)}
+        onClose={() => setSendBackDeal(null)}
+        deal={sendBackDeal}
+        onSuccess={() => {
+          setSendBackDeal(null);
+          fetchTransactions();
         }}
       />
+
+      {/* Confirm Claim Dialog (Company Step 3a) */}
+      {confirmClaimDeal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'var(--cmp-overlay, rgba(0, 0, 0, 0.7))',
+            display: 'grid',
+            placeItems: 'center',
+            zIndex: 1000,
+            padding: '20px'
+          }}
+          onClick={() => setConfirmClaimDeal(null)}
+        >
+          <div
+            className="card"
+            style={{
+              width: 'min(460px, 95vw)',
+              padding: '24px',
+              background: 'var(--cmp-surface, #0b1a15)',
+              border: '1px solid var(--cmp-border, #1f382f)',
+              borderRadius: '16px',
+              boxShadow: 'var(--cmp-shadow-lg)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+              <div
+                style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '8px',
+                  background: 'rgba(16, 185, 129, 0.15)',
+                  color: 'var(--cmp-success, #10b981)',
+                  display: 'grid',
+                  placeItems: 'center'
+                }}
+              >
+                <CheckCircle2 size={20} />
+              </div>
+              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#fff' }}>
+                Claim transaction?
+              </h3>
+            </div>
+            <p style={{ margin: '0 0 20px', fontSize: '13.5px', color: 'var(--cmp-text-muted, #8ea399)', lineHeight: 1.5 }}>
+              This will finalise and complete the deal for{' '}
+              <strong style={{ color: '#fff' }}>
+                {confirmClaimDeal.listing?.title || confirmClaimDeal.listing?.listingRef || 'this property'}
+              </strong>{' '}
+              internally for your company.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={() => setConfirmClaimDeal(null)}
+                disabled={isClaiming}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={handleExecuteClaim}
+                disabled={isClaiming}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+              >
+                {isClaiming && <Loader2 size={14} className="animate-spin" />}
+                <span>Claim deal</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Info Modal */}
       {isInfoModalOpen && (
@@ -695,7 +850,7 @@ export default function TransactionsPage() {
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'var(--cmp-overlay)',
+            background: 'var(--cmp-overlay, rgba(0, 0, 0, 0.7))',
             display: 'grid',
             placeItems: 'center',
             zIndex: 1000,
@@ -706,15 +861,19 @@ export default function TransactionsPage() {
           <div
             className="card"
             style={{
-              width: 'min(500px, 100%)',
+              width: 'min(520px, 100%)',
               padding: '24px',
-              background: 'var(--cmp-surface-raised)',
+              background: 'var(--cmp-surface, #0b1a15)',
+              border: '1px solid var(--cmp-border, #1f382f)',
+              borderRadius: '16px',
               boxShadow: 'var(--cmp-shadow-lg)'
             }}
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-              <h2 style={{ fontSize: '18px', fontWeight: 800, margin: 0 }}>Closed Deals on CMP</h2>
+              <h2 style={{ fontSize: '18px', fontWeight: 800, margin: 0, color: '#fff' }}>
+                How closed deals work
+              </h2>
               <button
                 type="button"
                 className="btn btn-ghost btn-sm"
@@ -724,15 +883,21 @@ export default function TransactionsPage() {
                 <X size={18} />
               </button>
             </div>
-            <div style={{ fontSize: '14px', lineHeight: 1.6, color: 'var(--cmp-text)' }}>
-              <p className="muted" style={{ marginTop: 0 }}>
-                When an agent closes a deal on a live or marketed property, recording it ensures:
+            <div style={{ fontSize: '13.5px', lineHeight: 1.6, color: 'var(--cmp-text, #fff)' }}>
+              <p style={{ marginTop: 0, color: 'var(--cmp-text-muted, #8ea399)' }}>
+                CMP Connect uses a 3-step internal workflow where deals are finalised within your company:
               </p>
-              <ul style={{ paddingLeft: '20px', margin: '12px 0' }}>
-                <li>The listing moves off-market cleanly to <strong>CLOSED</strong> (Sold / Rented).</li>
-                <li>Your agency and agents earn verified transaction credentials.</li>
-                <li>Compliance verification ensures prompt proof audit by CMP within 3 working days.</li>
-              </ul>
+              <ol style={{ paddingLeft: '20px', margin: '14px 0', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <li>
+                  <strong>Step 1 (Agent):</strong> Properties ⋮ "Mark as sold / rented" — the listing becomes <em>Closed</em> and appears under Transactions as <em>Pending contract</em>.
+                </li>
+                <li>
+                  <strong>Step 2 (Same Agent):</strong> "Submit contract" — the agent submits their Form F (sale) or Ejari (rent) contract, completion date, and final price. Status becomes <em>Submitted</em>.
+                </li>
+                <li>
+                  <strong>Step 3 (Company Manager / Accounts):</strong> Review the contract. Click <em>Claim</em> to complete the transaction, or <em>Send back</em> with a reason if any document or detail needs fixing.
+                </li>
+              </ol>
               <div style={{ textAlign: 'right', marginTop: '20px' }}>
                 <button type="button" className="btn btn-primary btn-sm" onClick={() => setIsInfoModalOpen(false)}>
                   Got it

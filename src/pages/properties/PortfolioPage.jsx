@@ -128,6 +128,11 @@ export default function PortfolioPage() {
   // Modals state
   const [rejectModal, setRejectModal] = useState({ isOpen: false, listingId: null, reason: '' });
   const [assignModal, setAssignModal] = useState({ isOpen: false, listingId: null, agentId: '' });
+  const [markSoldModal, setMarkSoldModal] = useState({
+    isOpen: false,
+    listing: null,
+    closedAt: new Date().toISOString().split('T')[0]
+  });
   const [activeTeamMembers, setActiveTeamMembers] = useState([]);
 
   const debouncedSearch = useDebounce(searchQuery, 300);
@@ -337,12 +342,12 @@ export default function PortfolioPage() {
   }, []);
 
   // Action Handlers
-  const runListingAction = async (listingId, actionFn, successText) => {
+  const runListingAction = async (listingId, actionFn, successText, link = null) => {
     setActionLoadingId(listingId);
     setOpenActionMenuId(null);
     try {
       await actionFn();
-      setFeedbackMessage({ type: 'success', text: successText });
+      setFeedbackMessage({ type: 'success', text: successText, link });
       await fetchLiveListings();
     } catch (err) {
       console.error('[Action error]', err);
@@ -473,15 +478,27 @@ export default function PortfolioPage() {
   };
 
   // Mark as Sold / Rented (Step 1)
-  // Calls POST /api/cmpConnect/listings/:id/mark-sold and adds deal to Transactions as UNCLAIMED
-  const handleMarkSold = (listing) => {
+  const handleOpenMarkSoldModal = (listing) => {
     setOpenActionMenuId(null);
+    setMarkSoldModal({
+      isOpen: true,
+      listing,
+      closedAt: new Date().toISOString().split('T')[0]
+    });
+  };
+
+  const handleConfirmMarkSold = () => {
+    const listing = markSoldModal.listing;
+    if (!listing) return;
+    const closedDate = markSoldModal.closedAt || new Date().toISOString().split('T')[0];
+    setMarkSoldModal({ isOpen: false, listing: null, closedAt: '' });
+
     const isRent = String(listing.purpose || '').toUpperCase() === 'RENT';
     runListingAction(
       listing.id,
       async () => {
         if (isLiveData) {
-          await cmpConnectApi.markListingSold(listing.id, authToken).catch(() => {});
+          await cmpConnectApi.markListingSold(listing.id, closedDate, authToken).catch(() => {});
         }
 
         // Cache as UNCLAIMED in local storage so Transactions page shows it
@@ -511,10 +528,12 @@ export default function PortfolioPage() {
             priceDisplay: formatPrice(listing.price, listing.rentalPeriod),
             badge: isRent ? 'Residential rent' : 'Residential sale',
             propertyType: listing.typeLabel || listing.propertyType || 'Apartment',
-            status: 'UNCLAIMED',
-            claimStatus: 'Not claimed',
-            completedDate: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
-            transactionDate: new Date().toISOString().split('T')[0],
+            status: 'PENDING_CONTRACT',
+            claimStatus: 'Pending contract',
+            claimable: true,
+            closedAt: closedDate,
+            completedDate: new Date(closedDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
+            transactionDate: closedDate,
             createdAt: new Date().toISOString()
           };
 
@@ -525,9 +544,12 @@ export default function PortfolioPage() {
           console.error('[Portfolio] Failed to cache unclaimed transaction:', e);
         }
       },
-      `${listing.listingRef || listing.title} marked as ${isRent ? 'rented' : 'sold'}. Deal added to Transactions as 'Not claimed'.`
+      `${listing.listingRef || listing.title} marked as ${isRent ? 'rented' : 'sold'}.`,
+      { to: '/transactions', label: 'Submit contract now →' }
     );
   };
+
+  const handleMarkSold = handleOpenMarkSoldModal;
 
   // Export CSV
   const handleExportCsv = async () => {
@@ -648,6 +670,20 @@ export default function PortfolioPage() {
         >
           {feedbackMessage.type === 'error' ? <AlertOctagon size={16} /> : <CheckCircle2 size={16} />}
           <span>{feedbackMessage.text}</span>
+          {feedbackMessage.link && (
+            <NavLink
+              to={feedbackMessage.link.to}
+              onClick={() => setFeedbackMessage(null)}
+              style={{
+                color: '#FFFFFF',
+                textDecoration: 'underline',
+                fontWeight: 700,
+                marginLeft: '6px'
+              }}
+            >
+              {feedbackMessage.link.label}
+            </NavLink>
+          )}
           <button
             type="button"
             onClick={() => setFeedbackMessage(null)}
@@ -2390,6 +2426,65 @@ export default function PortfolioPage() {
                 }}
               >
                 Confirm Assignment
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mark as Sold / Rented Modal */}
+      {markSoldModal.isOpen && markSoldModal.listing && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 10000,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'grid',
+            placeItems: 'center',
+            padding: '16px'
+          }}
+        >
+          <div className="card" style={{ maxWidth: '440px', width: '100%', padding: '24px' }}>
+            <h3 style={{ margin: '0 0 8px', fontSize: '18px' }}>
+              Mark as {String(markSoldModal.listing.purpose || '').toUpperCase() === 'RENT' ? 'rented' : 'sold'}
+            </h3>
+            <p className="muted" style={{ margin: '0 0 16px', fontSize: '13.5px' }}>
+              {markSoldModal.listing.listingRef ? `${markSoldModal.listing.listingRef} · ` : ''}
+              {markSoldModal.listing.title || 'Selected property'}
+            </p>
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: 600 }}>
+                When was it {String(markSoldModal.listing.purpose || '').toUpperCase() === 'RENT' ? 'rented' : 'sold'}?
+              </label>
+              <input
+                type="date"
+                max={new Date().toISOString().split('T')[0]}
+                value={markSoldModal.closedAt}
+                onChange={(e) => setMarkSoldModal({ ...markSoldModal, closedAt: e.target.value })}
+                style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--cmp-border)' }}
+              />
+              <span className="faint" style={{ display: 'block', marginTop: '4px', fontSize: '12px' }}>
+                Default is today. Future dates are not allowed.
+              </span>
+            </div>
+            <p className="faint" style={{ margin: '0 0 20px', fontSize: '12.5px', lineHeight: 1.4 }}>
+              The listing will become <strong>CLOSED</strong> and move off the market. It will appear under <strong>Transactions</strong> as <em>Not claimed</em>, where proof (Form F / Ejari) can be uploaded.
+            </p>
+            <div className="row" style={{ justifyContent: 'flex-end', gap: '8px' }}>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => setMarkSoldModal({ isOpen: false, listing: null, closedAt: '' })}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={handleConfirmMarkSold}
+              >
+                Confirm &amp; close listing
               </button>
             </div>
           </div>

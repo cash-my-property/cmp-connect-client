@@ -1,40 +1,84 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Sparkles, Copy, Check, ArrowRight, Building, Award, ExternalLink } from 'lucide-react';
+import {
+  Sparkles,
+  Copy,
+  Check,
+  ArrowRight,
+  Building,
+  Award,
+  ExternalLink,
+  RefreshCw,
+  AlertCircle,
+  Info
+} from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { cmpConnectApi } from '../../services/cmpConnectApi';
 
 const mockEligibleListings = [
   {
-    id: 'CMP-S-001001',
+    id: 'CLID-7K2M9QXA',
+    reference: 'CLID-7K2M9QXA',
     title: 'Full marina view 2 bed in Marina Gate',
-    community: 'Dubai Marina',
-    agent: 'Karim Saleh',
-    price: 'AED 2.85M',
-    quality: 94
+    location: 'Dubai Marina',
+    listedBy: 'Karim Saleh',
+    purpose: 'SALE',
+    qualityScore: 94
   },
   {
-    id: 'CMP-S-001002',
+    id: 'CLID-8L3N0RYB',
+    reference: 'CLID-8L3N0RYB',
     title: 'Burj Khalifa facing one bed in The Address',
-    community: 'Downtown Dubai',
-    agent: 'Layla Haddad',
-    price: 'AED 2.35M',
-    quality: 88
+    location: 'Downtown Dubai',
+    listedBy: 'Layla Haddad',
+    purpose: 'SALE',
+    qualityScore: 88
   },
   {
-    id: 'CMP-S-001004',
+    id: 'CLID-9M4P1SZC',
+    reference: 'CLID-9M4P1SZC',
     title: 'Duplex penthouse on the Palm',
-    community: 'Palm Jumeirah',
-    agent: 'Layla Haddad',
-    price: 'AED 14.5M',
-    quality: 97
+    location: 'Palm Jumeirah',
+    listedBy: 'Layla Haddad',
+    purpose: 'SALE',
+    qualityScore: 97
   }
 ];
 
 export default function SpotlightedPage() {
   const { isLiveData } = useApp();
   const [copiedId, setCopiedId] = useState(null);
+  const [apiData, setApiData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  const eligibleListings = isLiveData ? [] : mockEligibleListings;
+  const fetchSpotlightData = useCallback(async () => {
+    if (!isLiveData) return;
+    try {
+      setLoading(true);
+      setError(null);
+      const res = await cmpConnectApi.getInsightsSpotlight();
+      if (res && res.data) {
+        setApiData(res.data);
+      }
+    } catch (err) {
+      console.error('Error fetching spotlight data:', err);
+      setError(err.message || 'Failed to fetch spotlighted data.');
+    } finally {
+      setLoading(false);
+    }
+  }, [isLiveData]);
+
+  useEffect(() => {
+    fetchSpotlightData();
+  }, [fetchSpotlightData]);
+
+  const eligibleListings = isLiveData
+    ? (apiData?.eligible || [])
+    : mockEligibleListings;
+
+  const minQuality = apiData?.minQuality || 80;
+  const biddingAvailable = apiData?.biddingAvailable || false;
 
   const handleCopy = (id, e) => {
     e.stopPropagation();
@@ -44,7 +88,7 @@ export default function SpotlightedPage() {
   };
 
   return (
-    <div>
+    <div style={{ display: 'grid', gap: '22px' }}>
       {/* Header */}
       <div
         className="row"
@@ -52,14 +96,14 @@ export default function SpotlightedPage() {
           justifyContent: 'space-between',
           alignItems: 'flex-start',
           gap: '16px',
-          flexWrap: 'wrap',
-          marginBottom: '18px'
+          flexWrap: 'wrap'
         }}
       >
         <div>
           <h1
             style={{
-              fontSize: '22px',
+              fontSize: '24px',
+              fontWeight: 700,
               display: 'flex',
               alignItems: 'baseline',
               gap: '10px',
@@ -82,178 +126,245 @@ export default function SpotlightedPage() {
                 fontWeight: 800
               }}
             >
-              0
+              {apiData?.entries?.length || 0}
             </span>
           </h1>
-          <p className="muted" style={{ margin: '4px 0 0', fontSize: '14px', maxWidth: '820px' }}>
-            Listings shown at the top of a community’s search results. Bid for a community on Community Spotlight.
+          <p className="muted" style={{ margin: '6px 0 0', fontSize: '14px', maxWidth: '820px' }}>
+            Listings pinned at the top of a community search results. Bid for a community spotlight placement.
           </p>
         </div>
 
-        <div className="row" style={{ gap: '8px', flexWrap: 'wrap' }}>
-          <NavLink to="/growth/spotlight" className="btn btn-accent btn-sm">
-            Bid for a community
-          </NavLink>
+        <div className="row" style={{ gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+          {isLiveData && (
+            <button
+              type="button"
+              onClick={fetchSpotlightData}
+              className="btn btn-outline btn-sm"
+              disabled={loading}
+              title="Refresh"
+            >
+              <RefreshCw size={14} className={loading ? 'spin' : ''} />
+            </button>
+          )}
+
+          <button
+            type="button"
+            className="btn btn-accent btn-sm"
+            disabled={!biddingAvailable}
+            title={!biddingAvailable ? 'Spotlight bidding will activate with Wallet Credits' : 'Bid now'}
+            style={{ opacity: !biddingAvailable ? 0.6 : 1, cursor: !biddingAvailable ? 'not-allowed' : 'pointer' }}
+          >
+            <Sparkles size={14} />
+            <span>Bid for a community</span>
+          </button>
         </div>
       </div>
 
-      {/* Empty State Banner with Concept SVG */}
-      <div className="card" style={{ marginBottom: '28px' }}>
-        <div style={{ display: 'grid', placeItems: 'center', textAlign: 'center', padding: '48px 16px', gap: '14px' }}>
-          <svg width="170" height="170" viewBox="0 0 170 170" aria-hidden="true">
-            <circle cx="85" cy="85" r="82" fill="var(--cmp-surface-sunken)" />
-            <g fill="var(--cmp-surface)" stroke="var(--cmp-text-faint)" strokeWidth="2.5">
-              <rect x="52" y="44" width="36" height="82" rx="4" />
-              <rect x="88" y="62" width="30" height="64" rx="4" />
-              <rect x="34" y="84" width="18" height="42" rx="3" />
-              <path d="M60 56h6m8 0h6M96 64h6m6 0h4" />
-              <path d="M60 68h6m8 0h6M96 76h6m6 0h4" />
-              <path d="M60 80h6m8 0h6M96 88h6m6 0h4" />
-              <path d="M60 92h6m8 0h6M96 100h6m6 0h4" />
-              <path d="M60 104h6m8 0h6M96 112h6m6 0h4" />
-            </g>
-          </svg>
-          <h2 style={{ fontSize: '20px', margin: 0 }}>No spotlight listings yet</h2>
-          <p className="muted" style={{ margin: 0, maxWidth: '520px', fontSize: '14px' }}>
-            When you bid for a community on Community Spotlight, the listing you choose appears here alongside its live rank and performance.
+      {/* Info notice about Bidding and Credits */}
+      <div
+        className="card"
+        style={{
+          padding: '14px 18px',
+          background: 'var(--cmp-surface-sunken)',
+          borderColor: 'var(--cmp-border)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          fontSize: '13px'
+        }}
+      >
+        <Info size={18} style={{ color: 'var(--cmp-brand)', flexShrink: 0 }} />
+        <span style={{ color: 'var(--cmp-text-muted)' }}>
+          <strong>Community Spotlight Bidding:</strong> Active spotlight placements require Wallet Credits.
+          Properties below are verified and meet the <strong>quality score {minQuality}+</strong> threshold to qualify for spotlighting.
+        </span>
+      </div>
+
+      {error && (
+        <div
+          className="card"
+          style={{
+            padding: '14px 18px',
+            background: 'var(--cmp-danger-subtle, rgba(220, 38, 38, 0.08))',
+            borderColor: 'var(--cmp-danger)',
+            color: 'var(--cmp-danger)',
+            fontSize: '13px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px'
+          }}
+        >
+          <AlertCircle size={18} />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {/* Empty State Banner with Concept Graphic */}
+      <div className="card" style={{ padding: '0', overflow: 'hidden' }}>
+        <div style={{ display: 'grid', placeItems: 'center', textAlign: 'center', padding: '48px 20px', gap: '14px' }}>
+          <div
+            style={{
+              width: '80px',
+              height: '80px',
+              borderRadius: '50%',
+              background: 'var(--cmp-brand-subtle)',
+              color: 'var(--cmp-brand)',
+              display: 'grid',
+              placeItems: 'center'
+            }}
+          >
+            <Sparkles size={36} />
+          </div>
+          <h2 style={{ fontSize: '20px', fontWeight: 700, margin: 0 }}>No spotlight listings yet</h2>
+          <p className="muted" style={{ margin: 0, maxWidth: '520px', fontSize: '14px', lineHeight: 1.5 }}>
+            When you place a bid on a community, your selected property will appear here with live position, ranking, and search impressions.
           </p>
-          <NavLink to="/growth/spotlight" className="btn btn-primary btn-sm">
-            <span>Open Community Spotlight</span>
-            <ArrowRight size={14} />
-          </NavLink>
         </div>
       </div>
 
       {/* Eligible Listings Table */}
       <div>
-        <h2 style={{ fontSize: '18px', margin: '0 0 4px' }}>
-          Eligible for spotlight ({eligibleListings.length})
-        </h2>
-        <p className="muted" style={{ margin: '0 0 14px', fontSize: '14px' }}>
-          Live, verified listings with a quality score of 80 or more.
-        </p>
+        <div style={{ marginBottom: '14px' }}>
+          <h2 style={{ fontSize: '18px', fontWeight: 700, margin: '0 0 4px' }}>
+            Ready for the spotlight ({eligibleListings.length})
+          </h2>
+          <p className="muted" style={{ margin: 0, fontSize: '13.5px' }}>
+            Active, live listings scoring {minQuality} or higher in quality with no holds.
+          </p>
+        </div>
 
-        <div className="card table-scroll">
-          <table className="data">
-            <thead>
-              <tr>
-                <th>Reference</th>
-                <th>Property</th>
-                <th>Agent</th>
-                <th>Price</th>
-                <th>Quality score</th>
-                <th style={{ textAlign: 'right' }}>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {eligibleListings.length === 0 ? (
-                <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: '36px' }} className="muted">
-                    No eligible listings found. Published listings with a quality score of 80+ will appear here.
-                  </td>
+        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--cmp-border)', background: 'var(--cmp-surface-sunken)' }}>
+                  <th style={{ padding: '12px 20px', fontWeight: 600, color: 'var(--cmp-text-muted)' }}>Reference</th>
+                  <th style={{ padding: '12px 16px', fontWeight: 600, color: 'var(--cmp-text-muted)' }}>Property</th>
+                  <th style={{ padding: '12px 16px', fontWeight: 600, color: 'var(--cmp-text-muted)' }}>Agent</th>
+                  <th style={{ padding: '12px 16px', fontWeight: 600, color: 'var(--cmp-text-muted)', textAlign: 'center' }}>Purpose</th>
+                  <th style={{ padding: '12px 16px', fontWeight: 600, color: 'var(--cmp-text-muted)', textAlign: 'center' }}>Quality Score</th>
+                  <th style={{ padding: '12px 20px', fontWeight: 600, color: 'var(--cmp-text-muted)', textAlign: 'right' }}>Action</th>
                 </tr>
-              ) : (
-                eligibleListings.map((listing) => (
-                  <tr key={listing.id}>
-                  <td>
-                    <span className="row" style={{ gap: '6px', display: 'inline-flex', alignItems: 'center' }}>
-                      <button
-                        type="button"
-                        onClick={(e) => handleCopy(listing.id, e)}
-                        title="Copy reference"
-                        style={{
-                          border: 'none',
-                          background: 'transparent',
-                          padding: 0,
-                          cursor: 'pointer',
-                          color: 'var(--cmp-text-faint)'
-                        }}
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={6} style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--cmp-text-muted)' }}>
+                      Loading eligible properties...
+                    </td>
+                  </tr>
+                ) : eligibleListings.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} style={{ textAlign: 'center', padding: '44px 20px' }} className="muted">
+                      No eligible listings found. Live properties with a quality score of {minQuality}+ will appear here.
+                    </td>
+                  </tr>
+                ) : (
+                  eligibleListings.map((listing) => {
+                    const ref = listing.reference || listing.listingRef || listing.id;
+                    const quality = listing.qualityScore ?? listing.quality ?? 80;
+                    const agentName = listing.listedBy?.fullName || listing.listedBy || listing.agent || '—';
+                    const location = listing.location || listing.community || '—';
+
+                    return (
+                      <tr
+                        key={listing.id}
+                        style={{ borderBottom: '1px solid var(--cmp-border)', transition: 'background 0.15s ease' }}
                       >
-                        {copiedId === listing.id ? (
-                          <Check size={14} style={{ color: 'var(--cmp-brand)' }} />
-                        ) : (
-                          <Copy size={14} />
-                        )}
-                      </button>
-                      <NavLink
-                        to={`/properties/${listing.id}/edit`}
-                        style={{
-                          color: 'var(--cmp-brand)',
-                          fontWeight: 600,
-                          fontSize: '13px',
-                          textDecoration: 'underline',
-                          textUnderlineOffset: '3px'
-                        }}
-                      >
-                        {listing.id}
-                      </NavLink>
-                    </span>
-                  </td>
-                  <td>
-                    <span style={{ fontWeight: 600, color: 'var(--cmp-text)' }}>{listing.title}</span>
-                    <span className="faint" style={{ display: 'block', fontSize: '12px' }}>
-                      {listing.community}
-                    </span>
-                  </td>
-                  <td>
-                    <span style={{ fontSize: '13.5px' }}>{listing.agent}</span>
-                  </td>
-                  <td>
-                    <strong style={{ fontSize: '13.5px' }}>{listing.price}</strong>
-                  </td>
-                  <td>
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-                      <span
-                        role="img"
-                        aria-label={`${listing.quality}%`}
-                        style={{
-                          position: 'relative',
-                          display: 'inline-grid',
-                          placeItems: 'center',
-                          width: '40px',
-                          height: '40px'
-                        }}
-                      >
-                        <svg width="40" height="40" style={{ transform: 'rotate(-90deg)' }}>
-                          <circle
-                            cx="20"
-                            cy="20"
-                            r="17.5"
-                            fill="none"
-                            stroke="var(--cmp-border)"
-                            strokeWidth="5"
-                          />
-                          <circle
-                            cx="20"
-                            cy="20"
-                            r="17.5"
-                            fill="none"
-                            stroke="var(--cmp-success)"
-                            strokeWidth="5"
-                            strokeLinecap="round"
-                            strokeDasharray={`${(listing.quality / 100) * 110} 110`}
-                          />
-                        </svg>
-                        <span style={{ position: 'absolute', fontSize: '10px', fontWeight: 800 }}>
-                          {listing.quality}%
-                        </span>
-                      </span>
-                    </div>
-                  </td>
-                  <td style={{ textAlign: 'right' }}>
-                    <NavLink
-                      to="/growth/spotlight"
-                      className="btn btn-outline btn-sm"
-                      style={{ height: '32px', padding: '0 10px' }}
-                    >
-                      <span>Bid spotlight</span>
-                    </NavLink>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-          </table>
+                        <td style={{ padding: '14px 20px' }}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                            <button
+                              type="button"
+                              onClick={(e) => handleCopy(ref, e)}
+                              title="Copy reference"
+                              style={{
+                                border: 'none',
+                                background: 'transparent',
+                                padding: 0,
+                                cursor: 'pointer',
+                                color: 'var(--cmp-text-faint)'
+                              }}
+                            >
+                              {copiedId === ref ? (
+                                <Check size={14} style={{ color: 'var(--cmp-brand)' }} />
+                              ) : (
+                                <Copy size={14} />
+                              )}
+                            </button>
+                            <NavLink
+                              to={`/properties/${listing.id}/edit`}
+                              style={{
+                                color: 'var(--cmp-brand)',
+                                fontWeight: 600,
+                                fontSize: '13px',
+                                textDecoration: 'underline',
+                                textUnderlineOffset: '3px'
+                              }}
+                            >
+                              {ref}
+                            </NavLink>
+                          </span>
+                        </td>
+                        <td style={{ padding: '14px 16px' }}>
+                          <span style={{ fontWeight: 600, color: 'var(--cmp-text)', display: 'block' }}>
+                            {listing.title || listing.propertyTitle}
+                          </span>
+                          <span className="faint" style={{ fontSize: '12px' }}>
+                            {location}
+                          </span>
+                        </td>
+                        <td style={{ padding: '14px 16px' }}>
+                          <span style={{ fontSize: '13px' }}>{agentName}</span>
+                        </td>
+                        <td style={{ padding: '14px 16px', textAlign: 'center' }}>
+                          <span
+                            className="chip"
+                            style={{
+                              fontSize: '11px',
+                              fontWeight: 700,
+                              padding: '2px 8px',
+                              background: listing.purpose === 'SALE' ? 'var(--cmp-brand-subtle)' : 'var(--cmp-info-subtle)',
+                              color: listing.purpose === 'SALE' ? 'var(--cmp-brand)' : 'var(--cmp-info)',
+                              border: 'none'
+                            }}
+                          >
+                            {listing.purpose || 'SALE'}
+                          </span>
+                        </td>
+                        <td style={{ padding: '14px 16px', textAlign: 'center' }}>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                            <span
+                              style={{
+                                padding: '4px 10px',
+                                borderRadius: '999px',
+                                background: 'var(--cmp-success-subtle, rgba(34, 197, 94, 0.12))',
+                                color: 'var(--cmp-success, #16a34a)',
+                                fontWeight: 800,
+                                fontSize: '12px'
+                              }}
+                            >
+                              {quality}/100
+                            </span>
+                          </div>
+                        </td>
+                        <td style={{ padding: '14px 20px', textAlign: 'right' }}>
+                          <button
+                            type="button"
+                            className="btn btn-outline btn-sm"
+                            disabled={!biddingAvailable}
+                            style={{ height: '32px', padding: '0 12px', opacity: !biddingAvailable ? 0.6 : 1 }}
+                            title="Bidding will activate with Wallet Credits"
+                          >
+                            <span>Spotlight</span>
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>

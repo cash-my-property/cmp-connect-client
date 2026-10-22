@@ -126,12 +126,13 @@ export default function HubBar() {
         tabs: []
       };
     }
-    if (pathname.startsWith('/growth')) {
+    if (pathname.startsWith('/growth') || pathname.startsWith('/market') || pathname.startsWith('/insights')) {
       return {
         title: 'Growth',
         blurb: 'Where your enquiries come from and how to get more of them.',
         tabs: [
           { label: 'Performance', path: '/growth' },
+          { label: 'Market standing', path: '/growth/market' },
           { label: 'Enquiry insights', path: '/growth/insights' },
           { label: 'Smart Boost', path: '/growth/smart-boost' },
           { label: 'Community Spotlight', path: '/growth/spotlight' },
