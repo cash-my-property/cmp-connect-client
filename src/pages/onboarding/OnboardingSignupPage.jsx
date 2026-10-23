@@ -40,7 +40,6 @@ function formatUaePhoneDisplay(phone) {
 }
 
 // Calculate Trade Licence Status based on expiryDate vs Date.now()
-// > 30 days -> 'Active', <= 30 days & >= 0 -> 'Expires soon', < 0 days -> 'Expired'
 function calculateTradeLicenceStatus(expiryDateStr) {
   if (!expiryDateStr || typeof expiryDateStr !== 'string') return 'Active';
 
@@ -50,10 +49,8 @@ function calculateTradeLicenceStatus(expiryDateStr) {
     let expiryDate;
     if (parts.length === 3) {
       if (parts[0].length === 4) {
-        // YYYY-MM-DD
         expiryDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
       } else if (parts[2].length === 4) {
-        // DD-MM-YYYY
         expiryDate = new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
       } else {
         expiryDate = new Date(cleanStr);
@@ -77,7 +74,7 @@ function calculateTradeLicenceStatus(expiryDateStr) {
     } else {
       return 'Active';
     }
-  } catch (err) {
+  } catch {
     return 'Active';
   }
 }
@@ -98,16 +95,62 @@ function formatUaeDateTime(isoString) {
     }).format(date);
     const clean = formatted.replace(' at ', ', ');
     return `Link valid until ${clean} (Asia/Dubai)`;
-  } catch (err) {
+  } catch {
     return `Link valid until ${isoString} (Asia/Dubai)`;
   }
 }
 
-// Form validation helper matching backend Joi constraints
-function validateForm(formData, accountType) {
+// Validation: Step 1 (Company & Licence)
+function validateStep1(formData, accountType) {
+  const errors = {};
+  const compLabel = accountType === 'DEVELOPER' ? 'Developer' : 'Company';
+
+  if (!formData.companyName.trim()) {
+    errors.companyName = `${compLabel} name is required.`;
+  } else if (formData.companyName.trim().length < 2 || formData.companyName.trim().length > 150) {
+    errors.companyName = `${compLabel} name must be 2 to 150 characters.`;
+  }
+
+  if (!formData.emirate) {
+    errors.emirate = 'Emirate is required.';
+  }
+
+  if (!formData.tradeLicenceNumber.trim()) {
+    errors.tradeLicenceNumber = 'Trade licence number is required.';
+  } else if (formData.tradeLicenceNumber.trim().length < 1 || formData.tradeLicenceNumber.trim().length > 50) {
+    errors.tradeLicenceNumber = 'Trade licence number must be 1 to 50 characters.';
+  }
+
+  if (accountType === 'AGENCY') {
+    if (!formData.orn.trim()) {
+      errors.orn = 'RERA ORN number is required.';
+    } else if (formData.orn.trim().length < 1 || formData.orn.trim().length > 50) {
+      errors.orn = 'RERA ORN number must be 1 to 50 characters.';
+    }
+    if (!formData.companyType) {
+      errors.companyType = 'Company type is required.';
+    }
+  }
+
+  if (accountType === 'DEVELOPER') {
+    if (!formData.developerType) {
+      errors.developerType = 'Developer type is required.';
+    }
+    if (!formData.dldDeveloperNumber.trim()) {
+      errors.dldDeveloperNumber = 'DLD developer registration number is required.';
+    } else if (formData.dldDeveloperNumber.trim().length < 1 || formData.dldDeveloperNumber.trim().length > 50) {
+      errors.dldDeveloperNumber = 'DLD developer number must be 1 to 50 characters.';
+    }
+  }
+
+  return errors;
+}
+
+// Validation: Step 2 (Account Holder & Contacts)
+function validateStep2(formData) {
   const errors = {};
 
-  // Contact person
+  // Account Holder (Owner login)
   if (!formData.firstName.trim()) {
     errors.firstName = 'First name is required.';
   } else if (formData.firstName.trim().length < 2 || formData.firstName.trim().length > 80) {
@@ -129,152 +172,65 @@ function validateForm(formData, accountType) {
   if (!formData.phone.trim()) {
     errors.phone = 'Phone number is required.';
   } else if (!isValidUaePhone(formData.phone)) {
-    errors.phone = 'Please provide a valid UAE phone number (e.g., +971501234567)';
+    errors.phone = 'Please provide a valid UAE phone number (e.g. +971501234567)';
   }
 
-  // Company / Developer details
-  const compLabel = accountType === 'DEVELOPER' ? 'Developer' : 'Company';
-  if (!formData.companyName.trim()) {
-    errors.companyName = `${compLabel} name is required.`;
-  } else if (formData.companyName.trim().length < 2 || formData.companyName.trim().length > 150) {
-    errors.companyName = `${compLabel} name must be 2 to 150 characters.`;
-  }
-
-  if (!formData.emirate) {
-    errors.emirate = 'Emirate is required.';
-  }
-
-  if (!formData.tradeLicenceNumber.trim()) {
-    errors.tradeLicenceNumber = 'Trade licence number is required.';
-  } else if (formData.tradeLicenceNumber.trim().length < 1 || formData.tradeLicenceNumber.trim().length > 50) {
-    errors.tradeLicenceNumber = 'Trade licence number must be 1 to 50 characters.';
-  }
-
-  if (formData.trnNumber && formData.trnNumber.trim().length > 30) {
-    errors.trnNumber = 'TRN number cannot exceed 30 characters.';
-  }
-
-  if (!formData.officeAddress.trim()) {
-    errors.officeAddress = accountType === 'DEVELOPER' ? 'Head office address is required.' : 'Office address is required.';
-  } else if (formData.officeAddress.trim().length < 3 || formData.officeAddress.trim().length > 300) {
-    errors.officeAddress = 'Address must be 3 to 300 characters.';
-  }
-
-  if (!formData.officialEmail.trim()) {
-    errors.officialEmail = 'Official company email is required.';
-  } else if (!EMAIL_REGEX.test(formData.officialEmail.trim())) {
-    errors.officialEmail = 'Please enter a valid company email address.';
-  }
-
-  if (!formData.officialPhone.trim()) {
-    errors.officialPhone = 'Official company phone is required.';
-  } else if (!isValidUaePhone(formData.officialPhone)) {
-    errors.officialPhone = 'Please provide a valid UAE phone/landline number.';
-  }
-
-  if (formData.website && formData.website.trim().length > 200) {
-    errors.website = 'Website URL cannot exceed 200 characters.';
-  }
-
-  // Agency specific
-  if (accountType === 'AGENCY') {
-    if (!formData.companyType) {
-      errors.companyType = 'Company type is required.';
+  // Contact Person (if not same as Account Holder)
+  if (!formData.contactSameAsAccount) {
+    if (!formData.ownerFullName.trim()) {
+      errors.ownerFullName = 'Contact person full name is required.';
+    } else if (formData.ownerFullName.trim().length < 2 || formData.ownerFullName.trim().length > 80) {
+      errors.ownerFullName = 'Full name must be 2 to 80 characters.';
     }
-    if (!formData.tradeLicenceStatus) {
-      errors.tradeLicenceStatus = 'Trade licence status is required.';
+
+    if (!formData.ownerEmail.trim()) {
+      errors.ownerEmail = 'Contact person email is required.';
+    } else if (!EMAIL_REGEX.test(formData.ownerEmail.trim())) {
+      errors.ownerEmail = 'Please enter a valid email address.';
     }
-    if (!formData.orn.trim()) {
-      errors.orn = 'RERA ORN number is required.';
-    } else if (formData.orn.trim().length < 1 || formData.orn.trim().length > 50) {
-      errors.orn = 'RERA ORN number must be 1 to 50 characters.';
-    }
-    if (!formData.numberOfAgents) {
-      errors.numberOfAgents = 'Number of agents is required.';
+
+    if (!formData.ownerMobile.trim()) {
+      errors.ownerMobile = 'Contact person phone is required.';
+    } else if (!isValidUaePhone(formData.ownerMobile)) {
+      errors.ownerMobile = 'Please provide a valid UAE phone number (e.g. +971501234567)';
     }
   }
 
-  // Developer specific
-  if (accountType === 'DEVELOPER') {
-    if (!formData.developerType) {
-      errors.developerType = 'Developer type is required.';
-    }
-
-    // firstProject object validation
-    const proj = formData.firstProject || {};
-    if (!proj.name?.trim() || proj.name.trim().length < 2 || proj.name.trim().length > 150) {
-      errors['firstProject.name'] = 'Project name must be 2 to 150 characters.';
-    }
-    if (!proj.community?.trim() || proj.community.trim().length < 2 || proj.community.trim().length > 150) {
-      errors['firstProject.community'] = 'Community must be 2 to 150 characters.';
-    }
-    if (!proj.reraProjectNumber?.trim() || proj.reraProjectNumber.trim().length < 1 || proj.reraProjectNumber.trim().length > 50) {
-      errors['firstProject.reraProjectNumber'] = 'RERA project number is required (1 to 50 characters).';
-    }
-    const unitsNum = parseInt(proj.units, 10);
-    if (!proj.units || isNaN(unitsNum) || unitsNum < 1) {
-      errors['firstProject.units'] = 'Units must be an integer of 1 or more.';
-    }
-    if (!proj.expectedHandover?.trim() || proj.expectedHandover.trim().length < 2 || proj.expectedHandover.trim().length > 30) {
-      errors['firstProject.expectedHandover'] = 'Expected handover is required (e.g. Q4 2028).';
-    }
-    if (!proj.escrowBank?.trim() || proj.escrowBank.trim().length < 2 || proj.escrowBank.trim().length > 100) {
-      errors['firstProject.escrowBank'] = 'Escrow bank is required (2 to 100 characters).';
-    }
-    if (!proj.escrowAccountNumber?.trim() || proj.escrowAccountNumber.trim().length < 4 || proj.escrowAccountNumber.trim().length > 50) {
-      errors['firstProject.escrowAccountNumber'] = 'Escrow account number is required (4 to 50 characters).';
-    }
-  }
-
-  // Signatory
+  // Authorised Signatory
   if (!formData.signatoryFullName.trim()) {
     errors.signatoryFullName = 'Signatory full name is required.';
   } else if (formData.signatoryFullName.trim().length < 2 || formData.signatoryFullName.trim().length > 80) {
     errors.signatoryFullName = 'Signatory full name must be 2 to 80 characters.';
   }
 
-  if (!formData.signatoryDesignation.trim()) {
-    errors.signatoryDesignation = 'Signatory position is required.';
-  } else if (formData.signatoryDesignation.trim().length < 2 || formData.signatoryDesignation.trim().length > 80) {
-    errors.signatoryDesignation = 'Signatory position must be 2 to 80 characters.';
+  return errors;
+}
+
+// Validation: Step 3 (Office & Optional Details)
+function validateStep3(formData, accountType) {
+  const errors = {};
+
+  if (formData.officialEmail && !EMAIL_REGEX.test(formData.officialEmail.trim())) {
+    errors.officialEmail = 'Please enter a valid company email address.';
   }
 
-  // Owner
-  if (!formData.ownerFullName.trim()) {
-    errors.ownerFullName = 'Owner full name is required.';
-  } else if (formData.ownerFullName.trim().length < 2 || formData.ownerFullName.trim().length > 80) {
-    errors.ownerFullName = 'Owner full name must be 2 to 80 characters.';
+  if (formData.officialPhone && !isValidUaePhone(formData.officialPhone)) {
+    errors.officialPhone = 'Please provide a valid UAE phone/landline number.';
   }
 
-  if (!formData.ownerEmail.trim()) {
-    errors.ownerEmail = 'Owner email is required.';
-  } else if (!EMAIL_REGEX.test(formData.ownerEmail.trim())) {
-    errors.ownerEmail = 'Please enter a valid email address.';
+  if (formData.trnNumber && formData.trnNumber.trim().length > 30) {
+    errors.trnNumber = 'TRN number cannot exceed 30 characters.';
   }
 
-  if (!formData.ownerMobile.trim()) {
-    errors.ownerMobile = 'Owner mobile is required.';
-  } else if (!isValidUaePhone(formData.ownerMobile)) {
-    errors.ownerMobile = 'Please provide a valid UAE phone number (e.g., +971501234567)';
+  if (formData.website && formData.website.trim().length > 200) {
+    errors.website = 'Website URL cannot exceed 200 characters.';
   }
 
-  // Admin
-  if (!formData.adminFullName.trim()) {
-    errors.adminFullName = 'Admin full name is required.';
-  } else if (formData.adminFullName.trim().length < 2 || formData.adminFullName.trim().length > 80) {
-    errors.adminFullName = 'Admin full name must be 2 to 80 characters.';
-  }
-
-  if (!formData.adminEmail.trim()) {
-    errors.adminEmail = 'Admin email is required.';
-  } else if (!EMAIL_REGEX.test(formData.adminEmail.trim())) {
-    errors.adminEmail = 'Please enter a valid email address.';
-  }
-
-  if (!formData.adminMobile.trim()) {
-    errors.adminMobile = 'Admin mobile is required.';
-  } else if (!isValidUaePhone(formData.adminMobile)) {
-    errors.adminMobile = 'Please provide a valid UAE phone number (e.g., +971501234567)';
+  if (accountType === 'DEVELOPER' && formData.firstProject?.name?.trim()) {
+    const proj = formData.firstProject;
+    if (proj.units && (isNaN(parseInt(proj.units, 10)) || parseInt(proj.units, 10) < 1)) {
+      errors['firstProject.units'] = 'Units must be an integer of 1 or more.';
+    }
   }
 
   return errors;
@@ -284,32 +240,51 @@ export default function OnboardingSignupPage() {
   const [searchParams] = useSearchParams();
   const initialType = searchParams.get('type') === 'developer' ? 'DEVELOPER' : 'AGENCY';
 
-  // 1. "Registering as" toggle: Real estate company (AGENCY) / Developer (DEVELOPER)
+  // 1. Account Type
   const [accountType, setAccountType] = useState(initialType);
 
-  // 2. Form state with all details
+  // 2. Wizard Step (1: Company & Licence, 2: Account Holder & Contacts, 3: Office & Review)
+  const [currentStep, setCurrentStep] = useState(1);
+
+  // 3. Form State
   const [formData, setFormData] = useState({
-    // Contact person
+    // Account Holder (whose email will be the Owner login username)
     firstName: '',
     lastName: '',
     email: '',
     phone: '',
-    // Company / Developer
+
+    // Contact Person (Liaison for company onboarding)
+    contactSameAsAccount: true,
+    ownerFullName: '',
+    ownerEmail: '',
+    ownerMobile: '',
+
+    // Signatory
+    signatoryFullName: '',
+    signatoryDesignation: 'Managing Director',
+    signatoryIsOwner: true,
+
+    // Company / Developer Entity Details
     companyName: '',
     emirate: 'Dubai',
     tradeLicenceNumber: '',
+    expiryDate: '',
+    tradeLicenceStatus: 'Active',
     trnNumber: '',
     officeAddress: '',
     officialEmail: '',
     officialPhone: '',
     website: '',
-    // Agency only
-    companyType: 'Real estate brokerage',
-    tradeLicenceStatus: 'Active',
+
+    // Agency Specific
     orn: '',
+    companyType: 'Real estate brokerage',
     numberOfAgents: '1 to 5',
-    // Developer only
+
+    // Developer Specific
     developerType: 'Master developer',
+    dldDeveloperNumber: '',
     firstProject: {
       name: '',
       community: '',
@@ -318,47 +293,28 @@ export default function OnboardingSignupPage() {
       expectedHandover: '',
       escrowBank: '',
       escrowAccountNumber: ''
-    },
-    // Signatory
-    signatoryFullName: '',
-    signatoryDesignation: '',
-    signatoryIsOwner: true,
-    // Owner
-    ownerFullName: '',
-    ownerEmail: '',
-    ownerMobile: '',
-    // Admin
-    adminFullName: '',
-    adminEmail: '',
-    adminMobile: '',
-    // DLD pre-fill metadata (editable)
-    expiryDate: '',
-    issueDate: '',
-    companyLogo: ''
+    }
   });
 
-  // 3. User interaction tracking
   const [touched, setTouched] = useState({});
-
-  // Flag indicating if details were pre-filled from official DLD/RERA records
   const [autofilledFromDld, setAutofilledFromDld] = useState(false);
 
-  // 4. Pre-check states
+  // Pre-check state
   const [agencyPrecheck, setAgencyPrecheck] = useState({
     loading: false,
     checkedOrn: '',
-    result: null, // { canSubmit, whitelisted, registeredOnApp, message }
+    result: null,
     error: null
   });
 
   const [devPrecheck, setDevPrecheck] = useState({
     loading: false,
-    checkedKey: '', // `${companyName}:::${email}`
-    result: null, // { canSubmit, message }
+    checkedKey: '',
+    result: null,
     error: null
   });
 
-  // 5. Backend response errors
+  // Backend response errors & loading
   const [backendErrors, setBackendErrors] = useState({
     orn: '',
     companyName: '',
@@ -366,14 +322,10 @@ export default function OnboardingSignupPage() {
     network: false
   });
 
-  // 6. Submission status & rate limit timer
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [rateLimitCountdown, setRateLimitCountdown] = useState(0);
-
-  // 7. Success state (HTTP 201)
   const [successData, setSuccessData] = useState(null);
 
-  // Timers & refs for debouncing and rate limiting
   const agencyDebounceRef = useRef(null);
   const devDebounceRef = useRef(null);
 
@@ -400,20 +352,15 @@ export default function OnboardingSignupPage() {
     return () => clearInterval(interval);
   }, [rateLimitCountdown]);
 
-  // Handle Account Type Change & Prune Other Type's Fields
+  // Handle Account Type Change
   const handleAccountTypeChange = (newType) => {
     if (newType === accountType) return;
     setAccountType(newType);
-
-    // Clear backend error states & autofill flag
     setBackendErrors({ orn: '', companyName: '', general: '', network: false });
     setAutofilledFromDld(false);
-
-    // Reset pre-checks
     setAgencyPrecheck({ loading: false, checkedOrn: '', result: null, error: null });
     setDevPrecheck({ loading: false, checkedKey: '', result: null, error: null });
 
-    // When switching, reset other type's specific values
     if (newType === 'DEVELOPER') {
       setFormData((prev) => ({
         ...prev,
@@ -421,12 +368,14 @@ export default function OnboardingSignupPage() {
         companyType: 'Real estate brokerage',
         tradeLicenceStatus: 'Active',
         numberOfAgents: '1 to 5',
-        developerType: prev.developerType || 'Master developer'
+        developerType: prev.developerType || 'Master developer',
+        dldDeveloperNumber: prev.dldDeveloperNumber || ''
       }));
     } else {
       setFormData((prev) => ({
         ...prev,
         developerType: 'Master developer',
+        dldDeveloperNumber: '',
         firstProject: {
           name: '',
           community: '',
@@ -440,10 +389,7 @@ export default function OnboardingSignupPage() {
     }
   };
 
-  // -------------------------------------------------------------
-  // AGENCY Pre-check: debounced 400ms on ORN change & on blur
-  // Auto-fills form when official DLD / RERA company data is returned
-  // -------------------------------------------------------------
+  // AGENCY Pre-check: debounced 400ms on ORN change
   const runAgencyCheck = async (ornVal) => {
     const trimmed = (ornVal || '').trim();
     if (!trimmed) {
@@ -468,14 +414,12 @@ export default function OnboardingSignupPage() {
         error: null
       });
 
-      // 🔍 AUTO-FILL FROM DLD COMPANY DATA (if available)
+      // Auto-fill official DLD company data if available
       const company = data?.company || res?.company || null;
       if (company) {
         setAutofilledFromDld(true);
         setFormData((prev) => {
           const updated = { ...prev };
-
-          // ONLY autofill official company details
           if (company.companyName) updated.companyName = company.companyName;
           if (company.tradeLicenceNumber) updated.tradeLicenceNumber = String(company.tradeLicenceNumber);
           if (company.expiryDate) {
@@ -487,11 +431,6 @@ export default function OnboardingSignupPage() {
           if (company.companyType) updated.companyType = company.companyType;
           if (company.officialPhone) updated.officialPhone = formatUaePhoneDisplay(company.officialPhone);
           if (company.officialEmail) updated.officialEmail = company.officialEmail;
-          if (company.issueDate) updated.issueDate = company.issueDate;
-          if (company.companyLogo) updated.companyLogo = company.companyLogo;
-          if (company.activities) updated.activities = company.activities;
-
-          // Contact Person, Signatory, Owner & Admin are filled manually by the user
           return updated;
         });
       }
@@ -518,7 +457,6 @@ export default function OnboardingSignupPage() {
   const handleOrnChange = (e) => {
     const val = e.target.value;
     setFormData((prev) => ({ ...prev, orn: val }));
-
     setBackendErrors((prev) => ({ ...prev, orn: '' }));
     setAgencyPrecheck({ loading: false, checkedOrn: '', result: null, error: null });
     setAutofilledFromDld(false);
@@ -539,9 +477,7 @@ export default function OnboardingSignupPage() {
     }
   };
 
-  // -------------------------------------------------------------
   // DEVELOPER Pre-check: once both name & email are filled
-  // -------------------------------------------------------------
   const runDeveloperCheck = async (nameVal, emailVal) => {
     const trimmedName = (nameVal || '').trim();
     const trimmedEmail = (emailVal || '').trim().toLowerCase();
@@ -581,7 +517,6 @@ export default function OnboardingSignupPage() {
   const handleDevNameChange = (e) => {
     const val = e.target.value;
     setFormData((prev) => ({ ...prev, companyName: val }));
-
     setBackendErrors((prev) => ({ ...prev, companyName: '' }));
     setDevPrecheck({ loading: false, checkedKey: '', result: null, error: null });
 
@@ -601,14 +536,19 @@ export default function OnboardingSignupPage() {
     }
   };
 
-  const handleContactEmailChange = (e) => {
+  const handleAccountEmailChange = (e) => {
     const val = e.target.value;
-    setFormData((prev) => ({ ...prev, email: val }));
+    setFormData((prev) => {
+      const updated = { ...prev, email: val };
+      if (prev.contactSameAsAccount) {
+        updated.ownerEmail = val;
+      }
+      return updated;
+    });
 
     if (accountType === 'DEVELOPER') {
       setBackendErrors((prev) => ({ ...prev, companyName: '' }));
       setDevPrecheck({ loading: false, checkedKey: '', result: null, error: null });
-
       if (devDebounceRef.current) clearTimeout(devDebounceRef.current);
       if (formData.companyName.trim() && val.trim()) {
         devDebounceRef.current = setTimeout(() => {
@@ -618,7 +558,7 @@ export default function OnboardingSignupPage() {
     }
   };
 
-  const handleContactEmailBlur = () => {
+  const handleAccountEmailBlur = () => {
     setTouched((prev) => ({ ...prev, email: true }));
     if (accountType === 'DEVELOPER') {
       if (devDebounceRef.current) clearTimeout(devDebounceRef.current);
@@ -650,7 +590,21 @@ export default function OnboardingSignupPage() {
         tradeLicenceStatus: calculatedStatus
       }));
     } else {
-      setFormData((prev) => ({ ...prev, [name]: value }));
+      setFormData((prev) => {
+        const next = { ...prev, [name]: value };
+        // Sync contact person if checkbox is active
+        if (prev.contactSameAsAccount) {
+          if (name === 'firstName' || name === 'lastName') {
+            const f = name === 'firstName' ? value : prev.firstName;
+            const l = name === 'lastName' ? value : prev.lastName;
+            next.ownerFullName = `${f.trim()} ${l.trim()}`.trim();
+          }
+          if (name === 'phone') {
+            next.ownerMobile = value;
+          }
+        }
+        return next;
+      });
     }
   };
 
@@ -659,12 +613,12 @@ export default function OnboardingSignupPage() {
     setTouched((prev) => ({ ...prev, [name]: true }));
   };
 
-  // Validation state
-  const formErrors = useMemo(() => {
-    return validateForm(formData, accountType);
-  }, [formData, accountType]);
+  // Validation errors for each step
+  const step1Errors = useMemo(() => validateStep1(formData, accountType), [formData, accountType]);
+  const step2Errors = useMemo(() => validateStep2(formData), [formData]);
+  const step3Errors = useMemo(() => validateStep3(formData, accountType), [formData, accountType]);
 
-  // RULE: Submit is enabled ONLY when canSubmit === true
+  // Pre-check condition
   const canSubmitFromPrecheck = useMemo(() => {
     if (accountType === 'AGENCY') {
       if (!formData.orn.trim()) return false;
@@ -675,28 +629,50 @@ export default function OnboardingSignupPage() {
     }
   }, [accountType, formData.orn, formData.companyName, formData.email, agencyPrecheck.result, devPrecheck.result]);
 
-  const isFormValid = Object.keys(formErrors).length === 0;
+  // Step 1 -> Step 2 Navigation
+  const handleGoToStep2 = () => {
+    const s1Touched = {
+      companyName: true,
+      emirate: true,
+      tradeLicenceNumber: true,
+      ...(accountType === 'AGENCY' ? { orn: true, companyType: true, tradeLicenceStatus: true } : { developerType: true, dldDeveloperNumber: true })
+    };
+    setTouched((prev) => ({ ...prev, ...s1Touched }));
 
-  // -------------------------------------------------------------
-  // Form Submission
-  // -------------------------------------------------------------
+    if (Object.keys(step1Errors).length > 0) return;
+    if (accountType === 'AGENCY' && agencyPrecheck.result?.canSubmit === false) return;
+    if (accountType === 'DEVELOPER' && devPrecheck.result?.canSubmit === false) return;
+
+    setCurrentStep(2);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Step 2 -> Step 3 Navigation
+  const handleGoToStep3 = () => {
+    const s2Touched = {
+      firstName: true,
+      lastName: true,
+      email: true,
+      phone: true,
+      signatoryFullName: true,
+      ...(!formData.contactSameAsAccount ? { ownerFullName: true, ownerEmail: true, ownerMobile: true } : {})
+    };
+    setTouched((prev) => ({ ...prev, ...s2Touched }));
+
+    if (Object.keys(step2Errors).length > 0) return;
+
+    setCurrentStep(3);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Final Form Submission
   const handleSubmit = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
 
-    // Mark all fields as touched
-    const allTouched = {};
-    Object.keys(formData).forEach((k) => {
-      allTouched[k] = true;
-    });
-    if (accountType === 'DEVELOPER') {
-      ['name', 'community', 'reraProjectNumber', 'units', 'expectedHandover', 'escrowBank', 'escrowAccountNumber'].forEach((f) => {
-        allTouched[`firstProject.${f}`] = true;
-      });
-    }
-    setTouched(allTouched);
-
-    const currentErrors = validateForm(formData, accountType);
-    if (Object.keys(currentErrors).length > 0) {
+    const allErrors = { ...step1Errors, ...step2Errors, ...step3Errors };
+    if (Object.keys(allErrors).length > 0) {
+      if (Object.keys(step1Errors).length > 0) setCurrentStep(1);
+      else if (Object.keys(step2Errors).length > 0) setCurrentStep(2);
       return;
     }
 
@@ -707,94 +683,93 @@ export default function OnboardingSignupPage() {
     setIsSubmitting(true);
     setBackendErrors({ orn: '', companyName: '', general: '', network: false });
 
-    // Send only the selected type's fields (remove other type's fields to avoid 400)
-    let payload;
-    if (accountType === 'AGENCY') {
-      payload = {
-        type: 'AGENCY',
-        firstName: formData.firstName.trim(),
-        lastName: formData.lastName.trim(),
-        email: formData.email.trim().toLowerCase(),
-        phone: formData.phone.trim().replace(/[\s-]/g, ''),
-        companyName: formData.companyName.trim(),
+    // Derive Account Holder & Contact Person accurately
+    const accountHolderFullName = `${formData.firstName.trim()} ${formData.lastName.trim()}`.trim();
+    const contactFullName = (formData.contactSameAsAccount ? accountHolderFullName : formData.ownerFullName).trim();
+    const contactEmail = (formData.contactSameAsAccount ? formData.email : formData.ownerEmail).trim().toLowerCase();
+    const contactMobile = (formData.contactSameAsAccount ? formData.phone : formData.ownerMobile).trim().replace(/[\s-]/g, '');
+
+    const payload = {
+      type: accountType,
+      // Account Holder (signup): Owner login is issued to this email
+      fullName: accountHolderFullName,
+      firstName: formData.firstName.trim(),
+      lastName: formData.lastName.trim(),
+      email: formData.email.trim().toLowerCase(),
+      phone: formData.phone.trim().replace(/[\s-]/g, ''),
+
+      // Company details
+      companyName: formData.companyName.trim(),
+      emirate: formData.emirate,
+      tradeLicenceNumber: formData.tradeLicenceNumber.trim(),
+      signatoryFullName: formData.signatoryFullName.trim(),
+      signatoryDesignation: formData.signatoryDesignation.trim() || 'Managing Director',
+      signatoryIsOwner: Boolean(formData.signatoryIsOwner),
+
+      // Contact Person (owner fields in backend)
+      ownerFullName: contactFullName,
+      ownerEmail: contactEmail,
+      ownerMobile: contactMobile,
+
+      // Admin (legacy fallback - synced with contact person)
+      adminFullName: contactFullName,
+      adminEmail: contactEmail,
+      adminMobile: contactMobile,
+
+      // Can wait / optional fields
+      ...(formData.trnNumber.trim() ? { trnNumber: formData.trnNumber.trim() } : {}),
+      ...(formData.officeAddress.trim() ? { officeAddress: formData.officeAddress.trim() } : {}),
+      ...(formData.officialEmail.trim() ? { officialEmail: formData.officialEmail.trim().toLowerCase() } : {}),
+      ...(formData.officialPhone.trim() ? { officialPhone: formData.officialPhone.trim().replace(/[\s-]/g, '') } : {}),
+      ...(formData.website.trim() ? { website: formData.website.trim() } : {}),
+
+      // Agency specific
+      ...(accountType === 'AGENCY' ? {
         companyType: formData.companyType,
-        emirate: formData.emirate,
-        tradeLicenceStatus: (() => {
-          if (formData.tradeLicenceStatus === 'Active') return 'Valid and active';
-          if (formData.tradeLicenceStatus === 'Expires soon' || formData.tradeLicenceStatus === 'Expired') return 'Under renewal';
-          return formData.tradeLicenceStatus || 'Valid and active';
-        })(),
+        tradeLicenceStatus: formData.tradeLicenceStatus === 'Active' ? 'Valid and active' : formData.tradeLicenceStatus,
         orn: formData.orn.trim(),
-        tradeLicenceNumber: formData.tradeLicenceNumber.trim(),
-        trnNumber: formData.trnNumber.trim(),
-        numberOfAgents: formData.numberOfAgents,
-        officeAddress: formData.officeAddress.trim(),
-        officialEmail: formData.officialEmail.trim().toLowerCase(),
-        officialPhone: formData.officialPhone.trim().replace(/[\s-]/g, ''),
-        website: formData.website.trim(),
-        signatoryFullName: formData.signatoryFullName.trim(),
-        signatoryDesignation: formData.signatoryDesignation.trim(),
-        signatoryIsOwner: Boolean(formData.signatoryIsOwner),
-        ownerFullName: formData.ownerFullName.trim(),
-        ownerEmail: formData.ownerEmail.trim().toLowerCase(),
-        ownerMobile: formData.ownerMobile.trim().replace(/[\s-]/g, ''),
-        adminFullName: formData.adminFullName.trim(),
-        adminEmail: formData.adminEmail.trim().toLowerCase(),
-        adminMobile: formData.adminMobile.trim().replace(/[\s-]/g, '')
-      };
-    } else {
-      payload = {
-        type: 'DEVELOPER',
-        firstName: formData.firstName.trim(),
-        lastName: formData.lastName.trim(),
-        email: formData.email.trim().toLowerCase(),
-        phone: formData.phone.trim().replace(/[\s-]/g, ''),
-        companyName: formData.companyName.trim(),
+        ...(formData.numberOfAgents ? { numberOfAgents: formData.numberOfAgents } : {})
+      } : {}),
+
+      // Developer specific
+      ...(accountType === 'DEVELOPER' ? {
         developerType: formData.developerType,
-        emirate: formData.emirate,
-        tradeLicenceNumber: formData.tradeLicenceNumber.trim(),
-        trnNumber: formData.trnNumber.trim(),
-        officeAddress: formData.officeAddress.trim(),
-        officialEmail: formData.officialEmail.trim().toLowerCase(),
-        officialPhone: formData.officialPhone.trim().replace(/[\s-]/g, ''),
-        website: formData.website.trim(),
-        firstProject: {
-          name: formData.firstProject.name.trim(),
-          community: formData.firstProject.community.trim(),
-          reraProjectNumber: formData.firstProject.reraProjectNumber.trim(),
-          units: parseInt(formData.firstProject.units, 10),
-          expectedHandover: formData.firstProject.expectedHandover.trim(),
-          escrowBank: formData.firstProject.escrowBank.trim(),
-          escrowAccountNumber: formData.firstProject.escrowAccountNumber.trim()
-        },
-        signatoryFullName: formData.signatoryFullName.trim(),
-        signatoryDesignation: formData.signatoryDesignation.trim(),
-        signatoryIsOwner: Boolean(formData.signatoryIsOwner),
-        ownerFullName: formData.ownerFullName.trim(),
-        ownerEmail: formData.ownerEmail.trim().toLowerCase(),
-        ownerMobile: formData.ownerMobile.trim().replace(/[\s-]/g, ''),
-        adminFullName: formData.adminFullName.trim(),
-        adminEmail: formData.adminEmail.trim().toLowerCase(),
-        adminMobile: formData.adminMobile.trim().replace(/[\s-]/g, '')
-      };
-    }
+        dldDeveloperNumber: formData.dldDeveloperNumber.trim(),
+        ...(formData.firstProject.name.trim() ? {
+          firstProject: {
+            name: formData.firstProject.name.trim(),
+            community: formData.firstProject.community.trim(),
+            reraProjectNumber: formData.firstProject.reraProjectNumber.trim(),
+            units: parseInt(formData.firstProject.units, 10) || undefined,
+            expectedHandover: formData.firstProject.expectedHandover.trim(),
+            escrowBank: formData.firstProject.escrowBank.trim(),
+            escrowAccountNumber: formData.firstProject.escrowAccountNumber.trim()
+          }
+        } : {})
+      } : {})
+    };
 
     try {
       const response = await cmpConnectApi.register(payload);
-      if (response?.status === 'success' && response?.data) {
-        setSuccessData(response.data);
-      } else {
-        throw new Error(response?.message || 'Registration failed.');
-      }
+      const data = response?.data || response;
+      setSuccessData({
+        code: data?.code || data?.registrationCode || 'CMP-REQ',
+        email: contactEmail || formData.email,
+        linkExpiresAt: data?.linkExpiresAt || data?.expiresAt || new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+        linkEmailStatus: data?.linkEmailStatus || 'SENT'
+      });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err) {
-      const status = err.status;
-      const msg = err.message || 'An error occurred during registration.';
+      const status = err.status || err.response?.status;
+      const msg = err.message || err.response?.data?.message || 'Registration failed';
 
       if (status === 400) {
-        setBackendErrors((prev) => ({ ...prev, general: msg }));
-      } else if (status === 403) {
-        setBackendErrors((prev) => ({ ...prev, orn: msg }));
-        if (accountType === 'AGENCY') {
+        setBackendErrors((prev) => ({
+          ...prev,
+          general: msg || 'Please check the form for errors.'
+        }));
+        if (msg.toLowerCase().includes('orn') && accountType === 'AGENCY') {
+          setBackendErrors((prev) => ({ ...prev, orn: msg }));
           setAgencyPrecheck((prev) => ({
             ...prev,
             result: { ...(prev.result || {}), canSubmit: false, message: msg }
@@ -926,7 +901,7 @@ export default function OnboardingSignupPage() {
   }
 
   // -------------------------------------------------------------
-  // RENDER: REGISTRATION FORM
+  // RENDER: STEP-BY-STEP REGISTRATION FORM
   // -------------------------------------------------------------
   return (
     <OnboardingLayout
@@ -940,884 +915,1128 @@ export default function OnboardingSignupPage() {
       ]}
     >
       <div className="reg-card wide">
-        <div className="reg-card-header">
+        <div className="reg-card-header" style={{ marginBottom: 20 }}>
           <p className="eyebrow">CMP Connect</p>
           <h2>Registration form</h2>
           <p className="sub">
-            Submit your company registration request. Once received, we will send an upload link to complete your verification documents.
+            Submit your partner registration in 3 quick steps. Once received, an upload link will be emailed to complete verification documents.
           </p>
+        </div>
 
-          {/* 1. Registering as Toggle */}
-          <div className="type-grid">
+        {/* ── STEP PROGRESS BAR ── */}
+        <div
+          className="signup-stepper"
+          style={{
+            marginBottom: '32px',
+            padding: '16px 20px',
+            background: 'var(--cmp-surface-sunken)',
+            borderRadius: '12px',
+            border: '1px solid var(--cmp-border)'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative' }}>
+            {/* Connecting line */}
+            <div
+              style={{
+                position: 'absolute',
+                top: '18px',
+                left: '48px',
+                right: '48px',
+                height: '3px',
+                background: 'var(--cmp-border)',
+                zIndex: 0
+              }}
+            >
+              <div
+                style={{
+                  height: '100%',
+                  background: 'var(--cmp-brand)',
+                  width: currentStep === 1 ? '0%' : currentStep === 2 ? '50%' : '100%',
+                  transition: 'width 0.35s cubic-bezier(0.4, 0, 0.2, 1)'
+                }}
+              />
+            </div>
+
+            {/* Step 1: Company & Licence */}
             <button
               type="button"
-              className="type-card"
-              aria-pressed={accountType === 'AGENCY'}
-              onClick={() => handleAccountTypeChange('AGENCY')}
+              onClick={() => setCurrentStep(1)}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                position: 'relative',
+                zIndex: 1,
+                gap: '6px'
+              }}
             >
-              <span className="type-icon">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
-                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8m14 10v-2a4 4 0 0 0-3-3.87" />
-                </svg>
+              <div
+                style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '50%',
+                  display: 'grid',
+                  placeItems: 'center',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  background: currentStep >= 1 ? 'var(--cmp-brand)' : 'var(--cmp-surface)',
+                  color: currentStep >= 1 ? '#FFFFFF' : 'var(--cmp-text-faint)',
+                  border: currentStep === 1 ? '2px solid var(--cmp-brand)' : '1px solid var(--cmp-border)',
+                  boxShadow: currentStep === 1 ? '0 0 0 4px var(--cmp-brand-subtle)' : 'none',
+                  transition: 'all 0.25s ease'
+                }}
+              >
+                {currentStep > 1 ? '✓' : '1'}
+              </div>
+              <span
+                style={{
+                  fontSize: '12px',
+                  fontWeight: currentStep === 1 ? 700 : 500,
+                  color: currentStep === 1 ? 'var(--cmp-brand)' : 'var(--cmp-text-muted)'
+                }}
+              >
+                1. Company &amp; Licence
               </span>
-              <strong>Real estate company</strong>
-              <span className="muted">Brokerages and agencies marketing and selling property.</span>
-              <span className="faint">Brokerage, agency, property management, holiday homes</span>
             </button>
 
+            {/* Step 2: Account Holder & Contacts */}
             <button
               type="button"
-              className="type-card"
-              aria-pressed={accountType === 'DEVELOPER'}
-              onClick={() => handleAccountTypeChange('DEVELOPER')}
+              onClick={() => {
+                if (currentStep > 2 || Object.keys(step1Errors).length === 0) {
+                  setCurrentStep(2);
+                }
+              }}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                background: 'none',
+                border: 'none',
+                cursor: currentStep >= 2 ? 'pointer' : 'default',
+                position: 'relative',
+                zIndex: 1,
+                gap: '6px'
+              }}
             >
-              <span className="type-icon">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
-                  <path d="M4 21V10l8-6 8 6v11M9 21v-6h6v6" />
-                </svg>
+              <div
+                style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '50%',
+                  display: 'grid',
+                  placeItems: 'center',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  background: currentStep >= 2 ? 'var(--cmp-brand)' : 'var(--cmp-surface)',
+                  color: currentStep >= 2 ? '#FFFFFF' : 'var(--cmp-text-faint)',
+                  border: currentStep >= 2 ? '2px solid var(--cmp-brand)' : '1px solid var(--cmp-border)',
+                  boxShadow: currentStep === 2 ? '0 0 0 4px var(--cmp-brand-subtle)' : 'none',
+                  transition: 'all 0.25s ease'
+                }}
+              >
+                {currentStep > 2 ? '✓' : '2'}
+              </div>
+              <span
+                style={{
+                  fontSize: '12px',
+                  fontWeight: currentStep === 2 ? 700 : 500,
+                  color: currentStep === 2 ? 'var(--cmp-brand)' : 'var(--cmp-text-muted)'
+                }}
+              >
+                2. Account Holder &amp; Contacts
               </span>
-              <strong>Developer</strong>
-              <span className="muted">Developers building and selling their own projects.</span>
-              <span className="faint">Master developer, sub developer</span>
+            </button>
+
+            {/* Step 3: Office & Review */}
+            <button
+              type="button"
+              onClick={() => {
+                if (Object.keys(step1Errors).length === 0 && Object.keys(step2Errors).length === 0) {
+                  setCurrentStep(3);
+                }
+              }}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                background: 'none',
+                border: 'none',
+                cursor: currentStep === 3 ? 'pointer' : 'default',
+                position: 'relative',
+                zIndex: 1,
+                gap: '6px'
+              }}
+            >
+              <div
+                style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '50%',
+                  display: 'grid',
+                  placeItems: 'center',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  background: currentStep === 3 ? 'var(--cmp-brand)' : 'var(--cmp-surface)',
+                  color: currentStep === 3 ? '#FFFFFF' : 'var(--cmp-text-faint)',
+                  border: currentStep === 3 ? '2px solid var(--cmp-brand)' : '1px solid var(--cmp-border)',
+                  boxShadow: currentStep === 3 ? '0 0 0 4px var(--cmp-brand-subtle)' : 'none',
+                  transition: 'all 0.25s ease'
+                }}
+              >
+                3
+              </div>
+              <span
+                style={{
+                  fontSize: '12px',
+                  fontWeight: currentStep === 3 ? 700 : 500,
+                  color: currentStep === 3 ? 'var(--cmp-brand)' : 'var(--cmp-text-muted)'
+                }}
+              >
+                3. Office &amp; Review
+              </span>
             </button>
           </div>
         </div>
 
         <form onSubmit={handleSubmit} noValidate className="reg-card-form">
-          {/* 2. Contact Person Section */}
-          <section className="form-section">
-            <h3>Contact person</h3>
-            <p className="section-sub" style={{ fontSize: '13px', color: 'var(--cmp-text-muted)', marginBottom: 14 }}>
-              The upload link and login details are sent here; this email becomes your login username.
-            </p>
-            <div className="form-grid">
-              <div className="field half" data-invalid={touched.firstName && formErrors.firstName ? true : undefined}>
-                <label htmlFor="reg-first-name">First name *</label>
-                <input
-                  id="reg-first-name"
-                  name="firstName"
-                  type="text"
-                  value={formData.firstName}
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                  required
-                />
-                {touched.firstName && formErrors.firstName && (
-                  <span className="error-text">{formErrors.firstName}</span>
-                )}
+          {/* ═════════════════════════════════════════════════════════ */}
+          {/* STEP 1: COMPANY & LICENSING                              */}
+          {/* ═════════════════════════════════════════════════════════ */}
+          {currentStep === 1 && (
+            <div>
+              {/* Account Type Toggle */}
+              <div className="type-grid" style={{ marginBottom: 24 }}>
+                <button
+                  type="button"
+                  className="type-card"
+                  aria-pressed={accountType === 'AGENCY'}
+                  onClick={() => handleAccountTypeChange('AGENCY')}
+                >
+                  <span className="type-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+                      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8m14 10v-2a4 4 0 0 0-3-3.87" />
+                    </svg>
+                  </span>
+                  <strong>Real estate company</strong>
+                  <span className="muted">Brokerages and agencies marketing and selling property.</span>
+                  <span className="faint">Brokerage, agency, property management</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="type-card"
+                  aria-pressed={accountType === 'DEVELOPER'}
+                  onClick={() => handleAccountTypeChange('DEVELOPER')}
+                >
+                  <span className="type-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+                      <path d="M4 21V10l8-6 8 6v11M9 21v-6h6v6" />
+                    </svg>
+                  </span>
+                  <strong>Developer</strong>
+                  <span className="muted">Developers building and selling their own projects.</span>
+                  <span className="faint">Master developer, sub developer</span>
+                </button>
               </div>
 
-              <div className="field half" data-invalid={touched.lastName && formErrors.lastName ? true : undefined}>
-                <label htmlFor="reg-last-name">Last name *</label>
-                <input
-                  id="reg-last-name"
-                  name="lastName"
-                  type="text"
-                  value={formData.lastName}
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                  required
-                />
-                {touched.lastName && formErrors.lastName && (
-                  <span className="error-text">{formErrors.lastName}</span>
-                )}
-              </div>
+              <section className="form-section">
+                <h3>{accountType === 'AGENCY' ? 'Agency details' : 'Developer details'}</h3>
+                <p className="section-sub" style={{ fontSize: '13px', color: 'var(--cmp-text-muted)', marginBottom: 14 }}>
+                  Official registration credentials verified with the government regulatory authority.
+                </p>
 
-              <div className="field half" data-invalid={touched.email && formErrors.email ? true : undefined}>
-                <label htmlFor="reg-contact-email">Email *</label>
-                <input
-                  id="reg-contact-email"
-                  name="email"
-                  type="email"
-                  placeholder="name@company.ae"
-                  value={formData.email}
-                  onChange={handleContactEmailChange}
-                  onBlur={handleContactEmailBlur}
-                  required
-                />
-                <span className="hint">We send the upload link and login username here.</span>
-                {touched.email && formErrors.email && (
-                  <span className="error-text">{formErrors.email}</span>
-                )}
-              </div>
+                <div className="form-grid">
+                  {/* Company Name */}
+                  <div className="field" data-invalid={touched.companyName && step1Errors.companyName ? true : undefined}>
+                    <label htmlFor="reg-company-name">
+                      {accountType === 'DEVELOPER' ? 'Developer company name *' : 'Company name *'}
+                    </label>
+                    <input
+                      id="reg-company-name"
+                      name="companyName"
+                      type="text"
+                      placeholder="e.g. CMP Prime Real Estate LLC"
+                      value={formData.companyName}
+                      onChange={accountType === 'DEVELOPER' ? handleDevNameChange : handleChange}
+                      onBlur={accountType === 'DEVELOPER' ? handleDevNameBlur : handleBlur}
+                      required
+                    />
+                    <span className="hint">As it appears on the official trade licence.</span>
+                    {touched.companyName && step1Errors.companyName && (
+                      <span className="error-text">{step1Errors.companyName}</span>
+                    )}
+                    {backendErrors.companyName && (
+                      <span className="error-text">{backendErrors.companyName}</span>
+                    )}
+                  </div>
 
-              <div className="field half" data-invalid={touched.phone && formErrors.phone ? true : undefined}>
-                <label htmlFor="reg-contact-phone">Phone number *</label>
-                <input
-                  id="reg-contact-phone"
-                  name="phone"
-                  type="tel"
-                  placeholder="+971 50 123 4567"
-                  value={formData.phone}
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                  required
-                />
-                <span className="hint">UAE mobile number.</span>
-                {touched.phone && formErrors.phone && (
-                  <span className="error-text">{formErrors.phone}</span>
+                  {/* AGENCY SPECIFIC: ORN */}
+                  {accountType === 'AGENCY' && (
+                    <>
+                      <div className="field half" data-invalid={(touched.orn && step1Errors.orn) || backendErrors.orn ? true : undefined}>
+                        <label htmlFor="reg-orn">RERA ORN number *</label>
+                        <div style={{ position: 'relative' }}>
+                          <input
+                            id="reg-orn"
+                            name="orn"
+                            type="text"
+                            placeholder="e.g. 28841"
+                            value={formData.orn}
+                            onChange={handleOrnChange}
+                            onBlur={handleOrnBlur}
+                            required
+                            style={{ paddingRight: agencyPrecheck.loading ? 38 : 12 }}
+                          />
+                          {agencyPrecheck.loading && (
+                            <span
+                              style={{
+                                position: 'absolute',
+                                right: 12,
+                                top: '50%',
+                                transform: 'translateY(-50%)',
+                                fontSize: '12px',
+                                color: 'var(--cmp-brand)'
+                              }}
+                            >
+                              Checking...
+                            </span>
+                          )}
+                        </div>
+                        <span className="hint">Official RERA Office Registration Number.</span>
+                        {touched.orn && step1Errors.orn && (
+                          <span className="error-text">{step1Errors.orn}</span>
+                        )}
+                        {backendErrors.orn && (
+                          <span className="error-text">{backendErrors.orn}</span>
+                        )}
+                      </div>
+
+                      {/* Agency Company Type */}
+                      <div className="field half" data-invalid={touched.companyType && step1Errors.companyType ? true : undefined}>
+                        <label htmlFor="reg-company-type">Company type *</label>
+                        <select
+                          id="reg-company-type"
+                          name="companyType"
+                          value={formData.companyType}
+                          onChange={handleChange}
+                          onBlur={handleBlur}
+                          required
+                        >
+                          <option value="Real estate brokerage">Real estate brokerage</option>
+                          <option value="Sole establishment">Sole establishment</option>
+                          <option value="Branch of foreign company">Branch of foreign company</option>
+                          <option value="Free zone establishment">Free zone establishment</option>
+                          <option value="Other">Other</option>
+                        </select>
+                        {touched.companyType && step1Errors.companyType && (
+                          <span className="error-text">{step1Errors.companyType}</span>
+                        )}
+                      </div>
+
+                      {/* Agency Trade Licence Expiry */}
+                      <div className="field half">
+                        <label htmlFor="reg-licence-expiry">Trade licence expiry</label>
+                        <input
+                          id="reg-licence-expiry"
+                          name="expiryDate"
+                          type="text"
+                          placeholder="YYYY-MM-DD"
+                          value={formData.expiryDate || ''}
+                          onChange={handleChange}
+                          onBlur={handleBlur}
+                        />
+                        <span className="hint">As registered with official DLD / licensing authority.</span>
+                      </div>
+
+                      {/* Agency Trade Licence Status (Auto-calculated readOnly) */}
+                      <div className="field half">
+                        <label htmlFor="reg-licence-status">Trade licence status</label>
+                        <input
+                          id="reg-licence-status"
+                          name="tradeLicenceStatus"
+                          type="text"
+                          value={formData.tradeLicenceStatus || 'Active'}
+                          readOnly
+                          style={{
+                            backgroundColor: 'var(--cmp-surface-sunken, #f8fafc)',
+                            cursor: 'default',
+                            fontWeight: 600,
+                            color: formData.tradeLicenceStatus === 'Expired'
+                              ? 'var(--cmp-danger, #dc2626)'
+                              : formData.tradeLicenceStatus === 'Expires soon'
+                              ? 'var(--cmp-warning, #d97706)'
+                              : 'var(--cmp-success, #16a34a)'
+                          }}
+                        />
+                        {formData.tradeLicenceStatus === 'Expires soon' && (
+                          <span className="hint" style={{ color: 'var(--cmp-warning, #d97706)', fontWeight: 500 }}>
+                            ⚠️ Licence expires within 30 days (Auto-calculated)
+                          </span>
+                        )}
+                        {formData.tradeLicenceStatus === 'Expired' && (
+                          <span className="hint" style={{ color: 'var(--cmp-danger, #dc2626)', fontWeight: 500 }}>
+                            ⛔ Licence has expired (Auto-calculated)
+                          </span>
+                        )}
+                        {(!formData.tradeLicenceStatus || formData.tradeLicenceStatus === 'Active') && (
+                          <span className="hint" style={{ color: 'var(--cmp-success, #16a34a)', fontWeight: 500 }}>
+                            ✓ Licence is active (Auto-calculated)
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Number of agents (can wait / optional) */}
+                      <div className="field half">
+                        <label htmlFor="reg-agents-count">Number of active agents</label>
+                        <select
+                          id="reg-agents-count"
+                          name="numberOfAgents"
+                          value={formData.numberOfAgents}
+                          onChange={handleChange}
+                          onBlur={handleBlur}
+                        >
+                          <option value="1 to 5">1 to 5 agents</option>
+                          <option value="6 to 20">6 to 20 agents</option>
+                          <option value="21 to 50">21 to 50 agents</option>
+                          <option value="50+">50+ agents</option>
+                        </select>
+                        <span className="hint">Optional estimate of licensed brokers.</span>
+                      </div>
+                    </>
+                  )}
+
+                  {/* DEVELOPER SPECIFIC: DLD Registration Number & Developer Type */}
+                  {accountType === 'DEVELOPER' && (
+                    <>
+                      <div className="field half" data-invalid={touched.dldDeveloperNumber && step1Errors.dldDeveloperNumber ? true : undefined}>
+                        <label htmlFor="reg-dev-number">DLD developer registration number *</label>
+                        <input
+                          id="reg-dev-number"
+                          name="dldDeveloperNumber"
+                          type="text"
+                          placeholder="e.g. DLD-DEV-4417"
+                          value={formData.dldDeveloperNumber}
+                          onChange={handleChange}
+                          onBlur={handleBlur}
+                          required
+                        />
+                        <span className="hint">Official DLD developer licence / registration code.</span>
+                        {touched.dldDeveloperNumber && step1Errors.dldDeveloperNumber && (
+                          <span className="error-text">{step1Errors.dldDeveloperNumber}</span>
+                        )}
+                      </div>
+
+                      <div className="field half" data-invalid={touched.developerType && step1Errors.developerType ? true : undefined}>
+                        <label htmlFor="reg-dev-type">Developer classification *</label>
+                        <select
+                          id="reg-dev-type"
+                          name="developerType"
+                          value={formData.developerType}
+                          onChange={handleChange}
+                          onBlur={handleBlur}
+                          required
+                        >
+                          <option value="Master developer">Master developer</option>
+                          <option value="Sub developer">Sub developer</option>
+                        </select>
+                        {touched.developerType && step1Errors.developerType && (
+                          <span className="error-text">{step1Errors.developerType}</span>
+                        )}
+                      </div>
+                    </>
+                  )}
+
+                  {/* Common: Emirate & Trade Licence Number */}
+                  <div className="field half" data-invalid={touched.emirate && step1Errors.emirate ? true : undefined}>
+                    <label htmlFor="reg-emirate">Emirate of licence *</label>
+                    <select
+                      id="reg-emirate"
+                      name="emirate"
+                      value={formData.emirate}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                      required
+                    >
+                      <option value="Dubai">Dubai</option>
+                      <option value="Abu Dhabi">Abu Dhabi</option>
+                      <option value="Sharjah">Sharjah</option>
+                      <option value="Ajman">Ajman</option>
+                      <option value="Ras Al Khaimah">Ras Al Khaimah</option>
+                      <option value="Fujairah">Fujairah</option>
+                      <option value="Umm Al Quwain">Umm Al Quwain</option>
+                    </select>
+                    {touched.emirate && step1Errors.emirate && (
+                      <span className="error-text">{step1Errors.emirate}</span>
+                    )}
+                  </div>
+
+                  <div className="field half" data-invalid={touched.tradeLicenceNumber && step1Errors.tradeLicenceNumber ? true : undefined}>
+                    <label htmlFor="reg-licence-number">Trade licence number *</label>
+                    <input
+                      id="reg-licence-number"
+                      name="tradeLicenceNumber"
+                      type="text"
+                      placeholder="e.g. 771204"
+                      value={formData.tradeLicenceNumber}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                      required
+                    />
+                    {touched.tradeLicenceNumber && step1Errors.tradeLicenceNumber && (
+                      <span className="error-text">{step1Errors.tradeLicenceNumber}</span>
+                    )}
+                  </div>
+
+
+                  <div className="field half">
+                    <label htmlFor="reg-trn-number">TRN / Tax number (Optional)</label>
+                    <input
+                      id="reg-trn-number"
+                      name="trnNumber"
+                      type="text"
+                      placeholder="e.g. 100412887600003"
+                      value={formData.trnNumber}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                    />
+                    <span className="hint">Can wait: leave empty if not VAT registered.</span>
+                  </div>
+                </div>
+
+                {/* Precheck Notification Banners */}
+                {accountType === 'AGENCY' && agencyPrecheck.result && (
+                  <div style={{ marginTop: 14 }}>
+                    {agencyPrecheck.result.canSubmit === false ? (
+                      <div className="note" style={{ background: 'color-mix(in srgb, var(--cmp-danger) 10%, transparent)', border: '1px solid var(--cmp-danger)', color: 'var(--cmp-danger)', fontSize: 13, padding: '10px 14px' }}>
+                        ⛔ {agencyPrecheck.result.message || 'This ORN cannot be registered at this time.'}
+                      </div>
+                    ) : (
+                      <div className="note" style={{ background: 'color-mix(in srgb, var(--cmp-success) 12%, transparent)', border: '1px solid var(--cmp-success)', color: 'var(--cmp-success)', fontSize: 13, padding: '10px 14px' }}>
+                        ✓ <strong>Verified:</strong> ORN {formData.orn} is eligible for CMP Connect onboarding.
+                        {autofilledFromDld && ' Company details auto-filled from official regulatory records.'}
+                      </div>
+                    )}
+                  </div>
                 )}
+              </section>
+
+              <div className="form-actions" style={{ marginTop: 24, display: 'flex', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={handleGoToStep2}
+                  style={{ padding: '12px 24px', fontSize: '14.5px', fontWeight: 600 }}
+                >
+                  Continue to Contacts &rarr;
+                </button>
               </div>
             </div>
-          </section>
+          )}
 
-          {/* 3. Company Section */}
-          <section className="form-section">
-            <h3>{accountType === 'AGENCY' ? 'Company details' : 'Developer details'}</h3>
-            <div className="form-grid">
-              <div className="field" data-invalid={touched.companyName && formErrors.companyName ? true : undefined}>
-                <label htmlFor="reg-company-name">{accountType === 'DEVELOPER' ? 'Developer name *' : 'Company name *'}</label>
-                <input
-                  id="reg-company-name"
-                  name="companyName"
-                  type="text"
-                  value={formData.companyName}
-                  onChange={accountType === 'DEVELOPER' ? handleDevNameChange : handleChange}
-                  onBlur={accountType === 'DEVELOPER' ? handleDevNameBlur : handleBlur}
-                  required
-                />
-                <span className="hint">As it appears on the official trade licence.</span>
-                {touched.companyName && formErrors.companyName && (
-                  <span className="error-text">{formErrors.companyName}</span>
-                )}
-                {backendErrors.companyName && (
-                  <span className="error-text">{backendErrors.companyName}</span>
-                )}
-              </div>
+          {/* ═════════════════════════════════════════════════════════ */}
+          {/* STEP 2: ACCOUNT HOLDER & CONTACTS                         */}
+          {/* ═════════════════════════════════════════════════════════ */}
+          {currentStep === 2 && (
+            <div>
+              {/* CARD 1: ACCOUNT HOLDER (PORTAL OWNER) */}
+              <section
+                className="form-section"
+                style={{
+                  background: 'var(--cmp-surface-sunken)',
+                  padding: '20px',
+                  borderRadius: '12px',
+                  border: '1px solid var(--cmp-border)',
+                  marginBottom: '24px'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span>Account Holder</span>
+                  </h3>
+                  <span className="badge badge-brand" style={{ fontSize: '11px', textTransform: 'uppercase' }}>
+                    Portal Owner Login
+                  </span>
+                </div>
 
-              {/* AGENCY specific: ORN, Company Type, Licence Status, Number of Agents */}
-              {accountType === 'AGENCY' && (
-                <>
-                  <div className="field half" data-invalid={(touched.orn && formErrors.orn) || backendErrors.orn ? true : undefined}>
-                    <label htmlFor="reg-orn">RERA ORN number *</label>
-                    <div style={{ position: 'relative' }}>
+                <p style={{ fontSize: '13px', color: 'var(--cmp-text-muted)', margin: '0 0 16px', lineHeight: 1.45 }}>
+                  The primary administrator of this CMP Connect account. <strong>Your official Owner login credentials and portal access will be issued to this email.</strong>
+                </p>
+
+                <div className="form-grid">
+                  <div className="field half" data-invalid={touched.firstName && step2Errors.firstName ? true : undefined}>
+                    <label htmlFor="reg-first-name">First name *</label>
+                    <input
+                      id="reg-first-name"
+                      name="firstName"
+                      type="text"
+                      placeholder="e.g. Layla"
+                      value={formData.firstName}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                      required
+                    />
+                    {touched.firstName && step2Errors.firstName && (
+                      <span className="error-text">{step2Errors.firstName}</span>
+                    )}
+                  </div>
+
+                  <div className="field half" data-invalid={touched.lastName && step2Errors.lastName ? true : undefined}>
+                    <label htmlFor="reg-last-name">Last name *</label>
+                    <input
+                      id="reg-last-name"
+                      name="lastName"
+                      type="text"
+                      placeholder="e.g. Haddad"
+                      value={formData.lastName}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                      required
+                    />
+                    {touched.lastName && step2Errors.lastName && (
+                      <span className="error-text">{step2Errors.lastName}</span>
+                    )}
+                  </div>
+
+                  <div className="field half" data-invalid={touched.email && step2Errors.email ? true : undefined}>
+                    <label htmlFor="reg-contact-email">Account Holder email (Owner Login) *</label>
+                    <input
+                      id="reg-contact-email"
+                      name="email"
+                      type="email"
+                      placeholder="layla@cmpprime.ae"
+                      value={formData.email}
+                      onChange={handleAccountEmailChange}
+                      onBlur={handleAccountEmailBlur}
+                      required
+                    />
+                    <span className="hint">This email will be your portal login username.</span>
+                    {touched.email && step2Errors.email && (
+                      <span className="error-text">{step2Errors.email}</span>
+                    )}
+                  </div>
+
+                  <div className="field half" data-invalid={touched.phone && step2Errors.phone ? true : undefined}>
+                    <label htmlFor="reg-contact-phone">Account Holder mobile *</label>
+                    <input
+                      id="reg-contact-phone"
+                      name="phone"
+                      type="tel"
+                      placeholder="+971 50 412 7781"
+                      value={formData.phone}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                      required
+                    />
+                    <span className="hint">UAE mobile number (+971).</span>
+                    {touched.phone && step2Errors.phone && (
+                      <span className="error-text">{step2Errors.phone}</span>
+                    )}
+                  </div>
+                </div>
+              </section>
+
+              {/* CARD 2: CONTACT PERSON (VERIFICATION LIAISON) */}
+              <section
+                className="form-section"
+                style={{
+                  background: 'var(--cmp-surface-sunken)',
+                  padding: '20px',
+                  borderRadius: '12px',
+                  border: '1px solid var(--cmp-border)',
+                  marginBottom: '24px'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span>Contact Person</span>
+                  </h3>
+                  <span className="badge badge-neutral" style={{ fontSize: '11px', textTransform: 'uppercase' }}>
+                    Company Liaison
+                  </span>
+                </div>
+
+                <p style={{ fontSize: '13px', color: 'var(--cmp-text-muted)', margin: '0 0 14px', lineHeight: 1.45 }}>
+                  The person CMP compliance contacts for verification questions, document upload assistance, and contract signing.
+                </p>
+
+                {/* "Same as Account Holder" toggle */}
+                <label
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    padding: '12px 14px',
+                    background: 'var(--cmp-surface)',
+                    border: '1px solid var(--cmp-border)',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    marginBottom: 16
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={formData.contactSameAsAccount}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setFormData((prev) => ({
+                        ...prev,
+                        contactSameAsAccount: checked,
+                        ...(checked
+                          ? {
+                              ownerFullName: `${prev.firstName.trim()} ${prev.lastName.trim()}`.trim(),
+                              ownerEmail: prev.email,
+                              ownerMobile: prev.phone
+                            }
+                          : {})
+                      }));
+                    }}
+                    style={{ width: 17, height: 17, accentColor: 'var(--cmp-brand)' }}
+                  />
+                  <span style={{ fontSize: '13.5px', fontWeight: 600 }}>
+                    Contact Person is the same as the Account Holder
+                  </span>
+                </label>
+
+                {!formData.contactSameAsAccount ? (
+                  <div className="form-grid">
+                    <div className="field" data-invalid={touched.ownerFullName && step2Errors.ownerFullName ? true : undefined}>
+                      <label htmlFor="reg-owner-name">Contact Person full name *</label>
                       <input
-                        id="reg-orn"
-                        name="orn"
+                        id="reg-owner-name"
+                        name="ownerFullName"
                         type="text"
-                        placeholder="e.g. 28841"
-                        value={formData.orn}
-                        onChange={handleOrnChange}
-                        onBlur={handleOrnBlur}
-                        style={{ paddingRight: agencyPrecheck.loading ? 36 : undefined }}
+                        placeholder="e.g. Karim Saleh"
+                        value={formData.ownerFullName}
+                        onChange={handleChange}
+                        onBlur={handleBlur}
                         required
                       />
-                      {agencyPrecheck.loading && (
-                        <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--cmp-text-muted)' }}>
-                          ⏳
-                        </span>
+                      {touched.ownerFullName && step2Errors.ownerFullName && (
+                        <span className="error-text">{step2Errors.ownerFullName}</span>
                       )}
                     </div>
 
-                    {/* Pre-check hints & badges for ORN */}
-                    {agencyPrecheck.result && (
-                      <div style={{ marginTop: 6 }}>
-                        {agencyPrecheck.result.canSubmit && agencyPrecheck.result.whitelisted && (
-                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--cmp-success)' }}>
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M20 6 9 17l-5-5" />
-                            </svg>
-                            <span>Verified RERA ORN</span>
-                          </div>
-                        )}
-
-                        {autofilledFromDld && (
-                          <div
-                            className="note"
-                            style={{
-                              background: 'var(--cmp-brand-subtle)',
-                              border: '1px solid var(--cmp-brand-border)',
-                              color: 'var(--cmp-brand)',
-                              marginTop: 8,
-                              fontSize: 12.5,
-                              padding: '8px 12px',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 12,
-                              borderRadius: 8
-                            }}
-                          >
-                            {formData.companyLogo && (
-                              <img
-                                src={formData.companyLogo}
-                                alt="Company Logo"
-                                style={{
-                                  width: 38,
-                                  height: 38,
-                                  objectFit: 'contain',
-                                  borderRadius: 6,
-                                  background: '#fff',
-                                  border: '1px solid var(--cmp-border)',
-                                  padding: 2,
-                                  flexShrink: 0
-                                }}
-                                onError={(e) => { e.target.style.display = 'none'; }}
-                              />
-                            )}
-                            <div>
-                              <strong>DLD records matched:</strong> Company details pre-filled below. All fields remain fully editable.
-                              {formData.expiryDate && (
-                                <span style={{ display: 'block', marginTop: 2, fontSize: 12, opacity: 0.9 }}>
-                                  Licence valid until: {formData.expiryDate} ({formData.tradeLicenceStatus})
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        )}
-
-                        {agencyPrecheck.result.canSubmit && agencyPrecheck.result.whitelisted === false && (
-                          <div className="note" style={{ background: 'color-mix(in srgb, var(--cmp-warning) 10%, transparent)', border: '1px solid var(--cmp-warning)', color: 'var(--cmp-warning)', marginTop: 6, fontSize: 12.5, padding: '8px 12px' }}>
-                            ⚠️ We could not find this ORN in the RERA list. You can still submit. Our team will verify it.
-                          </div>
-                        )}
-
-                        {agencyPrecheck.result.registeredOnApp && (
-                          <div className="note" style={{ background: 'var(--cmp-brand-subtle)', border: '1px solid var(--cmp-brand)', color: 'var(--cmp-brand)', marginTop: 6, fontSize: 12.5, padding: '8px 12px' }}>
-                            ℹ️ This agency already uses the CMP app. Registering here adds your documents to the same account.
-                          </div>
-                        )}
-
-                        {!agencyPrecheck.result.canSubmit && (
-                          <div className="note" style={{ background: 'color-mix(in srgb, var(--cmp-danger) 10%, transparent)', border: '1px solid var(--cmp-danger)', color: 'var(--cmp-danger)', marginTop: 6, fontSize: 12.5, padding: '8px 12px' }}>
-                            ⛔ {agencyPrecheck.result.message || 'Registration is blocked for this ORN.'}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {touched.orn && formErrors.orn && (
-                      <span className="error-text">{formErrors.orn}</span>
-                    )}
-                    {backendErrors.orn && (
-                      <span className="error-text">{backendErrors.orn}</span>
-                    )}
-                  </div>
-
-                  <div className="field half" data-invalid={touched.companyType && formErrors.companyType ? true : undefined}>
-                    <label htmlFor="reg-company-type">Company type *</label>
-                    <select
-                      id="reg-company-type"
-                      name="companyType"
-                      value={formData.companyType}
-                      onChange={handleChange}
-                      onBlur={handleBlur}
-                      required
-                    >
-                      <option value="Real estate brokerage">Real estate brokerage</option>
-                      <option value="Property management">Property management</option>
-                      <option value="Holiday homes operator">Holiday homes operator</option>
-                      <option value="Other">Other</option>
-                    </select>
-                    {touched.companyType && formErrors.companyType && (
-                      <span className="error-text">{formErrors.companyType}</span>
-                    )}
-                  </div>
-
-                  <div className="field half" data-invalid={touched.tradeLicenceStatus && formErrors.tradeLicenceStatus ? true : undefined}>
-                    <label htmlFor="reg-licence-status">Trade licence status</label>
-                    <input
-                      id="reg-licence-status"
-                      name="tradeLicenceStatus"
-                      type="text"
-                      value={formData.tradeLicenceStatus || 'Active'}
-                      readOnly
-                      style={{
-                        backgroundColor: 'var(--cmp-surface-sunken, #f8fafc)',
-                        cursor: 'default',
-                        fontWeight: 600,
-                        color: formData.tradeLicenceStatus === 'Expired'
-                          ? 'var(--cmp-danger, #dc2626)'
-                          : formData.tradeLicenceStatus === 'Expires soon'
-                          ? 'var(--cmp-warning, #d97706)'
-                          : 'var(--cmp-success, #16a34a)'
-                      }}
-                    />
-                    {formData.tradeLicenceStatus === 'Expires soon' && (
-                      <span className="hint" style={{ color: 'var(--cmp-warning, #d97706)', fontWeight: 500 }}>
-                        ⚠️ Licence expires within 30 days (Auto-calculated)
-                      </span>
-                    )}
-                    {formData.tradeLicenceStatus === 'Expired' && (
-                      <span className="hint" style={{ color: 'var(--cmp-danger, #dc2626)', fontWeight: 500 }}>
-                        ⛔ Licence has expired (Auto-calculated)
-                      </span>
-                    )}
-                    {formData.tradeLicenceStatus === 'Active' && (
-                      <span className="hint" style={{ color: 'var(--cmp-success, #16a34a)', fontWeight: 500 }}>
-                        ✓ Licence is active (Auto-calculated)
-                      </span>
-                    )}
-                    {touched.tradeLicenceStatus && formErrors.tradeLicenceStatus && (
-                      <span className="error-text">{formErrors.tradeLicenceStatus}</span>
-                    )}
-                  </div>
-
-                  <div className="field half" data-invalid={touched.numberOfAgents && formErrors.numberOfAgents ? true : undefined}>
-                    <label htmlFor="reg-number-of-agents">Number of agents *</label>
-                    <select
-                      id="reg-number-of-agents"
-                      name="numberOfAgents"
-                      value={formData.numberOfAgents}
-                      onChange={handleChange}
-                      onBlur={handleBlur}
-                      required
-                    >
-                      <option value="1 to 5">1 to 5</option>
-                      <option value="6 to 20">6 to 20</option>
-                      <option value="21 to 50">21 to 50</option>
-                      <option value="More than 50">More than 50</option>
-                    </select>
-                    {touched.numberOfAgents && formErrors.numberOfAgents && (
-                      <span className="error-text">{formErrors.numberOfAgents}</span>
-                    )}
-                  </div>
-                </>
-              )}
-
-              {/* DEVELOPER specific: Developer Type */}
-              {accountType === 'DEVELOPER' && (
-                <>
-                  <div className="field half" data-invalid={touched.developerType && formErrors.developerType ? true : undefined}>
-                    <label htmlFor="reg-developer-type">Developer type *</label>
-                    <select
-                      id="reg-developer-type"
-                      name="developerType"
-                      value={formData.developerType}
-                      onChange={handleChange}
-                      onBlur={handleBlur}
-                      required
-                    >
-                      <option value="Master developer">Master developer</option>
-                      <option value="Sub developer">Sub developer</option>
-                    </select>
-                    {touched.developerType && formErrors.developerType && (
-                      <span className="error-text">{formErrors.developerType}</span>
-                    )}
-                  </div>
-
-                  {/* Pre-check notice for Developer */}
-                  {devPrecheck.result && !devPrecheck.result.canSubmit && (
-                    <div className="field" style={{ gridColumn: '1 / -1' }}>
-                      <div className="note" style={{ background: 'color-mix(in srgb, var(--cmp-danger) 10%, transparent)', border: '1px solid var(--cmp-danger)', color: 'var(--cmp-danger)', fontSize: 13, padding: '8px 12px' }}>
-                        ⛔ {devPrecheck.result.message || 'Registration is already in progress for this developer.'}
-                      </div>
+                    <div className="field half" data-invalid={touched.ownerEmail && step2Errors.ownerEmail ? true : undefined}>
+                      <label htmlFor="reg-owner-email">Contact Person email *</label>
+                      <input
+                        id="reg-owner-email"
+                        name="ownerEmail"
+                        type="email"
+                        placeholder="karim@cmpprime.ae"
+                        value={formData.ownerEmail}
+                        onChange={handleChange}
+                        onBlur={handleBlur}
+                        required
+                      />
+                      {touched.ownerEmail && step2Errors.ownerEmail && (
+                        <span className="error-text">{step2Errors.ownerEmail}</span>
+                      )}
                     </div>
-                  )}
-                </>
-              )}
 
-              {/* Common company details */}
-              <div className="field half" data-invalid={touched.emirate && formErrors.emirate ? true : undefined}>
-                <label htmlFor="reg-emirate">Emirate *</label>
-                <select
-                  id="reg-emirate"
-                  name="emirate"
-                  value={formData.emirate}
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                  required
-                >
-                  <option value="Dubai">Dubai</option>
-                  <option value="Abu Dhabi">Abu Dhabi</option>
-                  <option value="Sharjah">Sharjah</option>
-                  <option value="Ajman">Ajman</option>
-                  <option value="Ras Al Khaimah">Ras Al Khaimah</option>
-                  <option value="Fujairah">Fujairah</option>
-                  <option value="Umm Al Quwain">Umm Al Quwain</option>
-                </select>
-                {touched.emirate && formErrors.emirate && (
-                  <span className="error-text">{formErrors.emirate}</span>
+                    <div className="field half" data-invalid={touched.ownerMobile && step2Errors.ownerMobile ? true : undefined}>
+                      <label htmlFor="reg-owner-mobile">Contact Person mobile *</label>
+                      <input
+                        id="reg-owner-mobile"
+                        name="ownerMobile"
+                        type="tel"
+                        placeholder="+971 55 318 2240"
+                        value={formData.ownerMobile}
+                        onChange={handleChange}
+                        onBlur={handleBlur}
+                        required
+                      />
+                      {touched.ownerMobile && step2Errors.ownerMobile && (
+                        <span className="error-text">{step2Errors.ownerMobile}</span>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <p style={{ fontSize: '13px', color: 'var(--cmp-success)', margin: '4px 0 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span>✓</span>
+                    <span>
+                      Using <strong>{formData.firstName ? `${formData.firstName} ${formData.lastName}` : 'Account Holder'}</strong> ({formData.email || 'account email'}) as the primary contact person.
+                    </span>
+                  </p>
                 )}
-              </div>
+              </section>
 
-              <div className="field half" data-invalid={touched.tradeLicenceNumber && formErrors.tradeLicenceNumber ? true : undefined}>
-                <label htmlFor="reg-licence-number">Trade licence number *</label>
-                <input
-                  id="reg-licence-number"
-                  name="tradeLicenceNumber"
-                  type="text"
-                  placeholder="e.g. 771204"
-                  value={formData.tradeLicenceNumber}
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                  required
-                />
-                {touched.tradeLicenceNumber && formErrors.tradeLicenceNumber && (
-                  <span className="error-text">{formErrors.tradeLicenceNumber}</span>
-                )}
-              </div>
-
-              {accountType === 'AGENCY' && formData.expiryDate && (
-                <div className="field half">
-                  <label htmlFor="reg-licence-expiry">Trade licence expiry</label>
-                  <input
-                    id="reg-licence-expiry"
-                    name="expiryDate"
-                    type="text"
-                    placeholder="YYYY-MM-DD"
-                    value={formData.expiryDate}
-                    onChange={handleChange}
-                    onBlur={handleBlur}
-                  />
-                  <span className="hint">As registered with official DLD / licensing authority.</span>
-                </div>
-              )}
-
-              <div className="field half" data-invalid={touched.trnNumber && formErrors.trnNumber ? true : undefined}>
-                <label htmlFor="reg-trn-number">TRN number (optional)</label>
-                <input
-                  id="reg-trn-number"
-                  name="trnNumber"
-                  type="text"
-                  placeholder="e.g. 100412887600003"
-                  value={formData.trnNumber}
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                />
-                <span className="hint">Leave empty if you are not VAT registered.</span>
-                {touched.trnNumber && formErrors.trnNumber && (
-                  <span className="error-text">{formErrors.trnNumber}</span>
-                )}
-              </div>
-
-              <div className="field" data-invalid={touched.officeAddress && formErrors.officeAddress ? true : undefined}>
-                <label htmlFor="reg-office-address">{accountType === 'DEVELOPER' ? 'Head office address *' : 'Office address *'}</label>
-                <input
-                  id="reg-office-address"
-                  name="officeAddress"
-                  type="text"
-                  placeholder="Building, Suite, Area, City"
-                  value={formData.officeAddress}
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                  required
-                />
-                {touched.officeAddress && formErrors.officeAddress && (
-                  <span className="error-text">{formErrors.officeAddress}</span>
-                )}
-              </div>
-
-              <div className="field half" data-invalid={touched.officialEmail && formErrors.officialEmail ? true : undefined}>
-                <label htmlFor="reg-official-email">Official company email *</label>
-                <input
-                  id="reg-official-email"
-                  name="officialEmail"
-                  type="email"
-                  placeholder="info@company.ae"
-                  value={formData.officialEmail}
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                  required
-                />
-                {touched.officialEmail && formErrors.officialEmail && (
-                  <span className="error-text">{formErrors.officialEmail}</span>
-                )}
-              </div>
-
-              <div className="field half" data-invalid={touched.officialPhone && formErrors.officialPhone ? true : undefined}>
-                <label htmlFor="reg-official-phone">Official company phone *</label>
-                <input
-                  id="reg-official-phone"
-                  name="officialPhone"
-                  type="tel"
-                  placeholder="+971 4 455 0142"
-                  value={formData.officialPhone}
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                  required
-                />
-                <span className="hint">Landline or office number.</span>
-                {touched.officialPhone && formErrors.officialPhone && (
-                  <span className="error-text">{formErrors.officialPhone}</span>
-                )}
-              </div>
-
-              <div className="field half" data-invalid={touched.website && formErrors.website ? true : undefined}>
-                <label htmlFor="reg-website">Website (optional)</label>
-                <input
-                  id="reg-website"
-                  name="website"
-                  type="text"
-                  placeholder="company.ae"
-                  value={formData.website}
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                />
-                {touched.website && formErrors.website && (
-                  <span className="error-text">{formErrors.website}</span>
-                )}
-              </div>
-            </div>
-          </section>
-
-          {/* 4. DEVELOPER First Project Section */}
-          {accountType === 'DEVELOPER' && (
-            <section className="form-section">
-              <h3>First project</h3>
-              <p className="section-sub" style={{ fontSize: '13px', color: 'var(--cmp-text-muted)', marginBottom: 14 }}>
-                Enter details for your primary or active project to list on CMP Connect.
-              </p>
-              <div className="form-grid">
-                <div className="field half" data-invalid={touched['firstProject.name'] && formErrors['firstProject.name'] ? true : undefined}>
-                  <label htmlFor="reg-proj-name">Project name *</label>
-                  <input
-                    id="reg-proj-name"
-                    name="firstProject.name"
-                    type="text"
-                    placeholder="e.g. Aurora Heights"
-                    value={formData.firstProject.name}
-                    onChange={handleChange}
-                    onBlur={handleBlur}
-                    required
-                  />
-                  {touched['firstProject.name'] && formErrors['firstProject.name'] && (
-                    <span className="error-text">{formErrors['firstProject.name']}</span>
-                  )}
-                </div>
-
-                <div className="field half" data-invalid={touched['firstProject.community'] && formErrors['firstProject.community'] ? true : undefined}>
-                  <label htmlFor="reg-proj-community">Community / Location *</label>
-                  <input
-                    id="reg-proj-community"
-                    name="firstProject.community"
-                    type="text"
-                    placeholder="e.g. Dubai Hills Estate"
-                    value={formData.firstProject.community}
-                    onChange={handleChange}
-                    onBlur={handleBlur}
-                    required
-                  />
-                  {touched['firstProject.community'] && formErrors['firstProject.community'] && (
-                    <span className="error-text">{formErrors['firstProject.community']}</span>
-                  )}
-                </div>
-
-                <div className="field half" data-invalid={touched['firstProject.reraProjectNumber'] && formErrors['firstProject.reraProjectNumber'] ? true : undefined}>
-                  <label htmlFor="reg-proj-rera">RERA project number *</label>
-                  <input
-                    id="reg-proj-rera"
-                    name="firstProject.reraProjectNumber"
-                    type="text"
-                    placeholder="e.g. RERA-P-7781"
-                    value={formData.firstProject.reraProjectNumber}
-                    onChange={handleChange}
-                    onBlur={handleBlur}
-                    required
-                  />
-                  {touched['firstProject.reraProjectNumber'] && formErrors['firstProject.reraProjectNumber'] && (
-                    <span className="error-text">{formErrors['firstProject.reraProjectNumber']}</span>
-                  )}
-                </div>
-
-                <div className="field half" data-invalid={touched['firstProject.units'] && formErrors['firstProject.units'] ? true : undefined}>
-                  <label htmlFor="reg-proj-units">Total units *</label>
-                  <input
-                    id="reg-proj-units"
-                    name="firstProject.units"
-                    type="number"
-                    min="1"
-                    placeholder="e.g. 214"
-                    value={formData.firstProject.units}
-                    onChange={handleChange}
-                    onBlur={handleBlur}
-                    required
-                  />
-                  {touched['firstProject.units'] && formErrors['firstProject.units'] && (
-                    <span className="error-text">{formErrors['firstProject.units']}</span>
-                  )}
-                </div>
-
-                <div className="field half" data-invalid={touched['firstProject.expectedHandover'] && formErrors['firstProject.expectedHandover'] ? true : undefined}>
-                  <label htmlFor="reg-proj-handover">Expected handover *</label>
-                  <input
-                    id="reg-proj-handover"
-                    name="firstProject.expectedHandover"
-                    type="text"
-                    placeholder="e.g. Q4 2028"
-                    value={formData.firstProject.expectedHandover}
-                    onChange={handleChange}
-                    onBlur={handleBlur}
-                    required
-                  />
-                  {touched['firstProject.expectedHandover'] && formErrors['firstProject.expectedHandover'] && (
-                    <span className="error-text">{formErrors['firstProject.expectedHandover']}</span>
-                  )}
-                </div>
-
-                <div className="field half" data-invalid={touched['firstProject.escrowBank'] && formErrors['firstProject.escrowBank'] ? true : undefined}>
-                  <label htmlFor="reg-proj-bank">Escrow bank *</label>
-                  <input
-                    id="reg-proj-bank"
-                    name="firstProject.escrowBank"
-                    type="text"
-                    placeholder="e.g. Emirates NBD"
-                    value={formData.firstProject.escrowBank}
-                    onChange={handleChange}
-                    onBlur={handleBlur}
-                    required
-                  />
-                  {touched['firstProject.escrowBank'] && formErrors['firstProject.escrowBank'] && (
-                    <span className="error-text">{formErrors['firstProject.escrowBank']}</span>
-                  )}
-                </div>
-
-                <div className="field" data-invalid={touched['firstProject.escrowAccountNumber'] && formErrors['firstProject.escrowAccountNumber'] ? true : undefined}>
-                  <label htmlFor="reg-proj-escrow-acc">Escrow account number *</label>
-                  <input
-                    id="reg-proj-escrow-acc"
-                    name="firstProject.escrowAccountNumber"
-                    type="text"
-                    placeholder="e.g. AE07 0331 2345 6789 0123 456"
-                    value={formData.firstProject.escrowAccountNumber}
-                    onChange={handleChange}
-                    onBlur={handleBlur}
-                    required
-                  />
-                  {touched['firstProject.escrowAccountNumber'] && formErrors['firstProject.escrowAccountNumber'] && (
-                    <span className="error-text">{formErrors['firstProject.escrowAccountNumber']}</span>
-                  )}
-                </div>
-              </div>
-            </section>
-          )}
-
-          {/* 5. Signatory Section */}
-          <section className="form-section">
-            <h3>Signatory</h3>
-            <div className="form-grid">
-              <div className="field half" data-invalid={touched.signatoryFullName && formErrors.signatoryFullName ? true : undefined}>
-                <label htmlFor="reg-signatory-name">Signatory full name *</label>
-                <input
-                  id="reg-signatory-name"
-                  name="signatoryFullName"
-                  type="text"
-                  placeholder="Exactly as printed on Emirates ID"
-                  value={formData.signatoryFullName}
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                  required
-                />
-                <span className="hint">Exactly as printed on the Emirates ID.</span>
-                {touched.signatoryFullName && formErrors.signatoryFullName && (
-                  <span className="error-text">{formErrors.signatoryFullName}</span>
-                )}
-              </div>
-
-              <div className="field half" data-invalid={touched.signatoryDesignation && formErrors.signatoryDesignation ? true : undefined}>
-                <label htmlFor="reg-signatory-designation">Position *</label>
-                <input
-                  id="reg-signatory-designation"
-                  name="signatoryDesignation"
-                  type="text"
-                  placeholder="e.g. Managing Director"
-                  value={formData.signatoryDesignation}
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                  required
-                />
-                {touched.signatoryDesignation && formErrors.signatoryDesignation && (
-                  <span className="error-text">{formErrors.signatoryDesignation}</span>
-                )}
-              </div>
-
-              <div className="field" style={{ gridColumn: '1 / -1' }}>
-                <label style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>
-                  Is the signatory the owner or a listed manager? *
-                </label>
-                <div style={{ display: 'flex', gap: 20, alignItems: 'center', marginTop: 4 }}>
-                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 'normal' }}>
-                    <input
-                      type="radio"
-                      name="signatoryIsOwner"
-                      checked={formData.signatoryIsOwner === true}
-                      onChange={() => setFormData((prev) => ({ ...prev, signatoryIsOwner: true }))}
-                    />
-                    <span>Yes</span>
-                  </label>
-                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 'normal' }}>
-                    <input
-                      type="radio"
-                      name="signatoryIsOwner"
-                      checked={formData.signatoryIsOwner === false}
-                      onChange={() => setFormData((prev) => ({ ...prev, signatoryIsOwner: false }))}
-                    />
-                    <span>No</span>
-                  </label>
-                </div>
-                {formData.signatoryIsOwner === false && (
-                  <span className="hint" style={{ color: 'var(--cmp-warning)', marginTop: 4, display: 'block' }}>
-                    ℹ️ If not, you will need to upload a Power of Attorney on the documents portal.
-                  </span>
-                )}
-              </div>
-            </div>
-          </section>
-
-          {/* 6. Owner Section */}
-          <section className="form-section">
-            <h3>Owner</h3>
-            <div className="form-grid">
-              <div className="field" data-invalid={touched.ownerFullName && formErrors.ownerFullName ? true : undefined}>
-                <label htmlFor="reg-owner-name">Owner full name *</label>
-                <input
-                  id="reg-owner-name"
-                  name="ownerFullName"
-                  type="text"
-                  value={formData.ownerFullName}
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                  required
-                />
-                {touched.ownerFullName && formErrors.ownerFullName && (
-                  <span className="error-text">{formErrors.ownerFullName}</span>
-                )}
-              </div>
-
-              <div className="field half" data-invalid={touched.ownerEmail && formErrors.ownerEmail ? true : undefined}>
-                <label htmlFor="reg-owner-email">Owner email *</label>
-                <input
-                  id="reg-owner-email"
-                  name="ownerEmail"
-                  type="email"
-                  placeholder="owner@company.ae"
-                  value={formData.ownerEmail}
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                  required
-                />
-                {touched.ownerEmail && formErrors.ownerEmail && (
-                  <span className="error-text">{formErrors.ownerEmail}</span>
-                )}
-              </div>
-
-              <div className="field half" data-invalid={touched.ownerMobile && formErrors.ownerMobile ? true : undefined}>
-                <label htmlFor="reg-owner-mobile">Owner mobile *</label>
-                <input
-                  id="reg-owner-mobile"
-                  name="ownerMobile"
-                  type="tel"
-                  placeholder="+971 50 123 4567"
-                  value={formData.ownerMobile}
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                  required
-                />
-                {touched.ownerMobile && formErrors.ownerMobile && (
-                  <span className="error-text">{formErrors.ownerMobile}</span>
-                )}
-              </div>
-            </div>
-          </section>
-
-          {/* 7. Admin Section */}
-          <section className="form-section">
-            <h3>Admin</h3>
-            <p className="section-sub" style={{ fontSize: '13px', color: 'var(--cmp-text-muted)', marginBottom: 14 }}>
-              The person who runs the account day to day.
-            </p>
-            <div className="form-grid">
-              <div className="field" data-invalid={touched.adminFullName && formErrors.adminFullName ? true : undefined}>
-                <label htmlFor="reg-admin-name">Admin full name *</label>
-                <input
-                  id="reg-admin-name"
-                  name="adminFullName"
-                  type="text"
-                  value={formData.adminFullName}
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                  required
-                />
-                {touched.adminFullName && formErrors.adminFullName && (
-                  <span className="error-text">{formErrors.adminFullName}</span>
-                )}
-              </div>
-
-              <div className="field half" data-invalid={touched.adminEmail && formErrors.adminEmail ? true : undefined}>
-                <label htmlFor="reg-admin-email">Admin email *</label>
-                <input
-                  id="reg-admin-email"
-                  name="adminEmail"
-                  type="email"
-                  placeholder="admin@company.ae"
-                  value={formData.adminEmail}
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                  required
-                />
-                {touched.adminEmail && formErrors.adminEmail && (
-                  <span className="error-text">{formErrors.adminEmail}</span>
-                )}
-              </div>
-
-              <div className="field half" data-invalid={touched.adminMobile && formErrors.adminMobile ? true : undefined}>
-                <label htmlFor="reg-admin-mobile">Admin mobile *</label>
-                <input
-                  id="reg-admin-mobile"
-                  name="adminMobile"
-                  type="tel"
-                  placeholder="+971 55 123 4567"
-                  value={formData.adminMobile}
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                  required
-                />
-                {touched.adminMobile && formErrors.adminMobile && (
-                  <span className="error-text">{formErrors.adminMobile}</span>
-                )}
-              </div>
-            </div>
-          </section>
-
-          {/* General backend error banner */}
-          {backendErrors.general && (
-            <div
-              className="note"
-              style={{
-                background: 'color-mix(in srgb, var(--cmp-danger) 10%, transparent)',
-                border: '1px solid var(--cmp-danger)',
-                color: 'var(--cmp-danger)',
-                marginBottom: 16
-              }}
-            >
-              {backendErrors.general}
-              {backendErrors.network && (
-                <div style={{ marginTop: 8 }}>
+              {/* CARD 3: AUTHORISED SIGNATORY */}
+              <section
+                className="form-section"
+                style={{
+                  background: 'var(--cmp-surface-sunken)',
+                  padding: '20px',
+                  borderRadius: '12px',
+                  border: '1px solid var(--cmp-border)'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <h3 style={{ margin: 0 }}>Authorised Signatory</h3>
                   <button
                     type="button"
-                    className="btn btn-sm btn-outline"
-                    onClick={handleSubmit}
-                    style={{ borderColor: 'var(--cmp-danger)', color: 'var(--cmp-danger)' }}
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => {
+                      const name = `${formData.firstName.trim()} ${formData.lastName.trim()}`.trim();
+                      if (name) {
+                        setFormData((prev) => ({ ...prev, signatoryFullName: name }));
+                      }
+                    }}
+                    style={{ fontSize: '12px', color: 'var(--cmp-brand)' }}
                   >
-                    Retry
+                    Use Account Holder name
                   </button>
                 </div>
-              )}
+
+                <p style={{ fontSize: '13px', color: 'var(--cmp-text-muted)', margin: '0 0 14px', lineHeight: 1.45 }}>
+                  The authorized signatory signing the CMP platform subscription contract.
+                </p>
+
+                <div className="form-grid">
+                  <div className="field half" data-invalid={touched.signatoryFullName && step2Errors.signatoryFullName ? true : undefined}>
+                    <label htmlFor="reg-signatory-name">Signatory full name *</label>
+                    <input
+                      id="reg-signatory-name"
+                      name="signatoryFullName"
+                      type="text"
+                      placeholder="Exactly as printed on Emirates ID"
+                      value={formData.signatoryFullName}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                      required
+                    />
+                    <span className="hint">As printed on Emirates ID or Power of Attorney.</span>
+                    {touched.signatoryFullName && step2Errors.signatoryFullName && (
+                      <span className="error-text">{step2Errors.signatoryFullName}</span>
+                    )}
+                  </div>
+
+                  <div className="field half">
+                    <label htmlFor="reg-signatory-designation">Position / Title</label>
+                    <input
+                      id="reg-signatory-designation"
+                      name="signatoryDesignation"
+                      type="text"
+                      placeholder="e.g. Managing Director"
+                      value={formData.signatoryDesignation}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                    />
+                    <span className="hint">Optional: can be confirmed on document upload.</span>
+                  </div>
+                </div>
+              </section>
+
+              <div className="form-actions" style={{ marginTop: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => setCurrentStep(1)}
+                  style={{ padding: '12px 20px', fontSize: '14px' }}
+                >
+                  &larr; Back to Company
+                </button>
+
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={handleGoToStep3}
+                  style={{ padding: '12px 24px', fontSize: '14.5px', fontWeight: 600 }}
+                >
+                  Continue to Office &amp; Review &rarr;
+                </button>
+              </div>
             </div>
           )}
 
-          {/* Submit Action */}
-          <div className="form-actions" style={{ marginTop: 24 }}>
-            <button
-              type="submit"
-              className="btn btn-primary btn-block"
-              disabled={isSubmitting || !canSubmitFromPrecheck || rateLimitCountdown > 0}
-              style={{ padding: '14px 20px', fontSize: '15px', fontWeight: 600 }}
-            >
-              {isSubmitting
-                ? 'Submitting registration...'
-                : rateLimitCountdown > 0
-                ? `Please wait ${rateLimitCountdown}s...`
-                : 'Submit registration request'}
-            </button>
+          {/* ═════════════════════════════════════════════════════════ */}
+          {/* STEP 3: OFFICE DETAILS & REVIEW & SUBMIT                  */}
+          {/* ═════════════════════════════════════════════════════════ */}
+          {currentStep === 3 && (
+            <div>
+              {/* Optional Office Details */}
+              <section className="form-section">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <h3 style={{ margin: 0 }}>Office &amp; Contact channels</h3>
+                  <span className="badge badge-neutral" style={{ fontSize: '11px' }}>Can wait / Optional</span>
+                </div>
+                <p className="section-sub" style={{ fontSize: '13px', color: 'var(--cmp-text-muted)', marginBottom: 14 }}>
+                  You can complete these now or fill them later through your secure document upload link.
+                </p>
 
-            {!canSubmitFromPrecheck && (
-              <p className="faint" style={{ textAlign: 'center', marginTop: 10, fontSize: '12px' }}>
-                {accountType === 'AGENCY'
-                  ? 'Enter a valid, verified RERA ORN number above to enable registration submission.'
-                  : 'Enter developer name and contact email above to verify eligibility and enable submission.'}
-              </p>
-            )}
-          </div>
+                <div className="form-grid">
+                  <div className="field">
+                    <label htmlFor="reg-office-address">Head office address</label>
+                    <input
+                      id="reg-office-address"
+                      name="officeAddress"
+                      type="text"
+                      placeholder="e.g. Office 1402, Marina Plaza, Dubai Marina, Dubai"
+                      value={formData.officeAddress}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                    />
+                  </div>
+
+                  <div className="field half" data-invalid={touched.officialEmail && step3Errors.officialEmail ? true : undefined}>
+                    <label htmlFor="reg-official-email">Official company email</label>
+                    <input
+                      id="reg-official-email"
+                      name="officialEmail"
+                      type="email"
+                      placeholder="info@company.ae"
+                      value={formData.officialEmail}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                    />
+                    {touched.officialEmail && step3Errors.officialEmail && (
+                      <span className="error-text">{step3Errors.officialEmail}</span>
+                    )}
+                  </div>
+
+                  <div className="field half" data-invalid={touched.officialPhone && step3Errors.officialPhone ? true : undefined}>
+                    <label htmlFor="reg-official-phone">Official company phone / landline</label>
+                    <input
+                      id="reg-official-phone"
+                      name="officialPhone"
+                      type="tel"
+                      placeholder="+971 4 455 0142"
+                      value={formData.officialPhone}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                    />
+                    {touched.officialPhone && step3Errors.officialPhone && (
+                      <span className="error-text">{step3Errors.officialPhone}</span>
+                    )}
+                  </div>
+
+                  <div className="field half">
+                    <label htmlFor="reg-website">Website</label>
+                    <input
+                      id="reg-website"
+                      name="website"
+                      type="text"
+                      placeholder="company.ae"
+                      value={formData.website}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                    />
+                  </div>
+                </div>
+              </section>
+
+              {/* Developer First Project (Optional) */}
+              {accountType === 'DEVELOPER' && (
+                <section className="form-section">
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <h3 style={{ margin: 0 }}>Initial development project</h3>
+                    <span className="badge badge-neutral" style={{ fontSize: '11px' }}>Can wait / Optional</span>
+                  </div>
+                  <p className="section-sub" style={{ fontSize: '13px', color: 'var(--cmp-text-muted)', marginBottom: 14 }}>
+                    Details for your primary active project. Can also be added on your documents portal.
+                  </p>
+
+                  <div className="form-grid">
+                    <div className="field half">
+                      <label htmlFor="reg-proj-name">Project name</label>
+                      <input
+                        id="reg-proj-name"
+                        name="firstProject.name"
+                        type="text"
+                        placeholder="e.g. Aurora Heights"
+                        value={formData.firstProject.name}
+                        onChange={handleChange}
+                        onBlur={handleBlur}
+                      />
+                    </div>
+
+                    <div className="field half">
+                      <label htmlFor="reg-proj-community">Community / Location</label>
+                      <input
+                        id="reg-proj-community"
+                        name="firstProject.community"
+                        type="text"
+                        placeholder="e.g. Dubai Hills Estate"
+                        value={formData.firstProject.community}
+                        onChange={handleChange}
+                        onBlur={handleBlur}
+                      />
+                    </div>
+
+                    <div className="field half">
+                      <label htmlFor="reg-proj-rera">RERA project number</label>
+                      <input
+                        id="reg-proj-rera"
+                        name="firstProject.reraProjectNumber"
+                        type="text"
+                        placeholder="e.g. RERA-P-7781"
+                        value={formData.firstProject.reraProjectNumber}
+                        onChange={handleChange}
+                        onBlur={handleBlur}
+                      />
+                    </div>
+
+                    <div className="field half" data-invalid={step3Errors['firstProject.units'] ? true : undefined}>
+                      <label htmlFor="reg-proj-units">Total units</label>
+                      <input
+                        id="reg-proj-units"
+                        name="firstProject.units"
+                        type="number"
+                        min="1"
+                        placeholder="e.g. 214"
+                        value={formData.firstProject.units}
+                        onChange={handleChange}
+                        onBlur={handleBlur}
+                      />
+                      {step3Errors['firstProject.units'] && (
+                        <span className="error-text">{step3Errors['firstProject.units']}</span>
+                      )}
+                    </div>
+                  </div>
+                </section>
+              )}
+
+              {/* REVIEW SUMMARY CARD */}
+              <section
+                className="form-section"
+                style={{
+                  background: 'var(--cmp-surface-sunken)',
+                  padding: '20px',
+                  borderRadius: '12px',
+                  border: '1px solid var(--cmp-border)'
+                }}
+              >
+                <h3 style={{ margin: '0 0 14px' }}>Review &amp; Confirmation</h3>
+
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                    gap: '14px',
+                    fontSize: '13px'
+                  }}
+                >
+                  <div style={{ background: 'var(--cmp-surface)', padding: '12px 14px', borderRadius: '8px', border: '1px solid var(--cmp-border)' }}>
+                    <div style={{ color: 'var(--cmp-text-faint)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Entity</div>
+                    <div style={{ fontWeight: 700, fontSize: '14px', marginTop: 2 }}>{formData.companyName || '—'}</div>
+                    <div style={{ color: 'var(--cmp-text-muted)', fontSize: '12px', marginTop: 2 }}>
+                      {accountType === 'AGENCY' ? `ORN: ${formData.orn || '—'}` : `DLD: ${formData.dldDeveloperNumber || '—'}`} · {formData.emirate}
+                    </div>
+                  </div>
+
+                  <div style={{ background: 'var(--cmp-surface)', padding: '12px 14px', borderRadius: '8px', border: '1px solid var(--cmp-border)' }}>
+                    <div style={{ color: 'var(--cmp-brand)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 700 }}>
+                      Account Holder (Login)
+                    </div>
+                    <div style={{ fontWeight: 700, fontSize: '14px', marginTop: 2 }}>
+                      {formData.firstName} {formData.lastName}
+                    </div>
+                    <div style={{ color: 'var(--cmp-text-muted)', fontSize: '12px', marginTop: 2, wordBreak: 'break-all' }}>
+                      {formData.email} · {formData.phone}
+                    </div>
+                  </div>
+
+                  <div style={{ background: 'var(--cmp-surface)', padding: '12px 14px', borderRadius: '8px', border: '1px solid var(--cmp-border)' }}>
+                    <div style={{ color: 'var(--cmp-text-faint)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      Contact Person
+                    </div>
+                    <div style={{ fontWeight: 700, fontSize: '14px', marginTop: 2 }}>
+                      {formData.contactSameAsAccount
+                        ? `${formData.firstName} ${formData.lastName}`
+                        : formData.ownerFullName || '—'}
+                    </div>
+                    <div style={{ color: 'var(--cmp-text-muted)', fontSize: '12px', marginTop: 2, wordBreak: 'break-all' }}>
+                      {formData.contactSameAsAccount ? formData.email : formData.ownerEmail}
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    background: 'color-mix(in srgb, var(--cmp-brand) 8%, transparent)',
+                    border: '1px solid var(--cmp-brand-subtle)',
+                    color: 'var(--cmp-brand)',
+                    fontSize: '12.5px',
+                    marginTop: 14
+                  }}
+                >
+                  <span>✓</span>
+                  <span>
+                    Upon submission, an instant verification upload link will be emailed to <strong>{formData.email}</strong>.
+                  </span>
+                </div>
+              </section>
+
+              {/* General backend error banner */}
+              {backendErrors.general && (
+                <div
+                  className="note"
+                  style={{
+                    background: 'color-mix(in srgb, var(--cmp-danger) 10%, transparent)',
+                    border: '1px solid var(--cmp-danger)',
+                    color: 'var(--cmp-danger)',
+                    marginTop: 16,
+                    marginBottom: 16
+                  }}
+                >
+                  {backendErrors.general}
+                  {backendErrors.network && (
+                    <div style={{ marginTop: 8 }}>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-outline"
+                        onClick={handleSubmit}
+                        style={{ borderColor: 'var(--cmp-danger)', color: 'var(--cmp-danger)' }}
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Submit Buttons */}
+              <div className="form-actions" style={{ marginTop: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => setCurrentStep(2)}
+                  style={{ padding: '12px 20px', fontSize: '14px' }}
+                >
+                  &larr; Back to Contacts
+                </button>
+
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={isSubmitting || !canSubmitFromPrecheck || rateLimitCountdown > 0}
+                  style={{ padding: '14px 28px', fontSize: '15px', fontWeight: 700 }}
+                >
+                  {isSubmitting
+                    ? 'Submitting registration...'
+                    : rateLimitCountdown > 0
+                    ? `Please wait ${rateLimitCountdown}s...`
+                    : 'Submit registration request'}
+                </button>
+              </div>
+
+              {!canSubmitFromPrecheck && (
+                <p className="faint" style={{ textAlign: 'center', marginTop: 10, fontSize: '12px' }}>
+                  {accountType === 'AGENCY'
+                    ? 'Enter a valid, verified RERA ORN number in Step 1 to enable registration submission.'
+                    : 'Enter developer name and contact email in Step 1 to verify eligibility and enable submission.'}
+                </p>
+              )}
+            </div>
+          )}
         </form>
       </div>
     </OnboardingLayout>
