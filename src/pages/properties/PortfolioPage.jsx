@@ -2865,26 +2865,13 @@ export default function PortfolioPage() {
                         <AlertTriangle size={15} style={{ color: 'var(--cmp-accent)', flexShrink: 0 }} />
                         <span>{a.label}</span>
                       </span>
-                      {a.kind === 'verify' ? (
-                        <button
-                          type="button"
-                          className="btn btn-outline btn-sm"
-                          onClick={() => {
-                            setPendingOpen(false);
-                            runListingAction(l.id, () => cmpConnectApi.requestVerification(l.id, authToken), 'Verification requested.');
-                          }}
-                        >
-                          Request
-                        </button>
-                      ) : (
-                        <NavLink
-                          to={`/properties/${l.id}/edit`}
-                          className="btn btn-outline btn-sm"
-                          onClick={() => setPendingOpen(false)}
-                        >
-                          Fix
-                        </NavLink>
-                      )}
+                      <NavLink
+                        to={`/properties/${l.id}/edit`}
+                        className="btn btn-outline btn-sm"
+                        onClick={() => setPendingOpen(false)}
+                      >
+                        Fix
+                      </NavLink>
                     </li>
                   ))}
                 </ul>

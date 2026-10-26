@@ -584,6 +584,119 @@ export const cmpConnectApi = {
     return this.requestMemberVerification(memberId, payload, token);
   },
 
+  /**
+   * Get Member Details (Account, Public Profile, Licences, Away Mode, Permissions)
+   * GET /api/cmpConnect/team/members/:id
+   */
+  async getMember(memberId, token) {
+    return apiRequest(`/api/cmpConnect/team/members/${memberId}`, {
+      method: 'GET',
+      token
+    });
+  },
+
+  /**
+   * Update Member Account Details (firstName, lastName, mobile, email)
+   * PATCH /api/cmpConnect/team/members/:id
+   */
+  async updateMemberAccount(memberId, data, token) {
+    return apiRequest(`/api/cmpConnect/team/members/${memberId}`, {
+      method: 'PATCH',
+      token,
+      body: JSON.stringify(data)
+    });
+  },
+
+  /**
+   * Update Member Public Profile, Licences & About Me
+   * PATCH /api/cmpConnect/team/members/:id/profile
+   */
+  async updateMemberProfile(memberId, data, token) {
+    return apiRequest(`/api/cmpConnect/team/members/${memberId}/profile`, {
+      method: 'PATCH',
+      token,
+      body: JSON.stringify(data)
+    });
+  },
+
+  /**
+   * Get Signed Upload Signature for Member Profile Photo
+   * GET /api/cmpConnect/team/members/:id/photo-signature
+   */
+  async getMemberPhotoSignature(memberId, token) {
+    return apiRequest(`/api/cmpConnect/team/members/${memberId}/photo-signature`, {
+      method: 'GET',
+      token
+    });
+  },
+
+  /**
+   * Upload Member Profile Photo to Cloudinary using signed upload
+   */
+  async uploadMemberPhoto(file, sig) {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('api_key', sig.apiKey);
+    formData.append('timestamp', sig.timestamp);
+    formData.append('signature', sig.signature);
+    formData.append('folder', sig.folder);
+
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${sig.cloudName}/auto/upload`, {
+      method: 'POST',
+      body: formData
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error?.message || 'Profile photo upload failed.');
+    }
+
+    const data = await res.json();
+    return {
+      url: data.secure_url || data.url,
+      public_id: data.public_id
+    };
+  },
+
+  /**
+   * Get Broker / Team Leaderboard
+   * GET /api/cmpConnect/team/leaderboard?search=
+   */
+  async getLeaderboard(params = {}, token) {
+    const query = new URLSearchParams();
+    if (params.search) query.append('search', params.search);
+
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    return apiRequest(`/api/cmpConnect/team/leaderboard${qs}`, {
+      method: 'GET',
+      token
+    });
+  },
+
+  /**
+   * Get Agent Summary (Performance, Away Mode, Live Properties, Transactions)
+   * GET /api/cmpConnect/team/members/:id/summary
+   */
+  async getMemberSummary(memberId, token) {
+    return apiRequest(`/api/cmpConnect/team/members/${memberId}/summary`, {
+      method: 'GET',
+      token
+    });
+  },
+
+  /**
+   * Set Member Away Mode
+   * PATCH /api/cmpConnect/team/members/:id/away
+   * Payload: { away: boolean }
+   */
+  async setMemberAway(memberId, away, token) {
+    return apiRequest(`/api/cmpConnect/team/members/${memberId}/away`, {
+      method: 'PATCH',
+      token,
+      body: JSON.stringify({ away: Boolean(away) })
+    });
+  },
+
   // ─────────────────────────────────────────────────────────────
   // TEAM: ROLES & ACCESS (roles.html)
   // ─────────────────────────────────────────────────────────────

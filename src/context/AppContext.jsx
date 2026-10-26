@@ -11,7 +11,7 @@ import {
 } from '../data/mockData';
 
 import { cmpConnectApi, getAuthToken, setAuthToken, clearAuthToken } from '../services/cmpConnectApi';
-import { can as checkPermission } from '../utils/permissions';
+import { can as checkPermission, hasAny as checkHasAny } from '../utils/permissions';
 
 const AppContext = createContext();
 
@@ -458,9 +458,11 @@ export function AppProvider({ children }) {
         isAuthenticated,
         authToken: authToken || (account ? 'cookie_session_active' : null),
         account,
+        setAccount,
         mustChangePassword,
         isAuthLoading,
         can: (...keys) => (dataMode === 'mock' ? true : checkPermission(account, ...keys)),
+        hasAny: (...keys) => (dataMode === 'mock' ? true : checkHasAny(account, ...keys)),
         userPermissions: account?.permissions || [],
         userRole: account?.role || (dataMode === 'mock' ? { key: 'OWNER', name: 'Owner' } : null),
         loginUser,

@@ -208,8 +208,8 @@ export default function EditPropertyPage() {
         });
       }
 
-      // Load active members if assignable or if agency user
-      if (can('listings.assign') || (account?.accountType === 'AGENCY' && !account?.compliance?.brn)) {
+      // Load active members if assignable
+      if (can('listings.assign')) {
         const memRes = await cmpConnectApi.listMembers({ status: 'ACTIVE' }, authToken);
         if (Array.isArray(memRes?.data)) {
           setActiveMembers(memRes.data);
@@ -258,6 +258,54 @@ export default function EditPropertyPage() {
     }
     return keys.map((k) => ({ key: k, label: options.typeLabels?.[k] || k }));
   }, [options, formData.listingPurpose, formData.propertyCategory, formData.propertyPlan]);
+
+  // Active type rules for fields and documents
+  const currentRules = useMemo(() => {
+    if (!options?.rules) return null;
+    const { listingPurpose, propertyCategory, propertyPlan, propertyType } = formData;
+    return options.rules[listingPurpose]?.[propertyCategory]?.[propertyPlan]?.[propertyType] || null;
+  }, [options, formData.listingPurpose, formData.propertyCategory, formData.propertyPlan, formData.propertyType]);
+
+  // Helper to determine field rules (required, forbidden, optional) per selected property type
+  const getFieldRule = useCallback((fieldName) => {
+    if (currentRules?.fields?.[fieldName]) {
+      return currentRules.fields[fieldName]; // 'required' | 'forbidden' | 'optional'
+    }
+    const type = String(formData.propertyType || '').toUpperCase();
+    if (fieldName === 'propertyBuiltUpArea') {
+      const requiredTypes = [
+        'VILLA', 'TOWNHOUSE', 'COMPOUND', 'COMMERCIAL_VILLA',
+        'COMMERCIAL_BUILDING', 'RESIDENTIAL_BUILDING', 'LAND',
+        'COMMERCIAL_PLOT', 'FARM'
+      ];
+      return requiredTypes.includes(type) ? 'required' : 'forbidden';
+    }
+    if (fieldName === 'propertyBedrooms') {
+      const forbiddenTypes = [
+        'LAND', 'COMMERCIAL_PLOT', 'COMMERCIAL_BUILDING', 'RESIDENTIAL_BUILDING',
+        'COMMERCIAL_UNIT', 'OFFICE', 'RETAIL', 'WAREHOUSE', 'SHOWROOM', 'FLOOR',
+        'COMMERCIAL_BULK', 'FARM'
+      ];
+      return forbiddenTypes.includes(type) ? 'forbidden' : 'required';
+    }
+    if (fieldName === 'propertyBathrooms') {
+      const forbiddenTypes = [
+        'LAND', 'COMMERCIAL_PLOT', 'COMMERCIAL_BUILDING', 'RESIDENTIAL_BUILDING',
+        'COMMERCIAL_UNIT', 'OFFICE', 'RETAIL', 'WAREHOUSE', 'SHOWROOM', 'FLOOR',
+        'COMMERCIAL_BULK', 'COMMERCIAL_VILLA', 'FARM'
+      ];
+      return forbiddenTypes.includes(type) ? 'forbidden' : 'required';
+    }
+    if (fieldName === 'unitNumber') {
+      const forbiddenTypes = ['RESIDENTIAL_BUILDING', 'RESIDENTIAL_BULK', 'COMMERCIAL_BULK', 'FARM'];
+      return forbiddenTypes.includes(type) ? 'forbidden' : 'required';
+    }
+    if (fieldName === 'furnishingStatus') {
+      const forbiddenTypes = ['COMMERCIAL_PLOT', 'COMMERCIAL_BULK', 'FARM'];
+      return forbiddenTypes.includes(type) ? 'forbidden' : 'required';
+    }
+    return 'optional';
+  }, [currentRules, formData.propertyType]);
 
   // Available amenities (matches backend AMENITIES_CONFIG)
   const availableAmenities = useMemo(() => {
@@ -514,19 +562,25 @@ export default function EditPropertyPage() {
           propertyLatitude: Number(formData.propertyLatitude) || 25.08,
           propertyLongitude: Number(formData.propertyLongitude) || 55.14
         };
-      case 3:
+      case 3: {
+        const bAreaRule = getFieldRule('propertyBuiltUpArea');
+        const bedsRule = getFieldRule('propertyBedrooms');
+        const bathsRule = getFieldRule('propertyBathrooms');
+        const unitRule = getFieldRule('unitNumber');
+        const furnRule = getFieldRule('furnishingStatus');
         return {
           propertyArea: formData.propertyArea ? Number(formData.propertyArea) : null,
           propertyAreaUnit: formData.propertyAreaUnit || 'sqft',
-          propertyBuiltUpArea: formData.propertyBuiltUpArea ? Number(formData.propertyBuiltUpArea) : null,
-          propertyBedrooms: formData.propertyBedrooms,
-          propertyBathrooms: formData.propertyBathrooms,
-          unitNumber: formData.unitNumber || null,
-          parkingSpaces: formData.parkingSpaces ? Number(formData.parkingSpaces) : null,
-          furnishingStatus: formData.furnishingStatus,
+          propertyBuiltUpArea: bAreaRule !== 'forbidden' && formData.propertyBuiltUpArea ? Number(formData.propertyBuiltUpArea) : null,
+          propertyBedrooms: bedsRule !== 'forbidden' ? formData.propertyBedrooms : null,
+          propertyBathrooms: bathsRule !== 'forbidden' ? formData.propertyBathrooms : null,
+          unitNumber: unitRule !== 'forbidden' ? (formData.unitNumber || null) : null,
+          parkingSpaces: formData.parkingSpaces ? Number(formData.parkingSpaces) : 0,
+          furnishingStatus: furnRule !== 'forbidden' ? formData.furnishingStatus : null,
           availability: formData.availability,
           referenceNumber: formData.referenceNumber || null
         };
+      }
       case 4:
         return {
           propertyAmenities: (formData.propertyAmenities || []).filter((a) => availableAmenities.includes(a))
@@ -569,8 +623,15 @@ export default function EditPropertyPage() {
         if (!formData.propertyTitle.trim()) {
           throw new Error('Listing title is required.');
         }
-        if (account?.accountType === 'AGENCY' && !account?.compliance?.brn && !formData.listedBy) {
+        if (can('listings.assign') && account?.accountType === 'AGENCY' && !account?.compliance?.brn && !account?.brn && !formData.listedBy) {
           throw new Error('As an agency administrator without a broker licence (BRN), you must assign this listing to an agent.');
+        }
+      } else if (currentStep === 3) {
+        if (!formData.propertyArea || Number(formData.propertyArea) <= 0) {
+          throw new Error('Area size is required.');
+        }
+        if (getFieldRule('propertyBuiltUpArea') === 'required' && (!formData.propertyBuiltUpArea || Number(formData.propertyBuiltUpArea) <= 0)) {
+          throw new Error('Built-Up Area (BUA) is required for this property type.');
         }
       }
 
@@ -1058,11 +1119,11 @@ export default function EditPropertyPage() {
           </div>
 
           {/* Listed Agent Box */}
-          {(can('listings.assign') || (account?.accountType === 'AGENCY' && !account?.compliance?.brn)) && (
+          {can('listings.assign') ? (
             <div className="card" style={{ padding: '16px' }}>
               <label style={{ margin: '0 0 6px', fontSize: '12px', fontWeight: 700 }}>
                 Listing Assignment ("Listed under")
-                {account?.accountType === 'AGENCY' && !account?.compliance?.brn && (
+                {account?.accountType === 'AGENCY' && !account?.compliance?.brn && !account?.brn && (
                   <span style={{ color: 'var(--cmp-danger)', marginLeft: '4px' }}>*</span>
                 )}
               </label>
@@ -1072,22 +1133,41 @@ export default function EditPropertyPage() {
                 onChange={(e) => handleAgentChange(e.target.value)}
                 style={{ width: '100%' }}
               >
-                {account?.accountType === 'AGENCY' && !account?.compliance?.brn ? (
+                {account?.accountType === 'AGENCY' && !account?.compliance?.brn && !account?.brn ? (
                   <option value="">-- Choose an agent with BRN (Required) --</option>
                 ) : (
                   <option value="">-- Current user --</option>
                 )}
                 {brnEligibleMembers.map((m) => (
                   <option key={m.id} value={m.id}>
-                    {m.fullName} (BRN: {m.compliance?.brn})
+                    {m.fullName} {m.compliance?.brn ? `(BRN: ${m.compliance.brn})` : ''}
                   </option>
                 ))}
               </select>
-              {account?.accountType === 'AGENCY' && !account?.compliance?.brn && (
+              {account?.accountType === 'AGENCY' && !account?.compliance?.brn && !account?.brn && (
                 <p className="faint" style={{ fontSize: '11px', margin: '6px 0 0', color: 'var(--cmp-warning)' }}>
                   As an agency administrator without a BRN, you must assign this listing to a licensed agent.
                 </p>
               )}
+            </div>
+          ) : (
+            <div className="card" style={{ padding: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                <label style={{ margin: 0, fontSize: '12px', fontWeight: 700 }}>
+                  Listing Agent
+                </label>
+                <span className="badge badge-brand" style={{ fontSize: '10.5px' }}>
+                  Assigned
+                </span>
+              </div>
+              <div style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--cmp-text)' }}>
+                {listingData?.listedBy?.fullName || account?.fullName || 'Assigned Agent'}
+                {(listingData?.listedBy?.compliance?.brn || listingData?.listedBy?.brn || account?.compliance?.brn || account?.brn) && (
+                  <span style={{ marginLeft: '6px', fontSize: '12px', color: 'var(--cmp-brand)', fontWeight: 600 }}>
+                    (BRN: {listingData?.listedBy?.compliance?.brn || listingData?.listedBy?.brn || account?.compliance?.brn || account?.brn})
+                  </span>
+                )}
+              </div>
             </div>
           )}
         </aside>
@@ -1248,47 +1328,67 @@ export default function EditPropertyPage() {
                 Property Specifications
               </h2>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-                <div>
-                  <label>Bedrooms</label>
-                  <select
-                    disabled={onHold}
-                    value={formData.propertyBedrooms}
-                    onChange={(e) => setFormData({ ...formData, propertyBedrooms: e.target.value })}
-                  >
-                    {['0', '1', '2', '3', '4', '5', '6', '7+'].map((b) => (
-                      <option key={b} value={b}>
-                        {b === '0' ? 'Studio' : `${b} Bedroom`}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              {/* Bedrooms & Bathrooms - only shown when not forbidden */}
+              {(getFieldRule('propertyBedrooms') !== 'forbidden' || getFieldRule('propertyBathrooms') !== 'forbidden') && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                  {getFieldRule('propertyBedrooms') !== 'forbidden' && (
+                    <div>
+                      <label>
+                        Bedrooms {getFieldRule('propertyBedrooms') === 'required' && <span style={{ color: 'var(--cmp-danger)' }}>*</span>}
+                      </label>
+                      <select
+                        disabled={onHold}
+                        value={formData.propertyBedrooms}
+                        onChange={(e) => setFormData({ ...formData, propertyBedrooms: e.target.value })}
+                      >
+                        {['0', '1', '2', '3', '4', '5', '6', '7+'].map((b) => (
+                          <option key={b} value={b}>
+                            {b === '0' ? 'Studio' : `${b} Bedroom`}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
 
-                <div>
-                  <label>Bathrooms</label>
-                  <select
-                    disabled={onHold}
-                    value={formData.propertyBathrooms}
-                    onChange={(e) => setFormData({ ...formData, propertyBathrooms: e.target.value })}
-                  >
-                    {['1', '2', '3', '4', '5', '6+'].map((b) => (
-                      <option key={b} value={b}>
-                        {b} Bathroom
-                      </option>
-                    ))}
-                  </select>
+                  {getFieldRule('propertyBathrooms') !== 'forbidden' && (
+                    <div>
+                      <label>
+                        Bathrooms {getFieldRule('propertyBathrooms') === 'required' && <span style={{ color: 'var(--cmp-danger)' }}>*</span>}
+                      </label>
+                      <select
+                        disabled={onHold}
+                        value={formData.propertyBathrooms}
+                        onChange={(e) => setFormData({ ...formData, propertyBathrooms: e.target.value })}
+                      >
+                        {['1', '2', '3', '4', '5', '6+'].map((b) => (
+                          <option key={b} value={b}>
+                            {b} Bathroom
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
-              </div>
+              )}
 
+              {/* Area Size & Unit */}
               <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '14px' }}>
                 <div>
-                  <label>Area Size</label>
+                  <label>
+                    {getFieldRule('propertyBuiltUpArea') !== 'forbidden' ? 'Plot / Total Area Size' : 'Area Size'}{' '}
+                    <span style={{ color: 'var(--cmp-danger)' }}>*</span>
+                  </label>
                   <input
                     type="number"
                     disabled={onHold}
                     value={formData.propertyArea}
                     onChange={(e) => setFormData({ ...formData, propertyArea: e.target.value })}
                   />
+                  {getFieldRule('propertyBuiltUpArea') !== 'forbidden' && (
+                    <p className="faint" style={{ fontSize: '12px', margin: '4px 0 0' }}>
+                      Plot / land area size for this property.
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label>Unit</label>
@@ -1303,15 +1403,58 @@ export default function EditPropertyPage() {
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-                <div>
-                  <label>Unit Number (Confidential)</label>
-                  <input
-                    disabled={onHold}
-                    value={formData.unitNumber}
-                    onChange={(e) => setFormData({ ...formData, unitNumber: e.target.value })}
-                  />
+              {/* Built-Up Area (BUA) - rendered when required or optional for the selected property type */}
+              {getFieldRule('propertyBuiltUpArea') !== 'forbidden' && (
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '14px' }}>
+                  <div>
+                    <label>
+                      Built-Up Area (BUA){' '}
+                      {getFieldRule('propertyBuiltUpArea') === 'required' ? (
+                        <span style={{ color: 'var(--cmp-danger)' }}>*</span>
+                      ) : (
+                        <span className="faint" style={{ fontSize: '12px', fontWeight: 'normal' }}>(Optional)</span>
+                      )}
+                    </label>
+                    <input
+                      type="number"
+                      disabled={onHold}
+                      placeholder="e.g. 3400"
+                      value={formData.propertyBuiltUpArea}
+                      onChange={(e) => setFormData({ ...formData, propertyBuiltUpArea: e.target.value })}
+                    />
+                    <p className="faint" style={{ fontSize: '12px', margin: '4px 0 0' }}>
+                      Total built-up area across all floors and structures.
+                    </p>
+                  </div>
+                  <div>
+                    <label>Unit</label>
+                    <input
+                      disabled
+                      value={formData.propertyAreaUnit || 'sqft'}
+                      style={{ background: 'var(--cmp-surface-sunken)', cursor: 'not-allowed' }}
+                    />
+                  </div>
                 </div>
+              )}
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                {getFieldRule('unitNumber') !== 'forbidden' && (
+                  <div>
+                    <label>
+                      Unit Number (Confidential){' '}
+                      {getFieldRule('unitNumber') === 'required' && <span style={{ color: 'var(--cmp-danger)' }}>*</span>}
+                    </label>
+                    <input
+                      disabled={onHold}
+                      value={formData.unitNumber}
+                      onChange={(e) => setFormData({ ...formData, unitNumber: e.target.value })}
+                    />
+                    <p className="faint" style={{ fontSize: '12px', margin: '4px 0 0' }}>
+                      Never displayed publicly to buyers.
+                    </p>
+                  </div>
+                )}
+
                 <div>
                   <label>Parking Spaces</label>
                   <input
@@ -1324,18 +1467,23 @@ export default function EditPropertyPage() {
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-                <div>
-                  <label>Furnishing Status</label>
-                  <select
-                    disabled={onHold}
-                    value={formData.furnishingStatus}
-                    onChange={(e) => setFormData({ ...formData, furnishingStatus: e.target.value })}
-                  >
-                    <option value="SEMI">Semi-Furnished</option>
-                    <option value="FULL">Fully Furnished</option>
-                    <option value="NOT_FURNISHED">Unfurnished</option>
-                  </select>
-                </div>
+                {getFieldRule('furnishingStatus') !== 'forbidden' && (
+                  <div>
+                    <label>
+                      Furnishing Status{' '}
+                      {getFieldRule('furnishingStatus') === 'required' && <span style={{ color: 'var(--cmp-danger)' }}>*</span>}
+                    </label>
+                    <select
+                      disabled={onHold}
+                      value={formData.furnishingStatus}
+                      onChange={(e) => setFormData({ ...formData, furnishingStatus: e.target.value })}
+                    >
+                      <option value="SEMI">Semi-Furnished</option>
+                      <option value="FULL">Fully Furnished</option>
+                      <option value="NOT_FURNISHED">Unfurnished</option>
+                    </select>
+                  </div>
+                )}
                 <div>
                   <label>Availability</label>
                   <select
@@ -1688,7 +1836,10 @@ export default function EditPropertyPage() {
               <div className="card" style={{ padding: '16px', background: 'var(--cmp-surface-sunken)' }}>
                 <strong>{formData.propertyTitle}</strong>
                 <p className="muted" style={{ margin: '4px 0 0', fontSize: '13px' }}>
-                  {formData.propertyLocation} · {formData.propertyBedrooms} Beds · {formData.propertyArea} {formData.propertyAreaUnit}
+                  {formData.propertyLocation}
+                  {formData.propertyBedrooms && getFieldRule('propertyBedrooms') !== 'forbidden' ? ` · ${formData.propertyBedrooms === '0' ? 'Studio' : `${formData.propertyBedrooms} Beds`}` : ''}
+                  {formData.propertyArea ? ` · Area: ${formData.propertyArea} ${formData.propertyAreaUnit}` : ''}
+                  {formData.propertyBuiltUpArea && getFieldRule('propertyBuiltUpArea') !== 'forbidden' ? ` · BUA: ${formData.propertyBuiltUpArea} ${formData.propertyAreaUnit}` : ''}
                 </p>
                 <p style={{ margin: '8px 0 0', fontWeight: 800, color: 'var(--cmp-brand)', fontSize: '16px' }}>
                   AED {Number(formData.propertyPrice || 0).toLocaleString()}

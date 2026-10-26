@@ -193,8 +193,9 @@ export default function MarketStandingPage() {
         offering: offeringFilter,
         search: debouncedSearch
       });
-      if (res && res.data) {
-        setData(res.data);
+      const payload = res?.data?.stats ? res.data : (res?.data?.data || res?.data || res);
+      if (payload && (payload.stats || payload.communities)) {
+        setData(payload);
       }
     } catch (err) {
       console.error('Error fetching market standing data:', err);
@@ -532,10 +533,18 @@ export default function MarketStandingPage() {
                         </div>
                       </td>
                       <td style={{ padding: '14px 16px', textAlign: 'center', color: 'var(--cmp-text-muted)' }}>
-                        <span title="Available once consumer website tracking is enabled">N/A</span>
+                        {row.marketEnquiries != null ? (
+                          <strong style={{ color: 'var(--cmp-text)' }}>{row.marketEnquiries}</strong>
+                        ) : (
+                          <span title="Available once consumer website tracking is enabled">N/A</span>
+                        )}
                       </td>
                       <td style={{ padding: '14px 20px', textAlign: 'center', color: 'var(--cmp-text-muted)' }}>
-                        <span title="Available with historical DLD transaction feeds">N/A</span>
+                        {row.marketDeals != null ? (
+                          <strong style={{ color: 'var(--cmp-text)' }}>{row.marketDeals}</strong>
+                        ) : (
+                          <span title="Available with historical DLD transaction feeds">N/A</span>
+                        )}
                       </td>
                     </tr>
                   );

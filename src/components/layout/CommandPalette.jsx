@@ -18,7 +18,18 @@ import {
 import cmpConnectApi from '../../services/cmpConnectApi';
 
 export default function CommandPalette() {
-  const { isSearchOpen, setIsSearchOpen, listings, clients, isLiveData, authToken } = useApp();
+  const {
+    isSearchOpen,
+    setIsSearchOpen,
+    listings,
+    clients,
+    isLiveData,
+    authToken,
+    account,
+    can,
+    hasAny,
+    isMockData
+  } = useApp();
   const [query, setQuery] = useState('');
   const [liveResults, setLiveResults] = useState({ listings: [], members: [] });
   const [isSearchingLive, setIsSearchingLive] = useState(false);
@@ -67,19 +78,20 @@ export default function CommandPalette() {
 
   const quickPages = [
     { title: 'Dashboard (Today)', path: '/', icon: Home, category: 'Pages' },
-    { title: 'Properties Portfolio', path: '/properties', icon: Building, category: 'Pages' },
-    { title: 'Add New Property', path: '/properties/new', icon: Building, category: 'Pages' },
-    { title: 'CRM Client Pipeline', path: '/clients', icon: Users, category: 'Pages' },
-    { title: 'Enquiries Inbox', path: '/clients/enquiries', icon: Users, category: 'Pages' },
-    { title: 'Real Time Offer Live Desk', path: '/rto', icon: Radio, category: 'Pages' },
-    { title: 'Wallet & Credits', path: '/wallet', icon: CreditCard, category: 'Pages' },
-    { title: 'Agency Profile & Settings', path: '/account', icon: Settings, category: 'Pages' },
-    { title: 'Brand Kit (Watermark)', path: '/properties/brand-kit', icon: Building, category: 'Pages' },
+    { title: 'Properties Portfolio', path: '/properties', icon: Building, category: 'Pages', perm: () => !account || can('listings.view') },
+    { title: 'Add New Property', path: '/properties/new', icon: Building, category: 'Pages', perm: () => !account || can('listings.create') },
+    { title: 'CRM Client Pipeline', path: '/clients', icon: Users, category: 'Pages', perm: () => !account || can('leads.view') },
+    { title: 'Enquiries Inbox', path: '/clients/enquiries', icon: Users, category: 'Pages', perm: () => !account || can('leads.view') },
+    { title: 'Real Time Offer Live Desk', path: '/rto', icon: Radio, category: 'Pages', perm: () => !account || can('listings.view') },
+    { title: 'Wallet & Credits', path: '/wallet', icon: CreditCard, category: 'Pages', perm: () => !account || hasAny('contracts.view', 'credits.calculator', 'credits.history_view') },
+    { title: 'Agency Profile & Settings', path: '/account', icon: Settings, category: 'Pages', perm: () => !account || can('company.view') },
+    { title: 'Brand Kit (Watermark)', path: '/properties/brand-kit', icon: Building, category: 'Pages', perm: () => !account || can('company.watermark') },
     { title: 'Activity Audit Log', path: '/activity', icon: Settings, category: 'Pages' },
-    { title: 'Team Members', path: '/team/members', icon: Users, category: 'Pages' },
-    { title: 'Roles & Access Matrix', path: '/team/roles', icon: Settings, category: 'Pages' },
+    { title: 'Team Leaderboard', path: '/team', icon: Users, category: 'Pages', perm: () => !account || can('insights.agents_view') },
+    { title: 'Team Members', path: '/team/members', icon: Users, category: 'Pages', perm: () => !account || can('team.view') },
+    { title: 'Roles & Access Matrix', path: '/team/roles', icon: Settings, category: 'Pages', perm: () => !account || can('roles.view') },
     { title: 'Help & Knowledge Guides', path: '/help', icon: HelpCircle, category: 'Pages' }
-  ];
+  ].filter((p) => (isMockData || !p.perm ? true : p.perm()));
 
   const filteredPages = quickPages.filter((p) =>
     p.title.toLowerCase().includes(query.toLowerCase())

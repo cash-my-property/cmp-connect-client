@@ -421,13 +421,17 @@ table.data {
   font-size: 13.5px;
 }
 
+table.data thead th {
+  background: var(--cmp-surface-sunken);
+}
+
 table.data th {
   text-align: start;
-  font-size: 11.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--cmp-text-faint);
-  padding: 11px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--cmp-text);
+  padding: 12px 14px;
   border-bottom: 1px solid var(--cmp-border);
   white-space: nowrap;
 }

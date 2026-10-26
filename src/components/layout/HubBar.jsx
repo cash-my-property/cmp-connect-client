@@ -31,7 +31,8 @@ export default function HubBar() {
     needsYou,
     logout,
     account,
-    can
+    can,
+    hasAny
   } = useApp();
 
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -83,40 +84,59 @@ export default function HubBar() {
         blurb = 'Registered buyers place offers against a clock. The reserve stays private.';
       }
 
+      const tabs = [];
+      if (!account || can('listings.view')) {
+        tabs.push({ label: 'Live desk', path: '/rto' });
+        tabs.push({ label: 'Entries', path: '/rto/entries' });
+        tabs.push({ label: 'Results', path: '/rto/results' });
+      }
+      if (!account || can('leads.view')) {
+        tabs.push({ label: 'Registrations', path: '/rto/bidders' });
+      }
+      if (!account || can('contracts.view') || can('transactions.view')) {
+        tabs.push({ label: 'Cheques', path: '/rto/cheques' });
+      }
+
       return {
         title,
         blurb,
-        tabs: [
-          { label: 'Live desk', path: '/rto' },
-          { label: 'Entries', path: '/rto/entries' },
-          { label: 'Results', path: '/rto/results' },
-          { label: 'Registrations', path: '/rto/bidders' },
-          { label: 'Cheques', path: '/rto/cheques' }
-        ]
+        tabs
       };
     }
     if (pathname.startsWith('/properties')) {
+      const tabs = [];
+      if (!account || can('listings.view')) {
+        tabs.push({ label: 'Portfolio', path: '/properties' });
+        tabs.push({ label: 'Compliance', path: '/properties/compliance' });
+      }
+      if (!account || can('listings.archive') || can('listings.view')) {
+        tabs.push({ label: 'Archive', path: '/properties/archive' });
+      }
+      if (!account || can('company.watermark')) {
+        tabs.push({ label: 'Brand kit', path: '/properties/brand-kit' });
+      }
+
       return {
         title: 'Properties',
         blurb: 'Every property you market, its compliance and your brand on its photos.',
-        tabs: [
-          { label: 'Portfolio', path: '/properties' },
-          { label: 'Compliance', path: '/properties/compliance' },
-          { label: 'Archive', path: '/properties/archive' },
-          { label: 'Brand kit', path: '/properties/brand-kit' }
-        ]
+        tabs
       };
     }
     if (pathname.startsWith('/clients')) {
+      const tabs = [];
+      if (!account || can('leads.view')) {
+        tabs.push({ label: 'Enquiries', path: '/clients/enquiries' });
+        tabs.push({ label: 'Pipeline', path: '/clients' });
+        tabs.push({ label: 'Contacts', path: '/clients/contacts' });
+      }
+      if (!account || can('leads.whatsapp_view') || can('leads.call_view') || can('leads.view')) {
+        tabs.push({ label: 'Messages', path: '/clients/messages' });
+      }
+
       return {
         title: 'Clients',
         blurb: 'Enquiries in, contacts kept, clients moved towards a deal.',
-        tabs: [
-          { label: 'Enquiries', path: '/clients/enquiries' },
-          { label: 'Pipeline', path: '/clients' },
-          { label: 'Contacts', path: '/clients/contacts' },
-          { label: 'Messages', path: '/clients/messages' }
-        ]
+        tabs
       };
     }
     if (pathname.startsWith('/transactions')) {
@@ -127,30 +147,48 @@ export default function HubBar() {
       };
     }
     if (pathname.startsWith('/growth') || pathname.startsWith('/market') || pathname.startsWith('/insights')) {
+      const tabs = [];
+      if (!account || can('insights.listings_view')) {
+        tabs.push({ label: 'Performance', path: '/growth' });
+        tabs.push({ label: 'Market standing', path: '/growth/market' });
+      }
+      if (!account || can('insights.leads_view')) {
+        tabs.push({ label: 'Enquiry insights', path: '/growth/insights' });
+      }
+      if (!account || can('listings.view')) {
+        tabs.push({ label: 'Smart Boost', path: '/growth/smart-boost' });
+      }
+      if (!account || can('listings.spotlight')) {
+        tabs.push({ label: 'Community Spotlight', path: '/growth/spotlight' });
+        tabs.push({ label: 'Spotlighted', path: '/growth/spotlighted' });
+      }
+
       return {
         title: 'Growth',
         blurb: 'Where your enquiries come from and how to get more of them.',
-        tabs: [
-          { label: 'Performance', path: '/growth' },
-          { label: 'Market standing', path: '/growth/market' },
-          { label: 'Enquiry insights', path: '/growth/insights' },
-          { label: 'Smart Boost', path: '/growth/smart-boost' },
-          { label: 'Community Spotlight', path: '/growth/spotlight' },
-          { label: 'Spotlighted', path: '/growth/spotlighted' }
-        ]
+        tabs
       };
     }
     if (pathname.startsWith('/wallet')) {
+      const tabs = [];
+      if (!account || can('contracts.view') || can('credits.calculator') || can('credits.history_view')) {
+        tabs.push({ label: 'Balance & plan', path: '/wallet' });
+      }
+      if (!account || can('credits.history_view') || can('contracts.view')) {
+        tabs.push({ label: 'Activity', path: '/wallet/activity' });
+      }
+      if (!account || can('credits.return_request') || can('contracts.view')) {
+        tabs.push({ label: 'Refunds', path: '/wallet/refunds' });
+      }
+      if (!account || can('contracts.view')) {
+        tabs.push({ label: 'Contract', path: '/wallet/contract' });
+        tabs.push({ label: 'Invoices', path: '/wallet/invoices' });
+      }
+
       return {
         title: 'Wallet',
         blurb: 'Your credits, your contract with Cash My Property and its invoices.',
-        tabs: [
-          { label: 'Balance & plan', path: '/wallet' },
-          { label: 'Activity', path: '/wallet/activity' },
-          { label: 'Refunds', path: '/wallet/refunds' },
-          { label: 'Contract', path: '/wallet/contract' },
-          { label: 'Invoices', path: '/wallet/invoices' }
-        ]
+        tabs
       };
     }
     if (pathname.startsWith('/team')) {
@@ -166,14 +204,19 @@ export default function HubBar() {
       };
     }
     if (pathname.startsWith('/account')) {
+      const tabs = [];
+      if (!account || can('company.view')) {
+        tabs.push({ label: 'Agency profile', path: '/account' });
+      }
+      tabs.push({ label: 'Sign-in & security', path: '/account/security' });
+      if (!account || can('team.notifications_manage') || can('company.view')) {
+        tabs.push({ label: 'Notifications', path: '/account/notifications' });
+      }
+
       return {
         title: 'Account',
         blurb: 'Your agency’s details, sign-in security and what you get notified about.',
-        tabs: [
-          { label: 'Agency profile', path: '/account' },
-          { label: 'Sign-in & security', path: '/account/security' },
-          { label: 'Notifications', path: '/account/notifications' }
-        ]
+        tabs
       };
     }
     if (pathname.startsWith('/help')) {
@@ -438,13 +481,13 @@ export default function HubBar() {
           <p className="hub-blurb">{hub.blurb}</p>
         </div>
 
-        {pathname.startsWith('/properties') && (
+        {pathname.startsWith('/properties') && (!account || can('listings.create')) && (
           <NavLink to="/properties/new" className="btn btn-primary btn-sm">
             <Plus size={15} />
             <span>Add property</span>
           </NavLink>
         )}
-        {pathname.startsWith('/rto') && (
+        {pathname.startsWith('/rto') && (!account || can('listings.create')) && (
           <NavLink to="/rto/new" className="btn btn-accent btn-sm">
             <Plus size={15} />
             <span>Enter a property</span>

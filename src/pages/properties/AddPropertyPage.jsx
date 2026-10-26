@@ -75,9 +75,9 @@ export default function AddPropertyPage() {
   // Form State
   const [formData, setFormData] = useState({
     // Step 1
-    purposeCategoryKey: 'BUY_RES',
-    listingPurpose: 'SALE',
-    propertyCategory: 'RESIDENTIAL',
+    purposeCategoryKey: '',
+    listingPurpose: '',
+    propertyCategory: '',
     propertyPlan: 'READY',
     propertyType: 'APARTMENT',
     propertyTitle: '',
@@ -137,8 +137,8 @@ export default function AddPropertyPage() {
           setIsOptionsLoading(false);
         });
 
-      // Fetch team members if user has assign permission or is an agency user
-      if (can('listings.assign') || (account?.accountType === 'AGENCY' && !account?.compliance?.brn)) {
+      // Fetch team members if user has assign permission
+      if (can('listings.assign')) {
         cmpConnectApi.listMembers({ status: 'ACTIVE' }, authToken)
           .then((res) => {
             if (Array.isArray(res?.data)) {
@@ -150,9 +150,29 @@ export default function AddPropertyPage() {
     }
   }, [isLiveData, authToken, can, account]);
 
+  // For agents without listings.assign permission, auto-bind listedBy to current account
+  useEffect(() => {
+    if (account?.id && !can('listings.assign')) {
+      setFormData((prev) => (prev.listedBy !== account.id ? { ...prev, listedBy: account.id } : prev));
+    }
+  }, [account, can]);
+
   // Derived available property types based on options rules
   const availableTypes = useMemo(() => {
+    if (!formData.listingPurpose || !formData.propertyCategory) {
+      return [];
+    }
     if (!options?.rules) {
+      if (formData.propertyCategory === 'COMMERCIAL') {
+        return [
+          { key: 'OFFICE', label: 'Office' },
+          { key: 'RETAIL', label: 'Retail' },
+          { key: 'WAREHOUSE', label: 'Warehouse' },
+          { key: 'COMMERCIAL_VILLA', label: 'Commercial Villa' },
+          { key: 'COMMERCIAL_BUILDING', label: 'Commercial Building' },
+          { key: 'SHOWROOM', label: 'Showroom' }
+        ];
+      }
       return [
         { key: 'APARTMENT', label: 'Apartment' },
         { key: 'VILLA', label: 'Villa' },
@@ -240,6 +260,47 @@ export default function AddPropertyPage() {
     return options.rules[listingPurpose]?.[propertyCategory]?.[propertyPlan]?.[propertyType] || null;
   }, [options, formData.listingPurpose, formData.propertyCategory, formData.propertyPlan, formData.propertyType]);
 
+  // Helper to determine field rules (required, forbidden, optional) per selected property type
+  const getFieldRule = useCallback((fieldName) => {
+    if (currentRules?.fields?.[fieldName]) {
+      return currentRules.fields[fieldName]; // 'required' | 'forbidden' | 'optional'
+    }
+    const type = String(formData.propertyType || '').toUpperCase();
+    if (fieldName === 'propertyBuiltUpArea') {
+      const requiredTypes = [
+        'VILLA', 'TOWNHOUSE', 'COMPOUND', 'COMMERCIAL_VILLA',
+        'COMMERCIAL_BUILDING', 'RESIDENTIAL_BUILDING', 'LAND',
+        'COMMERCIAL_PLOT', 'FARM'
+      ];
+      return requiredTypes.includes(type) ? 'required' : 'forbidden';
+    }
+    if (fieldName === 'propertyBedrooms') {
+      const forbiddenTypes = [
+        'LAND', 'COMMERCIAL_PLOT', 'COMMERCIAL_BUILDING', 'RESIDENTIAL_BUILDING',
+        'COMMERCIAL_UNIT', 'OFFICE', 'RETAIL', 'WAREHOUSE', 'SHOWROOM', 'FLOOR',
+        'COMMERCIAL_BULK', 'FARM'
+      ];
+      return forbiddenTypes.includes(type) ? 'forbidden' : 'required';
+    }
+    if (fieldName === 'propertyBathrooms') {
+      const forbiddenTypes = [
+        'LAND', 'COMMERCIAL_PLOT', 'COMMERCIAL_BUILDING', 'RESIDENTIAL_BUILDING',
+        'COMMERCIAL_UNIT', 'OFFICE', 'RETAIL', 'WAREHOUSE', 'SHOWROOM', 'FLOOR',
+        'COMMERCIAL_BULK', 'COMMERCIAL_VILLA', 'FARM'
+      ];
+      return forbiddenTypes.includes(type) ? 'forbidden' : 'required';
+    }
+    if (fieldName === 'unitNumber') {
+      const forbiddenTypes = ['RESIDENTIAL_BUILDING', 'RESIDENTIAL_BULK', 'COMMERCIAL_BULK', 'FARM'];
+      return forbiddenTypes.includes(type) ? 'forbidden' : 'required';
+    }
+    if (fieldName === 'furnishingStatus') {
+      const forbiddenTypes = ['COMMERCIAL_PLOT', 'COMMERCIAL_BULK', 'FARM'];
+      return forbiddenTypes.includes(type) ? 'forbidden' : 'required';
+    }
+    return 'optional';
+  }, [currentRules, formData.propertyType]);
+
   // Load review step details
   const loadReviewDetails = useCallback(async () => {
     if (!isLiveData || !authToken || !listingId) return;
@@ -259,7 +320,41 @@ export default function AddPropertyPage() {
     }
   }, [currentStep, listingId, loadReviewDetails]);
 
-  // Purpose selector handler
+  // Purpose selector handler (Buy vs Rent)
+  const handleSelectPurpose = (purpose) => {
+    setFormData((prev) => {
+      let key = '';
+      if (purpose === 'SALE') {
+        key = prev.propertyCategory === 'COMMERCIAL' ? 'BUY_COMM' : prev.propertyCategory === 'RESIDENTIAL' ? 'BUY_RES' : '';
+      } else if (purpose === 'RENT') {
+        key = prev.propertyCategory === 'COMMERCIAL' ? 'RENT_COMM' : prev.propertyCategory === 'RESIDENTIAL' ? 'RENT_RES' : '';
+      }
+      return {
+        ...prev,
+        listingPurpose: purpose,
+        purposeCategoryKey: key
+      };
+    });
+  };
+
+  // Category selector handler (Residential vs Commercial)
+  const handleSelectCategory = (category) => {
+    setFormData((prev) => {
+      const purpose = prev.listingPurpose || 'SALE';
+      let key = '';
+      if (purpose === 'SALE') {
+        key = category === 'COMMERCIAL' ? 'BUY_COMM' : 'BUY_RES';
+      } else {
+        key = category === 'COMMERCIAL' ? 'RENT_COMM' : 'RENT_RES';
+      }
+      return {
+        ...prev,
+        propertyCategory: category,
+        purposeCategoryKey: key
+      };
+    });
+  };
+
   const handleSelectPurposeCategory = (item) => {
     setFormData((prev) => ({
       ...prev,
@@ -403,12 +498,18 @@ export default function AddPropertyPage() {
     try {
       if (currentStep === 1) {
         // Validation
+        if (!formData.listingPurpose) {
+          throw new Error('Please select whether this listing is for Buy or Rent.');
+        }
+        if (!formData.propertyCategory) {
+          throw new Error('Please select a property category (Residential or Commercial).');
+        }
         if (!formData.propertyTitle.trim()) {
           throw new Error('Listing title is required.');
         }
 
-        // Agency without BRN must assign listing to an agent with BRN
-        if (account?.accountType === 'AGENCY' && !account?.compliance?.brn && !formData.listedBy) {
+        // Agency admin without BRN must assign listing to an agent with BRN
+        if (can('listings.assign') && account?.accountType === 'AGENCY' && !account?.compliance?.brn && !account?.brn && !formData.listedBy) {
           throw new Error('As an agency administrator without a broker licence (BRN), you must assign this listing to an agent.');
         }
 
@@ -450,18 +551,38 @@ export default function AddPropertyPage() {
           authToken
         );
       } else if (currentStep === 3) {
+        // Step 3 Validation
+        if (!formData.propertyArea || Number(formData.propertyArea) <= 0) {
+          throw new Error('Area size is required.');
+        }
+        if (getFieldRule('propertyBuiltUpArea') === 'required' && (!formData.propertyBuiltUpArea || Number(formData.propertyBuiltUpArea) <= 0)) {
+          throw new Error('Built-Up Area (BUA) is required for this property type.');
+        }
+        if (getFieldRule('propertyBedrooms') === 'required' && !formData.propertyBedrooms) {
+          throw new Error('Bedrooms count is required.');
+        }
+        if (getFieldRule('propertyBathrooms') === 'required' && !formData.propertyBathrooms) {
+          throw new Error('Bathrooms count is required.');
+        }
+
+        const bAreaRule = getFieldRule('propertyBuiltUpArea');
+        const bedsRule = getFieldRule('propertyBedrooms');
+        const bathsRule = getFieldRule('propertyBathrooms');
+        const unitRule = getFieldRule('unitNumber');
+        const furnRule = getFieldRule('furnishingStatus');
+
         // Step 3 Details
         await cmpConnectApi.updateListing(
           listingId,
           {
             propertyArea: formData.propertyArea ? Number(formData.propertyArea) : null,
             propertyAreaUnit: formData.propertyAreaUnit || 'sqft',
-            propertyBuiltUpArea: formData.propertyBuiltUpArea ? Number(formData.propertyBuiltUpArea) : null,
-            propertyBedrooms: formData.propertyBedrooms,
-            propertyBathrooms: formData.propertyBathrooms,
-            unitNumber: formData.unitNumber || null,
-            parkingSpaces: formData.parkingSpaces ? Number(formData.parkingSpaces) : null,
-            furnishingStatus: formData.furnishingStatus,
+            propertyBuiltUpArea: bAreaRule !== 'forbidden' && formData.propertyBuiltUpArea ? Number(formData.propertyBuiltUpArea) : null,
+            propertyBedrooms: bedsRule !== 'forbidden' ? formData.propertyBedrooms : null,
+            propertyBathrooms: bathsRule !== 'forbidden' ? formData.propertyBathrooms : null,
+            unitNumber: unitRule !== 'forbidden' ? (formData.unitNumber || null) : null,
+            parkingSpaces: formData.parkingSpaces ? Number(formData.parkingSpaces) : 0,
+            furnishingStatus: furnRule !== 'forbidden' ? formData.furnishingStatus : null,
             availability: formData.availability,
             referenceNumber: formData.referenceNumber || null
           },
@@ -733,11 +854,11 @@ export default function AddPropertyPage() {
               </h2>
 
               {/* Responsible Agent ("Listed under") */}
-              {(can('listings.assign') || (account?.accountType === 'AGENCY' && !account?.compliance?.brn)) && (
+              {can('listings.assign') ? (
                 <div>
                   <label>
                     Responsible Agent ("Listed under")
-                    {account?.accountType === 'AGENCY' && !account?.compliance?.brn && (
+                    {account?.accountType === 'AGENCY' && !account?.compliance?.brn && !account?.brn && (
                       <span style={{ color: 'var(--cmp-danger)', marginLeft: '4px' }}>*</span>
                     )}
                   </label>
@@ -745,42 +866,133 @@ export default function AddPropertyPage() {
                     value={formData.listedBy}
                     onChange={(e) => setFormData({ ...formData, listedBy: e.target.value })}
                   >
-                    {account?.accountType === 'AGENCY' && !account?.compliance?.brn ? (
+                    {account?.accountType === 'AGENCY' && !account?.compliance?.brn && !account?.brn ? (
                       <option value="">-- Select an agent with BRN (Required) --</option>
                     ) : (
                       <option value="">
-                        -- Current user ({account?.fullName || 'Myself'}) {account?.compliance?.brn ? `(BRN: ${account.compliance.brn})` : ''} --
+                        -- Current user ({account?.fullName || 'Myself'}) {account?.compliance?.brn || account?.brn ? `(BRN: ${account.compliance?.brn || account.brn})` : ''} --
                       </option>
                     )}
                     {brnEligibleMembers.map((m) => (
                       <option key={m.id} value={m.id}>
-                        {m.fullName} (BRN: {m.compliance?.brn}) - {m.role?.name || m.role}
+                        {m.fullName} {m.compliance?.brn ? `(BRN: ${m.compliance.brn})` : ''} - {m.role?.name || m.role}
                       </option>
                     ))}
                   </select>
                   <p className="faint" style={{ fontSize: '12px', margin: '4px 0 0' }}>
-                    {account?.accountType === 'AGENCY' && !account?.compliance?.brn
+                    {account?.accountType === 'AGENCY' && !account?.compliance?.brn && !account?.brn
                       ? 'As an agency administrator without a broker licence (BRN), you must assign this listing to an agent.'
                       : 'Agent must have an in-date, CMP-verified BRN to publish live.'}
                   </p>
+                </div>
+              ) : (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    background: 'var(--cmp-surface-sunken)',
+                    border: '1px solid var(--cmp-border)'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div
+                      style={{
+                        width: '32px',
+                        height: '32px',
+                        borderRadius: '50%',
+                        background: 'var(--cmp-brand-subtle)',
+                        color: 'var(--cmp-brand)',
+                        display: 'grid',
+                        placeItems: 'center',
+                        fontWeight: 700,
+                        fontSize: '12px'
+                      }}
+                    >
+                      {account?.fullName
+                        ? account.fullName.split(' ').map((n) => n[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
+                        : 'AG'}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '11px', color: 'var(--cmp-text-faint)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        Listing Agent
+                      </div>
+                      <div style={{ fontWeight: 700, fontSize: '13.5px', color: 'var(--cmp-text)' }}>
+                        {account?.fullName || 'Current User'}
+                        {(account?.compliance?.brn || account?.brn) && (
+                          <span style={{ marginLeft: '6px', fontSize: '12px', fontWeight: 600, color: 'var(--cmp-brand)' }}>
+                            (BRN: {account.compliance?.brn || account.brn})
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <span className="badge badge-brand" style={{ fontSize: '11px' }}>
+                    Assigned to your profile
+                  </span>
                 </div>
               )}
 
               {/* Purpose & Category */}
               <div>
-                <label>Listing Purpose & Category</label>
+                <label>
+                  Listing Purpose & Category <span style={{ color: 'var(--cmp-danger)' }}>*</span>
+                </label>
+                {/* Level 1: Purpose Capsules (Buy / Rent) */}
                 <div className="row" style={{ gap: '8px', flexWrap: 'wrap' }}>
-                  {PURPOSE_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.key}
-                      type="button"
-                      className={`chip ${formData.purposeCategoryKey === opt.key ? 'active' : ''}`}
-                      onClick={() => handleSelectPurposeCategory(opt)}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
+                  <button
+                    type="button"
+                    className={`chip ${formData.listingPurpose === 'SALE' ? 'active' : ''}`}
+                    onClick={() => handleSelectPurpose('SALE')}
+                  >
+                    Buy
+                  </button>
+                  <button
+                    type="button"
+                    className={`chip ${formData.listingPurpose === 'RENT' ? 'active' : ''}`}
+                    onClick={() => handleSelectPurpose('RENT')}
+                  >
+                    Rent
+                  </button>
                 </div>
+
+                {/* Level 2: Category Capsules (Residential / Commercial) - opens when Buy or Rent is selected */}
+                {formData.listingPurpose && (
+                  <div
+                    style={{
+                      marginTop: '12px',
+                      padding: '12px 14px',
+                      borderRadius: '8px',
+                      background: 'var(--cmp-surface-sunken)',
+                      border: '1px solid var(--cmp-border)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '8px'
+                    }}
+                  >
+                    <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--cmp-text-muted)' }}>
+                      Select {formData.listingPurpose === 'SALE' ? 'Buy' : 'Rent'} Category:
+                    </div>
+                    <div className="row" style={{ gap: '8px', flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        className={`chip ${formData.propertyCategory === 'RESIDENTIAL' ? 'active' : ''}`}
+                        onClick={() => handleSelectCategory('RESIDENTIAL')}
+                      >
+                        Residential
+                      </button>
+                      <button
+                        type="button"
+                        className={`chip ${formData.propertyCategory === 'COMMERCIAL' ? 'active' : ''}`}
+                        onClick={() => handleSelectCategory('COMMERCIAL')}
+                      >
+                        Commercial
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Plan (Ready vs Off-plan) */}
@@ -807,18 +1019,24 @@ export default function AddPropertyPage() {
               {/* Property Type */}
               <div>
                 <label>Property Type</label>
-                <div className="row" style={{ gap: '8px', flexWrap: 'wrap' }}>
-                  {availableTypes.map((t) => (
-                    <button
-                      key={t.key}
-                      type="button"
-                      className={`chip ${formData.propertyType === t.key ? 'active' : ''}`}
-                      onClick={() => setFormData({ ...formData, propertyType: t.key })}
-                    >
-                      {t.label}
-                    </button>
-                  ))}
-                </div>
+                {availableTypes.length > 0 ? (
+                  <div className="row" style={{ gap: '8px', flexWrap: 'wrap' }}>
+                    {availableTypes.map((t) => (
+                      <button
+                        key={t.key}
+                        type="button"
+                        className={`chip ${formData.propertyType === t.key ? 'active' : ''}`}
+                        onClick={() => setFormData({ ...formData, propertyType: t.key })}
+                      >
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="faint" style={{ fontSize: '12.5px', margin: '4px 0' }}>
+                    Select purpose (Buy / Rent) and category (Residential / Commercial) above to view property types.
+                  </p>
+                )}
               </div>
 
               {/* Listing Title */}
@@ -915,45 +1133,65 @@ export default function AddPropertyPage() {
                 Step 3: Property Details
               </h2>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-                <div>
-                  <label>Bedrooms</label>
-                  <select
-                    value={formData.propertyBedrooms}
-                    onChange={(e) => setFormData({ ...formData, propertyBedrooms: e.target.value })}
-                  >
-                    {['0', '1', '2', '3', '4', '5', '6', '7+'].map((b) => (
-                      <option key={b} value={b}>
-                        {b === '0' ? 'Studio' : `${b} Bedroom`}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              {/* Bedrooms & Bathrooms - only shown when not forbidden */}
+              {(getFieldRule('propertyBedrooms') !== 'forbidden' || getFieldRule('propertyBathrooms') !== 'forbidden') && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                  {getFieldRule('propertyBedrooms') !== 'forbidden' && (
+                    <div>
+                      <label>
+                        Bedrooms {getFieldRule('propertyBedrooms') === 'required' && <span style={{ color: 'var(--cmp-danger)' }}>*</span>}
+                      </label>
+                      <select
+                        value={formData.propertyBedrooms}
+                        onChange={(e) => setFormData({ ...formData, propertyBedrooms: e.target.value })}
+                      >
+                        {['0', '1', '2', '3', '4', '5', '6', '7+'].map((b) => (
+                          <option key={b} value={b}>
+                            {b === '0' ? 'Studio' : `${b} Bedroom`}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
 
-                <div>
-                  <label>Bathrooms</label>
-                  <select
-                    value={formData.propertyBathrooms}
-                    onChange={(e) => setFormData({ ...formData, propertyBathrooms: e.target.value })}
-                  >
-                    {['1', '2', '3', '4', '5', '6+'].map((b) => (
-                      <option key={b} value={b}>
-                        {b} Bathroom
-                      </option>
-                    ))}
-                  </select>
+                  {getFieldRule('propertyBathrooms') !== 'forbidden' && (
+                    <div>
+                      <label>
+                        Bathrooms {getFieldRule('propertyBathrooms') === 'required' && <span style={{ color: 'var(--cmp-danger)' }}>*</span>}
+                      </label>
+                      <select
+                        value={formData.propertyBathrooms}
+                        onChange={(e) => setFormData({ ...formData, propertyBathrooms: e.target.value })}
+                      >
+                        {['1', '2', '3', '4', '5', '6+'].map((b) => (
+                          <option key={b} value={b}>
+                            {b} Bathroom
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
-              </div>
+              )}
 
+              {/* Area Size & Unit */}
               <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '14px' }}>
                 <div>
-                  <label>Area Size</label>
+                  <label>
+                    {getFieldRule('propertyBuiltUpArea') !== 'forbidden' ? 'Plot / Total Area Size' : 'Area Size'}{' '}
+                    <span style={{ color: 'var(--cmp-danger)' }}>*</span>
+                  </label>
                   <input
                     type="number"
                     placeholder="e.g. 1420"
                     value={formData.propertyArea}
                     onChange={(e) => setFormData({ ...formData, propertyArea: e.target.value })}
                   />
+                  {getFieldRule('propertyBuiltUpArea') !== 'forbidden' && (
+                    <p className="faint" style={{ fontSize: '12px', margin: '4px 0 0' }}>
+                      Plot / land area size for this property.
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label>Unit</label>
@@ -967,18 +1205,56 @@ export default function AddPropertyPage() {
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-                <div>
-                  <label>Unit Number (Confidential)</label>
-                  <input
-                    placeholder="e.g. 2104"
-                    value={formData.unitNumber}
-                    onChange={(e) => setFormData({ ...formData, unitNumber: e.target.value })}
-                  />
-                  <p className="faint" style={{ fontSize: '12px', margin: '4px 0 0' }}>
-                    Never displayed publicly to buyers.
-                  </p>
+              {/* Built-Up Area (BUA) - rendered when required or optional for the selected property type */}
+              {getFieldRule('propertyBuiltUpArea') !== 'forbidden' && (
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '14px' }}>
+                  <div>
+                    <label>
+                      Built-Up Area (BUA){' '}
+                      {getFieldRule('propertyBuiltUpArea') === 'required' ? (
+                        <span style={{ color: 'var(--cmp-danger)' }}>*</span>
+                      ) : (
+                        <span className="faint" style={{ fontSize: '12px', fontWeight: 'normal' }}>(Optional)</span>
+                      )}
+                    </label>
+                    <input
+                      type="number"
+                      placeholder="e.g. 3400"
+                      value={formData.propertyBuiltUpArea}
+                      onChange={(e) => setFormData({ ...formData, propertyBuiltUpArea: e.target.value })}
+                    />
+                    <p className="faint" style={{ fontSize: '12px', margin: '4px 0 0' }}>
+                      Total built-up area across all floors and structures.
+                    </p>
+                  </div>
+                  <div>
+                    <label>Unit</label>
+                    <input
+                      disabled
+                      value={formData.propertyAreaUnit || 'sqft'}
+                      style={{ background: 'var(--cmp-surface-sunken)', cursor: 'not-allowed' }}
+                    />
+                  </div>
                 </div>
+              )}
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                {getFieldRule('unitNumber') !== 'forbidden' && (
+                  <div>
+                    <label>
+                      Unit Number (Confidential){' '}
+                      {getFieldRule('unitNumber') === 'required' && <span style={{ color: 'var(--cmp-danger)' }}>*</span>}
+                    </label>
+                    <input
+                      placeholder="e.g. 2104"
+                      value={formData.unitNumber}
+                      onChange={(e) => setFormData({ ...formData, unitNumber: e.target.value })}
+                    />
+                    <p className="faint" style={{ fontSize: '12px', margin: '4px 0 0' }}>
+                      Never displayed publicly to buyers.
+                    </p>
+                  </div>
+                )}
 
                 <div>
                   <label>Parking Spaces</label>
@@ -992,17 +1268,22 @@ export default function AddPropertyPage() {
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-                <div>
-                  <label>Furnishing Status</label>
-                  <select
-                    value={formData.furnishingStatus}
-                    onChange={(e) => setFormData({ ...formData, furnishingStatus: e.target.value })}
-                  >
-                    <option value="SEMI">Semi-Furnished</option>
-                    <option value="FULL">Fully Furnished</option>
-                    <option value="NOT_FURNISHED">Unfurnished</option>
-                  </select>
-                </div>
+                {getFieldRule('furnishingStatus') !== 'forbidden' && (
+                  <div>
+                    <label>
+                      Furnishing Status{' '}
+                      {getFieldRule('furnishingStatus') === 'required' && <span style={{ color: 'var(--cmp-danger)' }}>*</span>}
+                    </label>
+                    <select
+                      value={formData.furnishingStatus}
+                      onChange={(e) => setFormData({ ...formData, furnishingStatus: e.target.value })}
+                    >
+                      <option value="SEMI">Semi-Furnished</option>
+                      <option value="FULL">Fully Furnished</option>
+                      <option value="NOT_FURNISHED">Unfurnished</option>
+                    </select>
+                  </div>
+                )}
 
                 <div>
                   <label>Availability</label>
@@ -1378,7 +1659,10 @@ export default function AddPropertyPage() {
                 </div>
                 <strong style={{ fontSize: '16px' }}>{formData.propertyTitle || 'Untitled Property'}</strong>
                 <p className="muted" style={{ margin: 0, fontSize: '13.5px' }}>
-                  {formData.propertyLocation} · {formData.propertyBedrooms} Beds · {formData.propertyArea} {formData.propertyAreaUnit}
+                  {formData.propertyLocation}
+                  {formData.propertyBedrooms && getFieldRule('propertyBedrooms') !== 'forbidden' ? ` · ${formData.propertyBedrooms === '0' ? 'Studio' : `${formData.propertyBedrooms} Beds`}` : ''}
+                  {formData.propertyArea ? ` · Area: ${formData.propertyArea} ${formData.propertyAreaUnit}` : ''}
+                  {formData.propertyBuiltUpArea && getFieldRule('propertyBuiltUpArea') !== 'forbidden' ? ` · BUA: ${formData.propertyBuiltUpArea} ${formData.propertyAreaUnit}` : ''}
                 </p>
                 <div className="row" style={{ gap: '8px', fontSize: '12.5px', color: 'var(--cmp-text-muted)' }}>
                   <span>Permit: {formData.permitNumber || 'None'}</span>

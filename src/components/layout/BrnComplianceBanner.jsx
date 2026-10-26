@@ -7,8 +7,19 @@ export default function BrnComplianceBanner() {
   const { account, isLiveData, theme } = useApp();
   const [isDismissed, setIsDismissed] = useState(false);
 
-  // Only relevant for live data and AGENCY accounts
-  if (!isLiveData || isDismissed || !account || account.accountType !== 'AGENCY') {
+  // Only relevant for live data
+  if (!isLiveData || isDismissed || !account) {
+    return null;
+  }
+
+  // Agency accounts have an ORN, not a BRN.
+  // BRN licence warning only applies to individual agents/brokers who hold a BRN.
+  const roleKey = (typeof account?.role === 'string' ? account.role : account?.role?.key || account?.role?.name || '').toUpperCase();
+  const isAgent = roleKey === 'AGENT';
+  const hasBrn = Boolean(account?.compliance?.brn);
+
+  // If not an individual agent or account does not hold a BRN, do NOT show BRN warning
+  if (!isAgent || !hasBrn) {
     return null;
   }
 

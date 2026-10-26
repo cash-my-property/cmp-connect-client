@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { cmpConnectApi } from '../../services/cmpConnectApi';
+import QualityScoreCircle from '../../components/ui/QualityScoreCircle';
 
 const mockEligibleListings = [
   {
@@ -58,8 +59,9 @@ export default function SpotlightedPage() {
       setLoading(true);
       setError(null);
       const res = await cmpConnectApi.getInsightsSpotlight();
-      if (res && res.data) {
-        setApiData(res.data);
+      const payload = res?.data?.eligible || res?.data?.entries ? res.data : (res?.data?.data || res?.data || res);
+      if (payload) {
+        setApiData(payload);
       }
     } catch (err) {
       console.error('Error fetching spotlight data:', err);
@@ -306,12 +308,30 @@ export default function SpotlightedPage() {
                           </span>
                         </td>
                         <td style={{ padding: '14px 16px' }}>
-                          <span style={{ fontWeight: 600, color: 'var(--cmp-text)', display: 'block' }}>
-                            {listing.title || listing.propertyTitle}
-                          </span>
-                          <span className="faint" style={{ fontSize: '12px' }}>
-                            {location}
-                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            {listing.coverImage && (
+                              <img
+                                src={listing.coverImage}
+                                alt={listing.title || 'Property'}
+                                style={{
+                                  width: '42px',
+                                  height: '42px',
+                                  borderRadius: '8px',
+                                  objectFit: 'cover',
+                                  flexShrink: 0,
+                                  border: '1px solid var(--cmp-border)'
+                                }}
+                              />
+                            )}
+                            <div>
+                              <span style={{ fontWeight: 600, color: 'var(--cmp-text)', display: 'block' }}>
+                                {listing.title || listing.propertyTitle}
+                              </span>
+                              <span className="faint" style={{ fontSize: '12px' }}>
+                                {location}
+                              </span>
+                            </div>
+                          </div>
                         </td>
                         <td style={{ padding: '14px 16px' }}>
                           <span style={{ fontSize: '13px' }}>{agentName}</span>
@@ -332,19 +352,26 @@ export default function SpotlightedPage() {
                           </span>
                         </td>
                         <td style={{ padding: '14px 16px', textAlign: 'center' }}>
-                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                            <span
-                              style={{
-                                padding: '4px 10px',
-                                borderRadius: '999px',
-                                background: 'var(--cmp-success-subtle, rgba(34, 197, 94, 0.12))',
-                                color: 'var(--cmp-success, #16a34a)',
-                                fontWeight: 800,
-                                fontSize: '12px'
-                              }}
-                            >
-                              {quality}/100
-                            </span>
+                          <div
+                            style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                            title={`Quality Score: ${quality} / 100`}
+                          >
+                            <QualityScoreCircle score={quality} size={36} strokeWidth={3}>
+                              <span
+                                style={{
+                                  fontSize: '11.5px',
+                                  fontWeight: 800,
+                                  color:
+                                    quality >= 80
+                                      ? 'var(--cmp-success, #16a34a)'
+                                      : quality >= 60
+                                      ? 'var(--cmp-warning, #d97706)'
+                                      : 'var(--cmp-danger, #dc2626)'
+                                }}
+                              >
+                                {quality}
+                              </span>
+                            </QualityScoreCircle>
                           </div>
                         </td>
                         <td style={{ padding: '14px 20px', textAlign: 'right' }}>

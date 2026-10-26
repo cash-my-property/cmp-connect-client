@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function QualityScoreCircle({ score = 0, size = 20, strokeWidth = 3 }) {
+export default function QualityScoreCircle({ score = 0, size = 20, strokeWidth = 3, children }) {
   const r = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * r;
   const validScore = Math.min(100, Math.max(0, score));
@@ -30,7 +30,7 @@ export default function QualityScoreCircle({ score = 0, size = 20, strokeWidth =
         width={size}
         height={size}
         aria-hidden="true"
-        style={{ transform: 'rotate(-90deg)' }}
+        style={{ transform: 'rotate(-90deg)', position: 'absolute', inset: 0 }}
       >
         {/* Track Circle */}
         <circle
@@ -53,6 +53,20 @@ export default function QualityScoreCircle({ score = 0, size = 20, strokeWidth =
           strokeDasharray={`${strokeDash} ${circumference}`}
         />
       </svg>
+      {children && (
+        <span
+          style={{
+            position: 'relative',
+            zIndex: 1,
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            lineHeight: 1
+          }}
+        >
+          {children}
+        </span>
+      )}
     </span>
   );
 }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, Navigate } from 'react-router-dom';
 import { Award, Star, Search, Check, X, Shield, Clock } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { cmpConnectApi } from '../../services/cmpConnectApi';
@@ -80,7 +80,18 @@ const mockLeaderboardAgents = [
 ];
 
 export default function TeamPage() {
-  const { authToken, dataMode, isMockData } = useApp();
+  const { authToken, dataMode, isMockData, account, can } = useApp();
+
+  if (!isMockData && account && !can('insights.agents_view')) {
+    if (can('team.view')) {
+      return <Navigate to="/team/members" replace />;
+    }
+    if (can('roles.view')) {
+      return <Navigate to="/team/roles" replace />;
+    }
+    return <Navigate to="/" replace />;
+  }
+
   const [agents, setAgents] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -99,10 +110,21 @@ export default function TeamPage() {
     }
 
     setIsLoading(true);
-    cmpConnectApi.listMembers({ limit: 100 }, authToken)
+    cmpConnectApi.getLeaderboard({}, authToken)
       .then((res) => {
-        if (res?.data) {
-          const mapped = res.data.map((m) => {
+        const payload = res?.data;
+        const rawList = Array.isArray(payload?.data)
+          ? payload.data
+          : Array.isArray(payload)
+            ? payload
+            : Array.isArray(res?.data)
+              ? res.data
+              : Array.isArray(res)
+                ? res
+                : [];
+
+        if (rawList.length > 0) {
+          const mapped = rawList.map((m) => {
             const name = m.fullName || m.name || `${m.firstName || ''} ${m.lastName || ''}`.trim() || 'Agent';
             const initials = name
               .split(' ')
@@ -110,36 +132,77 @@ export default function TeamPage() {
               .filter(Boolean)
               .slice(0, 2)
               .join('')
-              .toUpperCase();
+              .toUpperCase() || 'AG';
 
-            const isVerified = m.verificationStatus === 'VERIFIED';
+            const met = m.elite?.criteriaMet != null ? m.elite.criteriaMet : (m.verified ? 2 : 1);
+            const total = m.elite?.criteriaTotal != null ? m.elite.criteriaTotal : 4;
 
             return {
               id: m.id || m._id,
               name,
               initials,
-              isElite: isVerified,
-              criteriaMet: isVerified ? '4/4' : '1/4',
-              verified: isVerified,
-              liveProperties: 0,
-              avgRating: null,
-              ratingsCount: 0,
-              agentScore: '—',
-              waResponseTime: '< 5 mins',
-              waScore: '—',
-              responseRate: 100,
-              responseScore: '—',
-              listingQuality: 100,
-              qualityScore: '—'
+              photo: m.photo || null,
+              brn: m.brn || '',
+              away: Boolean(m.away),
+              isElite: Boolean(m.elite?.level),
+              criteriaMet: `${met}/${total}`,
+              verified: Boolean(m.verified),
+              liveProperties: m.liveProperties != null ? m.liveProperties : 0,
+              claimedDeals12m: m.claimedDeals12m != null ? m.claimedDeals12m : 0,
+              listingQuality: m.listingQuality != null ? m.listingQuality : null,
+              avgRating: m.averageRating != null ? m.averageRating : null,
+              ratingsCount: m.ratingsCount != null ? m.ratingsCount : 0,
+              agentScore: m.agentScore != null ? m.agentScore : null,
+              waResponseTime: m.whatsappResponseTime || null,
+              responseRate: m.responseRate != null ? m.responseRate : null
             };
           });
           setAgents(mapped);
         } else {
-          setAgents([]);
+          // Fallback to members list
+          return cmpConnectApi.listMembers({ limit: 100 }, authToken).then((mRes) => {
+            if (mRes?.data) {
+              const mapped = mRes.data.map((m) => {
+                const name = m.fullName || m.name || `${m.firstName || ''} ${m.lastName || ''}`.trim() || 'Agent';
+                const initials = name
+                  .split(' ')
+                  .map((n) => n[0])
+                  .filter(Boolean)
+                  .slice(0, 2)
+                  .join('')
+                  .toUpperCase();
+
+                const isVerified = m.verificationStatus === 'VERIFIED';
+
+                return {
+                  id: m.id || m._id,
+                  name,
+                  initials,
+                  photo: m.profile?.photo?.url || null,
+                  brn: m.compliance?.brn || m.brn || '',
+                  away: Boolean(m.awayMode?.active),
+                  isElite: isVerified,
+                  criteriaMet: isVerified ? '2/4' : '1/4',
+                  verified: isVerified,
+                  liveProperties: 0,
+                  claimedDeals12m: 0,
+                  avgRating: null,
+                  ratingsCount: 0,
+                  agentScore: null,
+                  waResponseTime: null,
+                  responseRate: null,
+                  listingQuality: null
+                };
+              });
+              setAgents(mapped);
+            } else {
+              setAgents([]);
+            }
+          });
         }
       })
       .catch((err) => {
-        console.warn('[TeamPage] Failed to fetch members for leaderboard:', err.message);
+        console.warn('[TeamPage] Failed to fetch leaderboard:', err.message);
         setAgents([]);
       })
       .finally(() => {
@@ -150,20 +213,25 @@ export default function TeamPage() {
   const filteredAgents = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
     if (!q) return agents;
-    return agents.filter((a) => a.name.toLowerCase().includes(q));
+    return agents.filter((a) =>
+      (a.name || '').toLowerCase().includes(q) ||
+      (a.brn || '').toLowerCase().includes(q)
+    );
   }, [agents, searchQuery]);
 
   // Mini circular SVG meter helper
   const renderMeter = (percentage) => {
+    const val = Number(percentage);
+    if (isNaN(val) || percentage === null || percentage === undefined) return null;
     const radius = 13;
     const circumference = 2 * Math.PI * radius; // ~81.68
-    const dash = (percentage / 100) * circumference;
-    const color = percentage >= 90 ? 'var(--cmp-success)' : 'var(--cmp-warning)';
+    const dash = (Math.min(100, Math.max(0, val)) / 100) * circumference;
+    const color = val >= 90 ? 'var(--cmp-success)' : val >= 70 ? 'var(--cmp-brand)' : 'var(--cmp-warning)';
 
     return (
       <span
         role="img"
-        aria-label={`${percentage}%`}
+        aria-label={`${val}%`}
         style={{ position: 'relative', display: 'inline-grid', placeItems: 'center', width: '30px', height: '30px' }}
       >
         <svg width="30" height="30" aria-hidden="true" style={{ transform: 'rotate(-90deg)' }}>
@@ -255,48 +323,57 @@ export default function TeamPage() {
                 <th>Agent</th>
                 <th>Verified</th>
                 <th>Live properties</th>
+                <th>Claimed deals</th>
+                <th>Listing quality</th>
                 <th>Average rating</th>
                 <th>Agent score</th>
-                <th>WhatsApp response time</th>
+                <th>WhatsApp response</th>
                 <th>Response rate</th>
-                <th>Listing quality</th>
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan={8} style={{ textAlign: 'center', padding: '40px', color: 'var(--cmp-text-muted)' }}>
+                  <td colSpan={9} style={{ textAlign: 'center', padding: '40px', color: 'var(--cmp-text-muted)' }}>
                     Loading leaderboard...
                   </td>
                 </tr>
               ) : filteredAgents.length === 0 ? (
                 <tr>
-                  <td colSpan={8} style={{ textAlign: 'center', padding: '36px', color: 'var(--cmp-text-muted)' }}>
+                  <td colSpan={9} style={{ textAlign: 'center', padding: '36px', color: 'var(--cmp-text-muted)' }}>
                     No agents found on the leaderboard.
                   </td>
                 </tr>
               ) : (
                 filteredAgents.map((agent) => (
                 <tr key={agent.id}>
-                  <td style={{ minWidth: '200px' }}>
+                  <td style={{ minWidth: '220px' }}>
                     <div className="row" style={{ gap: '10px' }}>
                       <span style={{ position: 'relative', display: 'inline-block', width: '38px', height: '38px', flexShrink: 0 }}>
-                        <span
-                          aria-hidden="true"
-                          style={{
-                            width: '38px',
-                            height: '38px',
-                            borderRadius: '50%',
-                            display: 'grid',
-                            placeItems: 'center',
-                            background: 'var(--cmp-brand-subtle)',
-                            color: 'var(--cmp-brand)',
-                            fontWeight: 700,
-                            fontSize: '13.5px'
-                          }}
-                        >
-                          {agent.initials}
-                        </span>
+                        {agent.photo ? (
+                          <img
+                            src={agent.photo}
+                            alt={agent.name}
+                            style={{ width: '38px', height: '38px', borderRadius: '50%', objectFit: 'cover' }}
+                          />
+                        ) : (
+                          <span
+                            aria-hidden="true"
+                            style={{
+                              width: '38px',
+                              height: '38px',
+                              borderRadius: '50%',
+                              display: 'grid',
+                              placeItems: 'center',
+                              background: 'var(--cmp-brand-subtle)',
+                              color: 'var(--cmp-brand)',
+                              fontWeight: 700,
+                              fontSize: '13.5px'
+                            }}
+                          >
+                            {agent.initials}
+                          </span>
+                        )}
                         {agent.isElite && (
                           <span
                             title="Elite agent"
@@ -321,29 +398,57 @@ export default function TeamPage() {
                         )}
                       </span>
                       <div>
-                        <NavLink
-                          to={`/team/agents/${agent.id}`}
-                          style={{
-                            color: 'var(--cmp-brand)',
-                            fontWeight: 700,
-                            fontSize: '14px',
-                            textDecoration: 'none'
-                          }}
-                        >
-                          {agent.name}
-                        </NavLink>
+                        <div className="row" style={{ gap: '6px', alignItems: 'center' }}>
+                          <NavLink
+                            to={`/team/agents/${agent.id}`}
+                            style={{
+                              color: 'var(--cmp-brand)',
+                              fontWeight: 700,
+                              fontSize: '14px',
+                              textDecoration: 'none'
+                            }}
+                          >
+                            {agent.name}
+                          </NavLink>
+                          {agent.away && (
+                            <span
+                              style={{
+                                fontSize: '10.5px',
+                                fontWeight: 700,
+                                padding: '1px 6px',
+                                borderRadius: '4px',
+                                background: '#fef3c7',
+                                color: '#92400e',
+                                border: '1px solid #fde68a'
+                              }}
+                            >
+                              Away
+                            </span>
+                          )}
+                        </div>
                         <span className="faint" style={{ display: 'block', fontSize: '12px' }}>
-                          Criteria: {agent.criteriaMet}
+                          {agent.brn ? `BRN# ${agent.brn} · ` : ''}Criteria: {agent.criteriaMet}
                         </span>
                       </div>
                     </div>
                   </td>
 
                   <td>
-                    <span className="row" style={{ gap: '4px', color: 'var(--cmp-success)', fontSize: '13px', fontWeight: 600 }}>
-                      <Check size={14} /> Yes
-                    </span>
-                    <span className="faint" style={{ fontSize: '12px' }}>Verified</span>
+                    {agent.verified ? (
+                      <>
+                        <span className="row" style={{ gap: '4px', color: 'var(--cmp-success)', fontSize: '13px', fontWeight: 600 }}>
+                          <Check size={14} /> Yes
+                        </span>
+                        <span className="faint" style={{ fontSize: '12px' }}>Verified</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="row" style={{ gap: '4px', color: 'var(--cmp-text-muted)', fontSize: '13px', fontWeight: 600 }}>
+                          <X size={14} /> No
+                        </span>
+                        <span className="faint" style={{ fontSize: '12px' }}>Unverified</span>
+                      </>
+                    )}
                   </td>
 
                   <td>
@@ -351,7 +456,7 @@ export default function TeamPage() {
                       {agent.liveProperties > 0 ? (
                         <Check size={14} style={{ color: 'var(--cmp-success)' }} />
                       ) : (
-                        <X size={14} style={{ color: 'var(--cmp-danger)' }} />
+                        <X size={14} style={{ color: 'var(--cmp-text-muted)' }} />
                       )}
                       {agent.liveProperties}
                     </span>
@@ -359,13 +464,36 @@ export default function TeamPage() {
                   </td>
 
                   <td>
-                    {agent.avgRating ? (
+                    <span className="row" style={{ gap: '4px', fontSize: '13px', fontWeight: 600 }}>
+                      {agent.claimedDeals12m > 0 ? (
+                        <Check size={14} style={{ color: 'var(--cmp-success)' }} />
+                      ) : (
+                        <span style={{ color: 'var(--cmp-text-muted)' }}>—</span>
+                      )}
+                      {agent.claimedDeals12m}
+                    </span>
+                    <span className="faint" style={{ fontSize: '12px' }}>Closed deals</span>
+                  </td>
+
+                  <td>
+                    {agent.listingQuality != null ? (
+                      <span className="row" style={{ gap: '8px', fontSize: '13px' }}>
+                        {renderMeter(agent.listingQuality)}
+                        <strong>{agent.listingQuality}%</strong>
+                      </span>
+                    ) : (
+                      <span className="muted" style={{ fontSize: '13px' }}>N/A</span>
+                    )}
+                  </td>
+
+                  <td>
+                    {agent.avgRating != null ? (
                       <>
                         <span className="row" style={{ gap: '4px', fontSize: '13px', fontWeight: 600 }}>
                           <Check size={14} style={{ color: 'var(--cmp-success)' }} />
                           {agent.avgRating}
                         </span>
-                        <span className="faint" style={{ fontSize: '12px' }}>{agent.ratingsCount} ratings</span>
+                        <span className="faint" style={{ fontSize: '12px' }}>{agent.ratingsCount || 0} ratings</span>
                       </>
                     ) : (
                       <span className="muted" style={{ fontSize: '13px' }}>N/A</span>
@@ -373,39 +501,32 @@ export default function TeamPage() {
                   </td>
 
                   <td>
-                    <span className="row" style={{ gap: '6px' }}>
+                    {agent.agentScore != null ? (
                       <span style={{ fontSize: '12px', fontWeight: 600, padding: '2px 6px', borderRadius: '4px', background: 'var(--cmp-brand-subtle)', color: 'var(--cmp-brand)', whiteSpace: 'nowrap' }}>
                         {agent.agentScore}
                       </span>
-                    </span>
-                    <span className="faint" style={{ fontSize: '12px' }}>Agent score</span>
+                    ) : (
+                      <span className="muted" style={{ fontSize: '13px' }}>N/A</span>
+                    )}
                   </td>
 
                   <td style={{ whiteSpace: 'nowrap', fontSize: '13px' }}>
-                    {agent.waResponseTime}{' '}
-                    <span style={{ fontSize: '12px', fontWeight: 600, padding: '2px 6px', borderRadius: '4px', background: 'var(--cmp-brand-subtle)', color: 'var(--cmp-brand)', whiteSpace: 'nowrap' }}>
-                      {agent.waScore}
-                    </span>
+                    {agent.waResponseTime ? (
+                      <span>{agent.waResponseTime}</span>
+                    ) : (
+                      <span className="muted">N/A</span>
+                    )}
                   </td>
 
                   <td>
-                    <span className="row" style={{ gap: '8px', fontSize: '13px' }}>
-                      {renderMeter(agent.responseRate)}
-                      <strong>{agent.responseRate}%</strong>
-                      <span style={{ fontSize: '11px', fontWeight: 600, padding: '2px 6px', borderRadius: '4px', background: 'var(--cmp-brand-subtle)', color: 'var(--cmp-brand)' }}>
-                        {agent.responseScore}
+                    {agent.responseRate != null ? (
+                      <span className="row" style={{ gap: '8px', fontSize: '13px' }}>
+                        {renderMeter(agent.responseRate)}
+                        <strong>{agent.responseRate}%</strong>
                       </span>
-                    </span>
-                  </td>
-
-                  <td>
-                    <span className="row" style={{ gap: '8px', fontSize: '13px' }}>
-                      {renderMeter(agent.listingQuality)}
-                      <strong>{agent.listingQuality}%</strong>
-                      <span style={{ fontSize: '11px', fontWeight: 600, padding: '2px 6px', borderRadius: '4px', background: 'var(--cmp-brand-subtle)', color: 'var(--cmp-brand)' }}>
-                        {agent.qualityScore}
-                      </span>
-                    </span>
+                    ) : (
+                      <span className="muted" style={{ fontSize: '13px' }}>N/A</span>
+                    )}
                   </td>
                 </tr>
               ))

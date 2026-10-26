@@ -1,6 +1,5 @@
 import React from 'react';
-import { Routes, Route, Navigate, Outlet, useLocation, NavLink } from 'react-router-dom';
-import { ShieldAlert } from 'lucide-react';
+import { Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 
 import DashboardPage from '../pages/home/DashboardPage';
@@ -84,47 +83,22 @@ function ProtectedLayout() {
   return <Outlet />;
 }
 
-function PermissionGuard({ required, label = 'this section' }) {
-  const { can, isMockData } = useApp();
+function PermissionGuard({ required, requiredAny, redirectTo = '/' }) {
+  const { can, hasAny, isMockData } = useApp();
 
   if (isMockData) {
     return <Outlet />;
   }
 
-  const hasAccess = Array.isArray(required) ? can(...required) : can(required);
+  let hasAccess = true;
+  if (requiredAny) {
+    hasAccess = Array.isArray(requiredAny) ? hasAny(...requiredAny) : can(requiredAny);
+  } else if (required) {
+    hasAccess = Array.isArray(required) ? can(...required) : can(required);
+  }
 
   if (!hasAccess) {
-    return (
-      <div style={{ maxWidth: '640px', margin: '40px auto', padding: '32px 24px', textAlign: 'center' }}>
-        <div className="card" style={{ padding: '36px 28px', display: 'grid', placeItems: 'center', gap: '14px' }}>
-          <div
-            style={{
-              width: '56px',
-              height: '56px',
-              borderRadius: '50%',
-              background: 'var(--cmp-danger-subtle, rgba(220, 38, 38, 0.1))',
-              color: 'var(--cmp-danger)',
-              display: 'grid',
-              placeItems: 'center'
-            }}
-          >
-            <ShieldAlert size={28} />
-          </div>
-          <h2 style={{ margin: 0, fontSize: '20px', color: 'var(--cmp-text)' }}>Access Restricted</h2>
-          <p className="muted" style={{ margin: 0, fontSize: '14px', maxWidth: '420px', lineHeight: 1.5 }}>
-            You do not have permission to access {label}. If you require access, please contact your company administrator.
-          </p>
-          <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
-            <NavLink to="/" className="btn btn-primary btn-sm">
-              Back to Dashboard
-            </NavLink>
-            <NavLink to="/properties" className="btn btn-outline btn-sm">
-              View Properties
-            </NavLink>
-          </div>
-        </div>
-      </div>
-    );
+    return <Navigate to={redirectTo} replace />;
   }
 
   return <Outlet />;
@@ -180,66 +154,78 @@ export default function AppRoutes() {
         <Route path="/activity" element={<ActivityLogPage />} />
 
         {/* Properties Hub */}
-        <Route path="/properties" element={<PortfolioPage />} />
-        <Route element={<PermissionGuard required="listings.create" label="Add New Property" />}>
-          <Route path="/properties/new" element={<AddPropertyPage />} />
-          <Route path="/properties/add" element={<AddPropertyPage />} />
+        <Route element={<PermissionGuard requiredAny={['listings.view', 'listings.create']} redirectTo="/" />}>
+          <Route path="/properties" element={<PortfolioPage />} />
+          <Route element={<PermissionGuard required="listings.create" redirectTo="/properties" />}>
+            <Route path="/properties/new" element={<AddPropertyPage />} />
+            <Route path="/properties/add" element={<AddPropertyPage />} />
+          </Route>
+          <Route path="/properties/:id/edit" element={<EditPropertyPage />} />
+          <Route path="/properties/edit" element={<EditPropertyPage />} />
+          <Route path="/properties/compliance" element={<CompliancePage />} />
+          <Route element={<PermissionGuard required="company.watermark" redirectTo="/properties" />}>
+            <Route path="/properties/brand-kit" element={<BrandKitPage />} />
+          </Route>
+          <Route path="/properties/archive" element={<ArchivePage />} />
         </Route>
-        <Route path="/properties/:id/edit" element={<EditPropertyPage />} />
-        <Route path="/properties/edit" element={<EditPropertyPage />} />
-        <Route path="/properties/compliance" element={<CompliancePage />} />
-        <Route element={<PermissionGuard required="company.watermark" label="Company Brand Kit" />}>
-          <Route path="/properties/brand-kit" element={<BrandKitPage />} />
-        </Route>
-        <Route path="/properties/archive" element={<ArchivePage />} />
 
         {/* Clients Hub */}
-        <Route path="/clients" element={<PipelinePage />} />
-        <Route path="/clients/pipeline" element={<PipelinePage />} />
-        <Route path="/clients/enquiries" element={<EnquiriesPage />} />
-        <Route path="/clients/contacts" element={<ContactsPage />} />
-        <Route path="/clients/messages" element={<MessagesPage />} />
+        <Route element={<PermissionGuard required="leads.view" redirectTo="/" />}>
+          <Route path="/clients" element={<PipelinePage />} />
+          <Route path="/clients/pipeline" element={<PipelinePage />} />
+          <Route path="/clients/enquiries" element={<EnquiriesPage />} />
+          <Route path="/clients/contacts" element={<ContactsPage />} />
+          <Route path="/clients/messages" element={<MessagesPage />} />
+        </Route>
 
         {/* Transactions Hub */}
-        <Route path="/transactions" element={<TransactionsPage />} />
+        <Route element={<PermissionGuard required="transactions.view" redirectTo="/" />}>
+          <Route path="/transactions" element={<TransactionsPage />} />
+        </Route>
 
         {/* Growth Hub */}
-        <Route element={<PermissionGuard required="insights.listings_view" label="Performance & Market Standing" />}>
+        <Route element={<PermissionGuard requiredAny={['insights.listings_view', 'insights.leads_view', 'listings.spotlight']} redirectTo="/" />}>
           <Route path="/growth" element={<PerformancePage />} />
           <Route path="/growth/performance" element={<PerformancePage />} />
           <Route path="/insights" element={<PerformancePage />} />
           <Route path="/growth/market" element={<MarketStandingPage />} />
           <Route path="/market" element={<MarketStandingPage />} />
-        </Route>
-        <Route element={<PermissionGuard required="insights.leads_view" label="Enquiry Insights" />}>
           <Route path="/growth/insights" element={<LeadInsightsPage />} />
           <Route path="/growth/enquiries" element={<LeadInsightsPage />} />
-        </Route>
-        <Route path="/growth/smart-boost" element={<SmartBoostPage />} />
-        <Route path="/growth/spotlight" element={<CommunitySpotlightPage />} />
-        <Route element={<PermissionGuard required="listings.spotlight" label="Spotlighted Properties" />}>
-          <Route path="/growth/spotlighted" element={<SpotlightedPage />} />
+          <Route path="/growth/smart-boost" element={<SmartBoostPage />} />
+          <Route path="/growth/spotlight" element={<CommunitySpotlightPage />} />
+          <Route element={<PermissionGuard required="listings.spotlight" redirectTo="/growth" />}>
+            <Route path="/growth/spotlighted" element={<SpotlightedPage />} />
+          </Route>
         </Route>
 
         {/* Wallet Hub */}
-        <Route element={<PermissionGuard required="contracts.view" label="Wallet & Invoices" />}>
+        <Route element={<PermissionGuard requiredAny={['contracts.view', 'credits.calculator', 'credits.history_view']} redirectTo="/" />}>
           <Route path="/wallet" element={<WalletPage />} />
-          <Route path="/wallet/activity" element={<CreditActivityPage />} />
-          <Route path="/wallet/refunds" element={<RefundsPage />} />
-          <Route path="/wallet/contract" element={<ContractPage />} />
-          <Route path="/wallet/invoices" element={<InvoicesPage />} />
+          <Route element={<PermissionGuard requiredAny={['credits.history_view', 'contracts.view']} redirectTo="/wallet" />}>
+            <Route path="/wallet/activity" element={<CreditActivityPage />} />
+          </Route>
+          <Route element={<PermissionGuard requiredAny={['credits.return_request', 'contracts.view']} redirectTo="/wallet" />}>
+            <Route path="/wallet/refunds" element={<RefundsPage />} />
+          </Route>
+          <Route element={<PermissionGuard required="contracts.view" redirectTo="/wallet" />}>
+            <Route path="/wallet/contract" element={<ContractPage />} />
+            <Route path="/wallet/invoices" element={<InvoicesPage />} />
+          </Route>
         </Route>
 
         {/* Team Hub */}
-        <Route element={<PermissionGuard required="team.view" label="Team Directory" />}>
+        <Route element={<PermissionGuard requiredAny={['team.view', 'insights.agents_view', 'roles.view']} redirectTo="/" />}>
           <Route path="/team" element={<TeamPage />} />
-          <Route path="/team/members" element={<MembersPage />} />
-          <Route path="/team/members/:id" element={<MemberProfilePage />} />
-          <Route path="/team/agents/:id" element={<AgentSummaryPage />} />
-          <Route path="/team/summary" element={<AgentSummaryPage />} />
-        </Route>
-        <Route element={<PermissionGuard required="roles.view" label="Roles & Access" />}>
-          <Route path="/team/roles" element={<RolesPage />} />
+          <Route element={<PermissionGuard required="team.view" redirectTo="/team" />}>
+            <Route path="/team/members" element={<MembersPage />} />
+            <Route path="/team/members/:id" element={<MemberProfilePage />} />
+            <Route path="/team/agents/:id" element={<AgentSummaryPage />} />
+            <Route path="/team/summary" element={<AgentSummaryPage />} />
+          </Route>
+          <Route element={<PermissionGuard required="roles.view" redirectTo="/team" />}>
+            <Route path="/team/roles" element={<RolesPage />} />
+          </Route>
         </Route>
 
         {/* Account Hub */}

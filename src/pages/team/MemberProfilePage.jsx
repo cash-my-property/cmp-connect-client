@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { NavLink, useParams, useNavigate } from 'react-router-dom';
 import {
   Save,
@@ -12,7 +12,8 @@ import {
   Building,
   Phone,
   Mail,
-  UserCheck
+  UserCheck,
+  Loader2
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { cmpConnectApi } from '../../services/cmpConnectApi';
@@ -87,6 +88,50 @@ export default function MemberProfilePage() {
   const [isPublicCollapsed, setIsPublicCollapsed] = useState(false);
   const [usePrivateInfo, setUsePrivateInfo] = useState(true);
   const [profileScore, setProfileScore] = useState(0);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const fileInputRef = useRef(null);
+
+  const populateMember = (found) => {
+    const fullName = found.fullName || found.name || `${found.firstName || ''} ${found.lastName || ''}`.trim() || '';
+    const parts = fullName.split(' ');
+    const fName = found.firstName || parts[0] || '';
+    const lName = found.lastName || parts.slice(1).join(' ') || '';
+    const mobile = found.mobile || found.phone || '';
+    const roleName = found.role?.name || (typeof found.role === 'string' ? found.role : 'Member');
+    const brnVal = found.compliance?.brn || found.brn || '';
+    const brnExp = found.compliance?.brnExpiry ? found.compliance.brnExpiry.split('T')[0] : '';
+    const prof = found.profile || {};
+
+    setFormData((prev) => ({
+      ...prev,
+      firstName: fName,
+      lastName: lName,
+      email: found.email || '',
+      phone: mobile.replace(/^\+971/, '').trim(),
+      role: roleName,
+      displayedName: prof.publicName || fullName,
+      publicEmail: prof.publicEmail || found.email || '',
+      publicNumber: (prof.publicPhone || mobile).replace(/^\+971/, '').trim(),
+      whatsapp: (prof.whatsapp || mobile).replace(/^\+971/, '').trim(),
+      brn: brnVal,
+      brnExpiry: brnExp,
+      bln: prof.bln || '',
+      otherLicence: prof.otherLicence || '',
+      otherLicenceExpiry: prof.otherLicenceExpiry ? prof.otherLicenceExpiry.split('T')[0] : '',
+      experienceSince: prof.experienceSince ? String(prof.experienceSince) : '',
+      languages: Array.isArray(prof.languages) ? prof.languages.join(', ') : (prof.languages || 'English, Arabic'),
+      nationality: prof.nationality || 'Emirati',
+      position: prof.position || 'Agent',
+      linkedin: prof.linkedin || '',
+      description: prof.description || '',
+      descriptionAr: prof.descriptionAr || '',
+      photo: prof.photo?.url || found.photo || ''
+    }));
+    setUsePrivateInfo(prof.useAccountInfo !== undefined ? prof.useAccountInfo : true);
+    setRawMember(found);
+    setProfileScore(found.verificationStatus === 'VERIFIED' ? 100 : 50);
+  };
 
   useEffect(() => {
     if (!authToken) {
@@ -94,51 +139,143 @@ export default function MemberProfilePage() {
       return;
     }
 
-    cmpConnectApi.listMembers({ limit: 100 }, authToken)
+    const targetMemberId = id || account?.id || account?._id;
+    if (!targetMemberId) {
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+    cmpConnectApi.getMember(targetMemberId, authToken)
       .then((res) => {
         if (res?.data) {
-          const found = res.data.find((m) => (m.id === id || m._id === id)) || (account?.id === id ? account : null);
-          if (found) {
-            const fullName = found.fullName || found.name || `${found.firstName || ''} ${found.lastName || ''}`.trim() || '';
-            const parts = fullName.split(' ');
-            const fName = found.firstName || parts[0] || '';
-            const lName = found.lastName || parts.slice(1).join(' ') || '';
-            const mobile = found.mobile || found.phone || '';
-            const roleName = found.role?.name || (typeof found.role === 'string' ? found.role : 'Member');
-            const brnVal = found.compliance?.brn || '';
-            const brnExp = found.compliance?.brnExpiry ? found.compliance.brnExpiry.split('T')[0] : '';
-
-            setFormData((prev) => ({
-              ...prev,
-              firstName: fName,
-              lastName: lName,
-              email: found.email || '',
-              phone: mobile.replace(/^\+971/, '').trim(),
-              role: roleName,
-              displayedName: fullName,
-              publicEmail: found.email || '',
-              publicNumber: mobile.replace(/^\+971/, '').trim(),
-              whatsapp: mobile.replace(/^\+971/, '').trim(),
-              brn: brnVal,
-              brnExpiry: brnExp
-            }));
-            setRawMember(found);
-            setProfileScore(found.verificationStatus === 'VERIFIED' ? 100 : 50);
-          }
+          populateMember(res.data);
+        } else {
+          fallbackList();
         }
       })
       .catch((err) => {
-        console.warn('[MemberProfilePage] Failed to fetch member:', err.message);
+        console.warn('[MemberProfilePage] getMember failed, trying listMembers:', err.message);
+        fallbackList();
       })
       .finally(() => {
         setIsLoading(false);
       });
+
+    function fallbackList() {
+      cmpConnectApi.listMembers({ limit: 100 }, authToken)
+        .then((res) => {
+          if (res?.data) {
+            const found = res.data.find((m) => (m.id === targetMemberId || m._id === targetMemberId)) || (account?.id === targetMemberId ? account : null);
+            if (found) populateMember(found);
+          }
+        })
+        .catch(() => {});
+    }
   }, [id, authToken, account]);
 
-  const handleSave = (e) => {
-    e.preventDefault();
-    alert('Member profile updated successfully.');
-    navigate('/team/members');
+  const handleSaveAccount = async (e) => {
+    e?.preventDefault();
+    const targetMemberId = id || account?.id || account?._id;
+    if (!targetMemberId) return;
+
+    setIsSaving(true);
+    try {
+      const cleanMobile = formData.phone
+        ? `${formData.phoneCode || '+971'}${formData.phone.replace(/^0+/, '').replace(/\s+/g, '')}`
+        : undefined;
+
+      await cmpConnectApi.updateMemberAccount(
+        targetMemberId,
+        {
+          firstName: formData.firstName.trim(),
+          lastName: formData.lastName.trim() || undefined,
+          mobile: cleanMobile,
+          email: formData.email.trim().toLowerCase()
+        },
+        authToken
+      );
+      alert('Account details updated successfully.');
+    } catch (err) {
+      alert(err.message || 'Failed to update account details.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSaveProfile = async (e) => {
+    e?.preventDefault();
+    const targetMemberId = id || account?.id || account?._id;
+    if (!targetMemberId) return;
+
+    setIsSaving(true);
+    try {
+      const profilePayload = {
+        useAccountInfo: Boolean(usePrivateInfo),
+        publicName: formData.displayedName.trim() || undefined,
+        publicEmail: formData.publicEmail.trim() || undefined,
+        publicPhone: formData.publicNumber ? `+971${formData.publicNumber.replace(/\s+/g, '')}` : undefined,
+        whatsapp: formData.whatsapp ? `+971${formData.whatsapp.replace(/\s+/g, '')}` : undefined,
+        bln: formData.bln.trim() || undefined,
+        otherLicence: formData.otherLicence.trim() || undefined,
+        otherLicenceExpiry: formData.otherLicenceExpiry || undefined,
+        experienceSince: formData.experienceSince ? Number(formData.experienceSince) : undefined,
+        languages: formData.languages ? formData.languages.split(',').map((l) => l.trim()).filter(Boolean) : [],
+        nationality: formData.nationality.trim() || undefined,
+        position: formData.position.trim() || undefined,
+        linkedin: formData.linkedin.trim() || undefined,
+        description: formData.description.trim() || undefined,
+        descriptionAr: formData.descriptionAr.trim() || undefined
+      };
+
+      await cmpConnectApi.updateMemberProfile(targetMemberId, profilePayload, authToken);
+      alert('Public profile updated successfully.');
+    } catch (err) {
+      alert(err.message || 'Failed to update public profile.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSaveAll = async (e) => {
+    e?.preventDefault();
+    setIsSaving(true);
+    try {
+      await handleSaveAccount();
+      await handleSaveProfile();
+      navigate('/team/members');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handlePhotoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Profile photo size must be under 5 MB.');
+      return;
+    }
+
+    const targetMemberId = id || account?.id || account?._id;
+    if (!targetMemberId) return;
+
+    setIsUploadingPhoto(true);
+    try {
+      const sigRes = await cmpConnectApi.getMemberPhotoSignature(targetMemberId, authToken);
+      const sig = sigRes?.data;
+      if (!sig) throw new Error('Could not obtain signed upload signature for photo.');
+
+      const uploaded = await cmpConnectApi.uploadMemberPhoto(file, sig);
+      await cmpConnectApi.updateMemberProfile(targetMemberId, { photo: uploaded }, authToken);
+      setFormData((prev) => ({ ...prev, photo: uploaded.url }));
+      alert('Profile photo updated successfully.');
+    } catch (err) {
+      alert(err.message || 'Failed to upload profile photo.');
+    } finally {
+      setIsUploadingPhoto(false);
+    }
   };
 
   const memberInitials = (formData.displayedName || formData.firstName || 'U')
@@ -178,8 +315,13 @@ export default function MemberProfilePage() {
         </div>
 
         <div className="row" style={{ gap: '8px' }}>
-          <button type="button" className="btn btn-primary btn-sm" onClick={handleSave}>
-            <Save size={14} />
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={handleSaveAll}
+            disabled={isSaving}
+          >
+            {isSaving ? <Loader2 size={14} className="spin" /> : <Save size={14} />}
             <span>Save all changes</span>
           </button>
         </div>
@@ -351,9 +493,11 @@ export default function MemberProfilePage() {
           type="button"
           className="btn btn-outline btn-sm"
           style={{ marginTop: '16px' }}
-          onClick={handleSave}
+          onClick={handleSaveAccount}
+          disabled={isSaving}
         >
-          Save account details
+          {isSaving ? <Loader2 size={13} className="spin" /> : null}
+          <span>Save account details</span>
         </button>
       </section>
 
@@ -448,22 +592,36 @@ export default function MemberProfilePage() {
                   borderRadius: '50%',
                   display: 'grid',
                   placeItems: 'center',
-                  background: 'var(--cmp-brand-subtle)',
+                  background: formData.photo ? `url(${formData.photo}) center/cover no-repeat` : 'var(--cmp-brand-subtle)',
                   color: 'var(--cmp-brand)',
                   fontWeight: 700,
-                  fontSize: '26px'
+                  fontSize: '26px',
+                  overflow: 'hidden'
                 }}
               >
-                {memberInitials}
+                {!formData.photo && memberInitials}
               </div>
               <div>
                 <strong>{formData.displayedName}</strong>
                 <p className="muted" style={{ margin: '2px 0 8px', fontSize: '13px' }}>
                   {formData.publicEmail}
                 </p>
-                <button type="button" className="btn btn-outline btn-sm" style={{ gap: '6px' }}>
-                  <Upload size={13} />
-                  <span>Upload profile photo</span>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handlePhotoUpload}
+                  accept="image/jpeg,image/png,image/webp"
+                  style={{ display: 'none' }}
+                />
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  style={{ gap: '6px' }}
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploadingPhoto}
+                >
+                  {isUploadingPhoto ? <Loader2 size={13} className="spin" /> : <Upload size={13} />}
+                  <span>{isUploadingPhoto ? 'Uploading photo...' : 'Upload profile photo'}</span>
                 </button>
                 <p className="faint" style={{ margin: '6px 0 0', fontSize: '12px' }}>
                   Visible on all your active listings. Recommended size 520 × 400 px.
@@ -631,9 +789,11 @@ export default function MemberProfilePage() {
               type="button"
               className="btn btn-primary btn-sm"
               style={{ marginTop: '20px' }}
-              onClick={handleSave}
+              onClick={handleSaveProfile}
+              disabled={isSaving}
             >
-              Save public profile
+              {isSaving ? <Loader2 size={14} className="spin" /> : null}
+              <span>Save public profile</span>
             </button>
           </div>
         )}

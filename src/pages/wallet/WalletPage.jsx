@@ -1,10 +1,21 @@
 import React, { useState, useMemo } from 'react';
+import { Navigate } from 'react-router-dom';
 import { initialWalletPlan } from '../../data/mockData';
 import { useApp } from '../../context/AppContext';
 import { Check, Mail, Send, X, AlertTriangle } from 'lucide-react';
 
 export default function WalletPage() {
-  const { agency, isLiveData } = useApp();
+  const { agency, isLiveData, isMockData, account, can, hasAny } = useApp();
+
+  if (!isMockData && account && !hasAny('contracts.view', 'credits.calculator')) {
+    if (can('credits.history_view')) {
+      return <Navigate to="/wallet/activity" replace />;
+    }
+    if (can('credits.return_request')) {
+      return <Navigate to="/wallet/refunds" replace />;
+    }
+    return <Navigate to="/" replace />;
+  }
 
   const liveWalletPlan = useMemo(() => ({
     planName: "Standard Account",

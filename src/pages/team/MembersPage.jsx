@@ -1150,7 +1150,24 @@ export default function MembersPage() {
         <table className="data">
           <thead>
             <tr>
-              <th>Users ({isLoading ? '…' : pagination.total || members.length})</th>
+              <th style={{ minWidth: '240px' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                  <span>Users</span>
+                  <span
+                    style={{
+                      fontSize: '11.5px',
+                      fontWeight: 600,
+                      padding: '1px 7px',
+                      borderRadius: '10px',
+                      background: 'var(--cmp-surface)',
+                      border: '1px solid var(--cmp-border)',
+                      color: 'var(--cmp-text-muted)'
+                    }}
+                  >
+                    {isLoading ? '…' : pagination.total || members.length}
+                  </span>
+                </span>
+              </th>
               <th>Role</th>
               <th>Verification</th>
               <th>Compliance</th>

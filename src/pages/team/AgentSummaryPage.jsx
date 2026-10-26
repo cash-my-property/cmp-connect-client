@@ -33,6 +33,7 @@ export default function AgentSummaryPage() {
   const { authToken, account, isLiveData, isMockData } = useApp();
   const [activeTab, setActiveTab] = useState('Overview');
   const [isAwayMode, setIsAwayMode] = useState(false);
+  const [isTogglingAway, setIsTogglingAway] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   // Agent profile state
@@ -123,24 +124,70 @@ export default function AgentSummaryPage() {
       return;
     }
 
-    // 2. Live Data Mode: fetch real member profile, real listings, and real transactions
+    // 2. Live Data Mode: fetch real member summary
     setIsLoading(true);
     const targetId = id || account?.id || account?._id;
 
-    Promise.allSettled([
-      cmpConnectApi.listMembers({ limit: 100 }, authToken),
-      cmpConnectApi.listListings({ agentId: targetId, limit: 100 }, authToken),
-      cmpConnectApi.listTransactions({ agentId: targetId, limit: 100 }, authToken)
-    ]).then(([membersRes, listingsRes, txRes]) => {
-      let member = null;
-      if (membersRes.status === 'fulfilled' && Array.isArray(membersRes.value?.data)) {
-        member = membersRes.value.data.find(
-          (m) => m.id === targetId || m._id === targetId || String(m.id) === String(targetId) || String(m._id) === String(targetId)
-        );
-      }
-      if (!member && account && (account.id === targetId || account._id === targetId || !id)) {
-        member = account;
-      }
+    cmpConnectApi.getMemberSummary(targetId, authToken)
+      .then((res) => {
+        const sumData = res?.data;
+        if (sumData && sumData.member) {
+          const m = sumData.member;
+          const name = m.fullName || m.name || 'Agent';
+          const initials = name
+            .split(' ')
+            .map((n) => n[0])
+            .filter(Boolean)
+            .slice(0, 2)
+            .join('')
+            .toUpperCase() || 'AG';
+
+          setIsAwayMode(Boolean(sumData.awayMode?.active));
+
+          setAgent({
+            id: m.id || targetId || '',
+            name,
+            initials,
+            email: m.email || '—',
+            phone: m.mobile || '—',
+            role: m.role?.name || (typeof m.role === 'string' ? m.role : 'Agent'),
+            brn: m.brn || '',
+            verificationStatus: m.verificationStatus || (m.brn ? 'VERIFIED' : 'UNVERIFIED'),
+            isVerified: Boolean(m.verified || m.verificationStatus === 'VERIFIED'),
+            tier: sumData.elite?.level || 'Rising',
+            score: sumData.agentScore != null ? sumData.agentScore : null,
+            rating: sumData.feedback?.averageRating != null ? sumData.feedback.averageRating : null,
+            reviewsCount: sumData.feedback?.ratingsCount || 0,
+            unattended: sumData.feedback?.unattendedEnquiries || 0,
+            responseRate: sumData.responseRate?.overall != null ? sumData.responseRate.overall : null,
+            liveListings: sumData.liveProperties?.total || 0,
+            claimedDeals: sumData.transactions12m?.claimed || 0,
+            unclaimedDeals: sumData.transactions12m?.notClaimed || 0,
+            totalDeals: sumData.transactions12m?.total || 0,
+            closedSalesVolume: 0,
+            avgResponseTime: null,
+            listingQuality: sumData.liveProperties?.listingQuality || null
+          });
+          return;
+        }
+        throw new Error('No summary payload');
+      })
+      .catch(() => {
+        // Fallback to individual endpoints if summary endpoint is not populated yet
+        Promise.allSettled([
+          cmpConnectApi.listMembers({ limit: 100 }, authToken),
+          cmpConnectApi.listListings({ agentId: targetId, limit: 100 }, authToken),
+          cmpConnectApi.listTransactions({ agentId: targetId, limit: 100 }, authToken)
+        ]).then(([membersRes, listingsRes, txRes]) => {
+          let member = null;
+          if (membersRes.status === 'fulfilled' && Array.isArray(membersRes.value?.data)) {
+            member = membersRes.value.data.find(
+              (m) => m.id === targetId || m._id === targetId || String(m.id) === String(targetId) || String(m._id) === String(targetId)
+            );
+          }
+          if (!member && account && (account.id === targetId || account._id === targetId || !id)) {
+            member = account;
+          }
 
       const name = member?.fullName || member?.name || `${member?.firstName || ''} ${member?.lastName || ''}`.trim() || 'Agent';
       const initials = name
@@ -235,11 +282,12 @@ export default function AgentSummaryPage() {
         leadsHandled: 0,
         reviews: []
       });
-    }).catch((err) => {
-      console.warn('[AgentSummaryPage] Error fetching agent summary:', err);
-    }).finally(() => {
-      setIsLoading(false);
     });
+  }).catch((err) => {
+    console.warn('[AgentSummaryPage] Error fetching agent summary:', err);
+  }).finally(() => {
+    setIsLoading(false);
+  });
   }, [id, authToken, account, isLiveData, isMockData]);
 
   // Compute transactions donut stroke lengths
@@ -296,7 +344,23 @@ export default function AgentSummaryPage() {
           <button
             type="button"
             className={`btn btn-sm ${isAwayMode ? 'btn-primary' : 'btn-outline'}`}
-            onClick={() => setIsAwayMode(!isAwayMode)}
+            disabled={isTogglingAway}
+            onClick={async () => {
+              const targetId = id || account?.id || account?._id;
+              if (!targetId) return;
+              const nextAway = !isAwayMode;
+              setIsTogglingAway(true);
+              try {
+                if (authToken) {
+                  await cmpConnectApi.setMemberAway(targetId, nextAway, authToken);
+                }
+                setIsAwayMode(nextAway);
+              } catch (err) {
+                alert(err.message || 'Failed to toggle away mode.');
+              } finally {
+                setIsTogglingAway(false);
+              }
+            }}
             style={{ gap: '6px' }}
           >
             <span>Away mode: {isAwayMode ? 'Active' : 'Off'}</span>

@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 
 export default function AppRail() {
-  const { platform } = useApp();
+  const { platform, account, can, hasAny } = useApp();
   const location = useLocation();
   const isRto = platform === 'auctions' || location.pathname.startsWith('/rto');
 
@@ -44,30 +44,48 @@ export default function AppRail() {
               <Home size={19} />
               <span>Home</span>
             </NavLink>
-            <NavLink to="/properties" className={({ isActive }) => `rail-link ${isActive ? 'active' : ''}`} title="Properties">
-              <Building size={19} />
-              <span>Properties</span>
-            </NavLink>
-            <NavLink to="/clients" className={({ isActive }) => `rail-link ${isActive ? 'active' : ''}`} title="Clients">
-              <Users size={19} />
-              <span>Clients</span>
-            </NavLink>
-            <NavLink to="/transactions" className={({ isActive }) => `rail-link ${isActive ? 'active' : ''}`} title="Transactions">
-              <Briefcase size={19} />
-              <span>Transactions</span>
-            </NavLink>
-            <NavLink to="/growth" className={({ isActive }) => `rail-link ${isActive ? 'active' : ''}`} title="Growth">
-              <TrendingUp size={19} />
-              <span>Growth</span>
-            </NavLink>
-            <NavLink to="/wallet" className={({ isActive }) => `rail-link ${isActive ? 'active' : ''}`} title="Wallet">
-              <CreditCard size={19} />
-              <span>Wallet</span>
-            </NavLink>
-            <NavLink to="/team" className={({ isActive }) => `rail-link ${isActive ? 'active' : ''}`} title="Team">
-              <UserCheck size={19} />
-              <span>Team</span>
-            </NavLink>
+
+            {(!account || hasAny('listings.view', 'listings.create')) && (
+              <NavLink to="/properties" className={({ isActive }) => `rail-link ${isActive ? 'active' : ''}`} title="Properties">
+                <Building size={19} />
+                <span>Properties</span>
+              </NavLink>
+            )}
+
+            {(!account || can('leads.view')) && (
+              <NavLink to="/clients" className={({ isActive }) => `rail-link ${isActive ? 'active' : ''}`} title="Clients">
+                <Users size={19} />
+                <span>Clients</span>
+              </NavLink>
+            )}
+
+            {(!account || can('transactions.view')) && (
+              <NavLink to="/transactions" className={({ isActive }) => `rail-link ${isActive ? 'active' : ''}`} title="Transactions">
+                <Briefcase size={19} />
+                <span>Transactions</span>
+              </NavLink>
+            )}
+
+            {(!account || hasAny('insights.listings_view', 'insights.leads_view', 'listings.spotlight')) && (
+              <NavLink to="/growth" className={({ isActive }) => `rail-link ${isActive ? 'active' : ''}`} title="Growth">
+                <TrendingUp size={19} />
+                <span>Growth</span>
+              </NavLink>
+            )}
+
+            {(!account || hasAny('contracts.view', 'credits.calculator', 'credits.history_view')) && (
+              <NavLink to="/wallet" className={({ isActive }) => `rail-link ${isActive ? 'active' : ''}`} title="Wallet">
+                <CreditCard size={19} />
+                <span>Wallet</span>
+              </NavLink>
+            )}
+
+            {(!account || hasAny('team.view', 'insights.agents_view', 'roles.view')) && (
+              <NavLink to="/team" className={({ isActive }) => `rail-link ${isActive ? 'active' : ''}`} title="Team">
+                <UserCheck size={19} />
+                <span>Team</span>
+              </NavLink>
+            )}
           </>
         ) : (
           <>
@@ -75,22 +93,30 @@ export default function AppRail() {
               <Radio size={19} />
               <span>Live desk</span>
             </NavLink>
-            <NavLink to="/rto/entries" className={({ isActive }) => `rail-link ${isActive ? 'active' : ''}`} title="Entries">
-              <Building size={19} />
-              <span>Entries</span>
-            </NavLink>
-            <NavLink to="/rto/bidders" className={({ isActive }) => `rail-link ${isActive ? 'active' : ''}`} title="Bidders">
-              <Users size={19} />
-              <span>Bidders</span>
-            </NavLink>
-            <NavLink to="/rto/cheques" className={({ isActive }) => `rail-link ${isActive ? 'active' : ''}`} title="Cheques">
-              <DollarSign size={19} />
-              <span>Cheques</span>
-            </NavLink>
-            <NavLink to="/rto/team" className={({ isActive }) => `rail-link ${isActive ? 'active' : ''}`} title="Team">
-              <UserCheck size={19} />
-              <span>Team</span>
-            </NavLink>
+            {(!account || can('listings.view')) && (
+              <NavLink to="/rto/entries" className={({ isActive }) => `rail-link ${isActive ? 'active' : ''}`} title="Entries">
+                <Building size={19} />
+                <span>Entries</span>
+              </NavLink>
+            )}
+            {(!account || can('leads.view')) && (
+              <NavLink to="/rto/bidders" className={({ isActive }) => `rail-link ${isActive ? 'active' : ''}`} title="Bidders">
+                <Users size={19} />
+                <span>Bidders</span>
+              </NavLink>
+            )}
+            {(!account || hasAny('contracts.view', 'transactions.view')) && (
+              <NavLink to="/rto/cheques" className={({ isActive }) => `rail-link ${isActive ? 'active' : ''}`} title="Cheques">
+                <DollarSign size={19} />
+                <span>Cheques</span>
+              </NavLink>
+            )}
+            {(!account || hasAny('team.view', 'insights.agents_view', 'roles.view')) && (
+              <NavLink to="/rto/team" className={({ isActive }) => `rail-link ${isActive ? 'active' : ''}`} title="Team">
+                <UserCheck size={19} />
+                <span>Team</span>
+              </NavLink>
+            )}
           </>
         )}
       </div>

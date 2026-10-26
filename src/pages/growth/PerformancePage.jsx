@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, Navigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import {
   Chip,
@@ -109,7 +109,21 @@ function getSeriesValue(point, kpiKey) {
 }
 
 export default function PerformancePage() {
-  const { isLiveData, authToken } = useApp();
+  const { isLiveData, isMockData, authToken, account, can } = useApp();
+
+  if (!isMockData && account && !can('insights.listings_view')) {
+    if (can('insights.leads_view')) {
+      return <Navigate to="/growth/insights" replace />;
+    }
+    if (can('listings.view')) {
+      return <Navigate to="/growth/smart-boost" replace />;
+    }
+    if (can('listings.spotlight')) {
+      return <Navigate to="/growth/spotlight" replace />;
+    }
+    return <Navigate to="/" replace />;
+  }
+
   const [showSecurityBanner, setShowSecurityBanner] = useState(true);
   const [selectedKpi, setSelectedKpi] = useState('published');
   const [dateRangeChip, setDateRangeChip] = useState('Last 30 days');

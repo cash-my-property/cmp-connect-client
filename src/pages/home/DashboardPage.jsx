@@ -32,7 +32,8 @@ export default function DashboardPage() {
     toggleFollowUp,
     addFollowUp,
     needsYou: mockNeedsYou,
-    account
+    account,
+    can
   } = useApp();
 
   const [newFollowUpText, setNewFollowUpText] = useState('');
@@ -216,14 +217,18 @@ export default function DashboardPage() {
           </p>
         </div>
         <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-          <NavLink to="/clients/regular" className="btn btn-outline btn-sm">
-            <Users size={16} />
-            <span>Add contact</span>
-          </NavLink>
-          <NavLink to="/properties/new" className="btn btn-primary btn-sm">
-            <Plus size={16} />
-            <span>Add property</span>
-          </NavLink>
+          {(!account || can('leads.view') || can('leads.create')) && (
+            <NavLink to="/clients/regular" className="btn btn-outline btn-sm">
+              <Users size={16} />
+              <span>Add contact</span>
+            </NavLink>
+          )}
+          {(!account || can('listings.create')) && (
+            <NavLink to="/properties/new" className="btn btn-primary btn-sm">
+              <Plus size={16} />
+              <span>Add property</span>
+            </NavLink>
+          )}
         </div>
       </div>
 
