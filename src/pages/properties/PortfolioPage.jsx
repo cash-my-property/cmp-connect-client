@@ -1421,34 +1421,14 @@ export default function PortfolioPage() {
                     )}
                   </div>
 
-                  {/* Top-Right Edit & Action Buttons */}
+                  {/* Top-Right Action Menu */}
                   <div
                     className="row"
                     data-action-menu="true"
-                    style={{ position: 'absolute', top: '10px', right: '10px', gap: '6px', zIndex: 40 }}
+                    style={{ position: 'absolute', top: '10px', right: '10px', zIndex: 40 }}
                   >
-                    {!onHold && canEdit && (
-                      <NavLink
-                        to={`/properties/${listing.id}/edit`}
-                        style={{
-                          width: '32px',
-                          height: '32px',
-                          borderRadius: '50%',
-                          display: 'grid',
-                          placeItems: 'center',
-                          background: 'rgba(255, 255, 255, 0.95)',
-                          color: '#18231C',
-                          boxShadow: '0 2px 6px rgba(0,0,0,0.25)',
-                          textDecoration: 'none'
-                        }}
-                        title="Edit Property"
-                      >
-                        <Edit2 size={14} />
-                      </NavLink>
-                    )}
-
                     {/* Action Dropdown Menu Trigger */}
-                    {isLiveProp && !onHold && (
+                    {!onHold && (
                       <div style={{ position: 'relative' }}>
                         <button
                           type="button"

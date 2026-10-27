@@ -242,21 +242,66 @@ export default function EditPropertyPage() {
 
   // Available property types
   const availableTypes = useMemo(() => {
-    if (!options?.rules) {
-      return [
-        { key: 'APARTMENT', label: 'Apartment' },
-        { key: 'VILLA', label: 'Villa' },
-        { key: 'TOWNHOUSE', label: 'Townhouse' },
-        { key: 'PENTHOUSE', label: 'Penthouse' },
-        { key: 'DUPLEX', label: 'Duplex' }
-      ];
+    if (!formData.listingPurpose || !formData.propertyCategory) {
+      return [];
     }
-    const ruleBranch = options.rules[formData.listingPurpose]?.[formData.propertyCategory]?.[formData.propertyPlan] || {};
-    const keys = Object.keys(ruleBranch);
-    if (keys.length === 0 && options.typeLabels) {
+    const { listingPurpose, propertyCategory, propertyPlan } = formData;
+    const ruleBranch = options?.rules?.[listingPurpose]?.[propertyCategory]?.[propertyPlan] || {};
+    let keys = Object.keys(ruleBranch);
+
+    if (propertyCategory === 'COMMERCIAL' && (!keys.length || keys.length <= 1)) {
+      const isRent = listingPurpose === 'RENT';
+      keys = [
+        'OFFICES', 'RETAIL', 'SHOP', 'SHOWROOM', 'WAREHOUSE',
+        'VILLA', 'BUILDING', 'FULL_FLOOR', 'HALF_FLOOR', 'LAND',
+        isRent ? 'BULK_RENT_UNIT' : 'BULK_SALE_UNIT',
+        'FACTORY', 'LABOR_CAMP', 'STAFF_ACCOMMODATION',
+        'BUSINESS_CENTRE', 'CO_WORKING_SPACE', 'FARM', 'HOTEL_APARTMENT'
+      ];
+    } else if (propertyCategory === 'RESIDENTIAL' && (!keys.length || (propertyPlan === 'OFF_PLAN' && keys.length <= 3))) {
+      const isRent = listingPurpose === 'RENT';
+      keys = [
+        'APARTMENT', 'VILLA', 'TOWNHOUSE', 'PENTHOUSE', 'COMPOUND',
+        'DUPLEX', 'FULL_FLOOR', 'HALF_FLOOR', 'BUILDING', 'LAND',
+        isRent ? 'BULK_RENT_UNIT' : 'BULK_SALE_UNIT',
+        'BUNGALOW', 'HOTEL_APARTMENT'
+      ];
+    } else if (keys.length === 0 && options?.typeLabels) {
       return Object.entries(options.typeLabels).map(([k, label]) => ({ key: k, label }));
     }
-    return keys.map((k) => ({ key: k, label: options.typeLabels?.[k] || k }));
+
+    const labelsMap = {
+      APARTMENT: 'Apartment',
+      VILLA: propertyCategory === 'COMMERCIAL' ? 'Commercial Villa' : 'Villa',
+      TOWNHOUSE: 'Townhouse',
+      PENTHOUSE: 'Penthouse',
+      COMPOUND: 'Compound',
+      DUPLEX: 'Duplex',
+      FULL_FLOOR: 'Full Floor',
+      HALF_FLOOR: 'Half Floor',
+      BUILDING: 'Whole Building',
+      LAND: propertyCategory === 'COMMERCIAL' ? 'Commercial Land' : 'Land',
+      BULK_SALE_UNIT: 'Bulk Sale Unit',
+      BULK_RENT_UNIT: 'Bulk Rent Unit',
+      BUNGALOW: 'Bungalow',
+      HOTEL_APARTMENT: 'Hotel & Hotel Apartment',
+      OFFICES: 'Office Space',
+      RETAIL: 'Retail',
+      SHOP: 'Shop',
+      SHOWROOM: 'Showroom',
+      WAREHOUSE: 'Warehouse',
+      FACTORY: 'Factory',
+      LABOR_CAMP: 'Labor Camp',
+      STAFF_ACCOMMODATION: 'Staff Accommodation',
+      BUSINESS_CENTRE: 'Business Centre',
+      CO_WORKING_SPACE: 'Co-working Space',
+      FARM: 'Farm'
+    };
+
+    return keys.map((k) => ({
+      key: k,
+      label: labelsMap[k] || options?.typeLabels?.[k] || k
+    }));
   }, [options, formData.listingPurpose, formData.propertyCategory, formData.propertyPlan]);
 
   // Active type rules for fields and documents
@@ -803,19 +848,27 @@ export default function EditPropertyPage() {
                 className={`badge ${
                   onHold
                     ? 'badge-danger'
-                    : listingData.status === 'LIVE'
+                    : listingData?.status === 'LIVE'
                     ? 'badge-brand'
-                    : listingData.status === 'REJECTED'
+                    : listingData?.status === 'PENDING_APPROVAL'
+                    ? 'badge-warning'
+                    : listingData?.status === 'REJECTED'
                     ? 'badge-danger'
                     : 'badge-neutral'
                 }`}
               >
-                {onHold ? 'ON HOLD' : listingData.status}
+                {onHold ? 'ON HOLD' : listingData?.status === 'PENDING_APPROVAL' ? 'IN REVIEW' : listingData?.status}
               </span>
             )}
           </div>
           <p className="muted" style={{ margin: '4px 0 0', fontSize: '13.5px' }}>
-            Changes to a live listing reflect immediately on public portals and apps.
+            {listingData?.status === 'LIVE'
+              ? 'Changes to a live listing reflect immediately on public portals and apps.'
+              : listingData?.status === 'PENDING_APPROVAL'
+              ? 'This listing is in review. You can edit details; it stays in review without needing resubmission, but must remain complete.'
+              : listingData?.status === 'REJECTED'
+              ? 'This listing was rejected. Review the notes, make fixes, and resubmit for approval.'
+              : 'Complete all required steps and submit for agency approval.'}
           </p>
         </div>
 
@@ -834,7 +887,7 @@ export default function EditPropertyPage() {
               onClick={handleSubmit}
             >
               <Send size={14} />
-              <span>{can('listings.approve') ? 'Publish (Go Live)' : 'Submit for approval'}</span>
+              <span>Submit for approval</span>
             </button>
           )}
 
@@ -966,6 +1019,58 @@ export default function EditPropertyPage() {
               {listingData?.holdReason || listingData?.adminHold?.reason || 'Contact CMP support for resolution.'}
             </p>
           </div>
+        </div>
+      )}
+
+      {/* In-Review Information Banner */}
+      {listingData?.status === 'PENDING_APPROVAL' && !onHold && (
+        <div
+          className="card"
+          style={{
+            padding: '14px 18px',
+            marginBottom: '18px',
+            background: 'rgba(197, 138, 44, 0.08)',
+            border: '1px solid rgba(197, 138, 44, 0.3)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px',
+            flexWrap: 'wrap'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <AlertCircle size={22} style={{ color: 'var(--cmp-warning, #c58a2c)', flexShrink: 0 }} />
+            <div>
+              <strong style={{ fontSize: '14px', color: 'var(--cmp-warning, #c58a2c)' }}>In Review (Pending Approval)</strong>
+              <p style={{ margin: '2px 0 0', fontSize: '13px', color: 'var(--cmp-text-muted)' }}>
+                You can edit this listing while waiting for agency approval. It stays in review without needing resubmission, but every save must remain complete.
+              </p>
+            </div>
+          </div>
+          {canActions.approve && (
+            <div className="row" style={{ gap: '8px', flexShrink: 0 }}>
+              <button
+                type="button"
+                className="btn btn-sm"
+                style={{ background: 'var(--cmp-success)', color: '#FFF' }}
+                disabled={isSaving}
+                onClick={handleApprove}
+              >
+                <CheckCircle2 size={14} />
+                <span>Approve</span>
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm"
+                style={{ background: 'var(--cmp-danger)', color: '#FFF' }}
+                disabled={isSaving}
+                onClick={() => setRejectModal({ isOpen: true, reason: '' })}
+              >
+                <XCircle size={14} />
+                <span>Reject</span>
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -1880,17 +1985,42 @@ export default function EditPropertyPage() {
                 <ArrowRight size={15} />
               </button>
             ) : (
-              !onHold && canActions.submit && (
-                <button
-                  type="button"
-                  className="btn btn-accent"
-                  disabled={isSaving || submitIssues.length > 0}
-                  onClick={handleSubmit}
-                >
-                  <Check size={16} />
-                  <span>{can('listings.approve') ? 'Publish Property' : 'Submit for approval'}</span>
-                </button>
-              )
+              <div className="row" style={{ gap: '8px', alignItems: 'center' }}>
+                {!onHold && canActions.submit && (
+                  <button
+                    type="button"
+                    className="btn btn-accent"
+                    disabled={isSaving || submitIssues.length > 0}
+                    onClick={handleSubmit}
+                  >
+                    <Check size={16} />
+                    <span>Submit for approval</span>
+                  </button>
+                )}
+                {!onHold && canActions.approve && (
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    style={{ background: 'var(--cmp-success)', color: '#FFF' }}
+                    disabled={isSaving}
+                    onClick={handleApprove}
+                  >
+                    <CheckCircle2 size={16} />
+                    <span>Approve &amp; Publish</span>
+                  </button>
+                )}
+                {!onHold && listingData?.status === 'PENDING_APPROVAL' && (
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    disabled={isSaving}
+                    onClick={handleSaveChanges}
+                  >
+                    {isSaving ? <Loader2 size={15} className="spin" /> : <Save size={15} />}
+                    <span>Save changes (stays in review)</span>
+                  </button>
+                )}
+              </div>
             )}
           </div>
         </div>

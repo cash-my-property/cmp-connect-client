@@ -162,37 +162,62 @@ export default function AddPropertyPage() {
     if (!formData.listingPurpose || !formData.propertyCategory) {
       return [];
     }
-    if (!options?.rules) {
-      if (formData.propertyCategory === 'COMMERCIAL') {
-        return [
-          { key: 'OFFICE', label: 'Office' },
-          { key: 'RETAIL', label: 'Retail' },
-          { key: 'WAREHOUSE', label: 'Warehouse' },
-          { key: 'COMMERCIAL_VILLA', label: 'Commercial Villa' },
-          { key: 'COMMERCIAL_BUILDING', label: 'Commercial Building' },
-          { key: 'SHOWROOM', label: 'Showroom' }
-        ];
-      }
-      return [
-        { key: 'APARTMENT', label: 'Apartment' },
-        { key: 'VILLA', label: 'Villa' },
-        { key: 'TOWNHOUSE', label: 'Townhouse' },
-        { key: 'PENTHOUSE', label: 'Penthouse' },
-        { key: 'DUPLEX', label: 'Duplex' },
-        { key: 'HOTEL_APARTMENT', label: 'Hotel Apartment' }
-      ];
-    }
     const { listingPurpose, propertyCategory, propertyPlan } = formData;
-    const ruleBranch = options.rules[listingPurpose]?.[propertyCategory]?.[propertyPlan] || {};
-    const keys = Object.keys(ruleBranch);
+    const ruleBranch = options?.rules?.[listingPurpose]?.[propertyCategory]?.[propertyPlan] || {};
+    let keys = Object.keys(ruleBranch);
 
-    if (keys.length === 0 && options.typeLabels) {
+    if (propertyCategory === 'COMMERCIAL' && (!keys.length || keys.length <= 1)) {
+      const isRent = listingPurpose === 'RENT';
+      keys = [
+        'OFFICES', 'RETAIL', 'SHOP', 'SHOWROOM', 'WAREHOUSE',
+        'VILLA', 'BUILDING', 'FULL_FLOOR', 'HALF_FLOOR', 'LAND',
+        isRent ? 'BULK_RENT_UNIT' : 'BULK_SALE_UNIT',
+        'FACTORY', 'LABOR_CAMP', 'STAFF_ACCOMMODATION',
+        'BUSINESS_CENTRE', 'CO_WORKING_SPACE', 'FARM', 'HOTEL_APARTMENT'
+      ];
+    } else if (propertyCategory === 'RESIDENTIAL' && (!keys.length || (propertyPlan === 'OFF_PLAN' && keys.length <= 3))) {
+      const isRent = listingPurpose === 'RENT';
+      keys = [
+        'APARTMENT', 'VILLA', 'TOWNHOUSE', 'PENTHOUSE', 'COMPOUND',
+        'DUPLEX', 'FULL_FLOOR', 'HALF_FLOOR', 'BUILDING', 'LAND',
+        isRent ? 'BULK_RENT_UNIT' : 'BULK_SALE_UNIT',
+        'BUNGALOW', 'HOTEL_APARTMENT'
+      ];
+    } else if (keys.length === 0 && options?.typeLabels) {
       return Object.entries(options.typeLabels).map(([k, label]) => ({ key: k, label }));
     }
 
+    const labelsMap = {
+      APARTMENT: 'Apartment',
+      VILLA: propertyCategory === 'COMMERCIAL' ? 'Commercial Villa' : 'Villa',
+      TOWNHOUSE: 'Townhouse',
+      PENTHOUSE: 'Penthouse',
+      COMPOUND: 'Compound',
+      DUPLEX: 'Duplex',
+      FULL_FLOOR: 'Full Floor',
+      HALF_FLOOR: 'Half Floor',
+      BUILDING: 'Whole Building',
+      LAND: propertyCategory === 'COMMERCIAL' ? 'Commercial Land' : 'Land',
+      BULK_SALE_UNIT: 'Bulk Sale Unit',
+      BULK_RENT_UNIT: 'Bulk Rent Unit',
+      BUNGALOW: 'Bungalow',
+      HOTEL_APARTMENT: 'Hotel & Hotel Apartment',
+      OFFICES: 'Office Space',
+      RETAIL: 'Retail',
+      SHOP: 'Shop',
+      SHOWROOM: 'Showroom',
+      WAREHOUSE: 'Warehouse',
+      FACTORY: 'Factory',
+      LABOR_CAMP: 'Labor Camp',
+      STAFF_ACCOMMODATION: 'Staff Accommodation',
+      BUSINESS_CENTRE: 'Business Centre',
+      CO_WORKING_SPACE: 'Co-working Space',
+      FARM: 'Farm'
+    };
+
     return keys.map((k) => ({
       key: k,
-      label: options.typeLabels?.[k] || k
+      label: labelsMap[k] || options?.typeLabels?.[k] || k
     }));
   }, [options, formData.listingPurpose, formData.propertyCategory, formData.propertyPlan]);
 
@@ -1727,7 +1752,7 @@ export default function AddPropertyPage() {
                 ) : (
                   <>
                     <Check size={16} />
-                    <span>{can('listings.approve') ? 'Publish Property (Live)' : 'Submit for approval'}</span>
+                    <span>Submit for approval</span>
                   </>
                 )}
               </button>
