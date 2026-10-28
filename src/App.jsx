@@ -9,11 +9,11 @@ export default function App() {
   return (
     <BrowserRouter>
       <AppProvider>
-        <AppShell>
-          <ErrorBoundary>
+        <ErrorBoundary>
+          <AppShell>
             <AppRoutes />
-          </ErrorBoundary>
-        </AppShell>
+          </AppShell>
+        </ErrorBoundary>
       </AppProvider>
     </BrowserRouter>
   );

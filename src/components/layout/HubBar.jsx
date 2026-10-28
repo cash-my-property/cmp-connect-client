@@ -66,35 +66,58 @@ export default function HubBar() {
   // Derive active hub information based on current URL path
   const getHubInfo = () => {
     if (pathname.startsWith('/rto')) {
-      const isProperties = pathname === '/rto/entries' || pathname === '/rto/results';
-      const isBuyers = pathname === '/rto/bidders' || pathname === '/rto/cheques';
       const isNew = pathname === '/rto/new';
+      const isTeam = pathname === '/rto/team';
+      const isEntries = pathname === '/rto/entries' || pathname === '/rto';
+      const isResults = pathname === '/rto/results';
+      const isBidders = pathname === '/rto/bidders';
+      const isCheques = pathname === '/rto/cheques';
+      const isDesk = pathname === '/rto/desk';
+      const isDetail = pathname.startsWith('/rto/') && !isNew && !isTeam && !isEntries && !isResults && !isBidders && !isCheques && !isDesk;
 
-      let title = 'Live desk';
-      let blurb = 'Offers arriving right now on properties with a closing date.';
+      let title = 'Real Time Offer';
+      let blurb = '7-day auctions managed by CMP. Enter properties and monitor live buyer offers.';
 
-      if (isProperties) {
-        title = 'Properties';
-        blurb = 'Properties entered into Real Time Offer and how their offer windows closed.';
-      } else if (isBuyers) {
-        title = 'Buyers';
-        blurb = 'Registered buyers and the 10% security cheques they lodge before placing offers.';
-      } else if (isNew) {
+      if (isNew) {
         title = 'Enter a property';
-        blurb = 'Registered buyers place offers against a clock. The reserve stays private.';
+        blurb = 'Submit an agency property for a 7-day Real Time Offer auction managed by CMP.';
+      } else if (isDetail) {
+        title = 'Auction Desk';
+        blurb = 'Live 7-day auction countdown, buyer offers and property details.';
+      } else if (isDesk) {
+        title = 'Live Desk';
+        blurb = 'Every property of yours taking instant bids against a live countdown clock.';
+      } else if (isEntries) {
+        title = 'Real Time Offer Entries';
+        blurb = 'Properties submitted by your agency for 7-day Real Time Offer auctions managed by CMP.';
+      } else if (isResults) {
+        title = 'Auction Results';
+        blurb = 'Closed auctions, final sale prices and performance history.';
+      } else if (isBidders) {
+        title = 'Registered Buyers';
+        blurb = 'Review pre-qualified buyers and identity verification status.';
+      } else if (isCheques) {
+        title = 'Security Cheques';
+        blurb = 'Manage security deposit cheques for participating buyers.';
+      } else if (isTeam) {
+        title = 'Auction Team';
+        blurb = 'Team members authorized to enter properties and view auctions.';
       }
 
       const tabs = [];
       if (!account || can('listings.view')) {
-        tabs.push({ label: 'Live desk', path: '/rto' });
-        tabs.push({ label: 'Entries', path: '/rto/entries' });
+        tabs.push({ label: 'Live desk', path: '/rto/desk' });
+        tabs.push({ label: 'Entries', path: '/rto' });
         tabs.push({ label: 'Results', path: '/rto/results' });
       }
-      if (!account || can('leads.view')) {
+      if (!account || can('leads.view') || can('listings.view')) {
         tabs.push({ label: 'Registrations', path: '/rto/bidders' });
       }
-      if (!account || can('contracts.view') || can('transactions.view')) {
+      if (!account || hasAny('contracts.view', 'transactions.view', 'listings.view')) {
         tabs.push({ label: 'Cheques', path: '/rto/cheques' });
+      }
+      if (!account || hasAny('team.view', 'insights.agents_view', 'roles.view')) {
+        tabs.push({ label: 'Team', path: '/rto/team' });
       }
 
       return {
@@ -264,14 +287,16 @@ export default function HubBar() {
             <Building size={16} />
             <span>Listings</span>
           </button>
-          <button
-            type="button"
-            className={pathname.startsWith('/rto') || platform === 'auctions' ? 'active' : ''}
-            onClick={() => handlePlatformChange('auctions')}
-          >
-            <Radio size={16} />
-            <span>Real Time Offer</span>
-          </button>
+          {(!account || account?.accountType === 'AGENCY') && (
+            <button
+              type="button"
+              className={pathname.startsWith('/rto') || platform === 'auctions' ? 'active' : ''}
+              onClick={() => handlePlatformChange('auctions')}
+            >
+              <Radio size={16} />
+              <span>Real Time Offer</span>
+            </button>
+          )}
         </nav>
 
         {/* Global Search Button */}

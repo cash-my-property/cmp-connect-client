@@ -88,7 +88,13 @@ export default function CmpConnectLoginPage() {
       });
 
       let account = response?.data?.account;
-      const token = response?.data?.token || null;
+      const token =
+        response?.data?.token ||
+        response?.data?.accessToken ||
+        response?.token ||
+        response?.accessToken ||
+        response?.data?.tokenPair?.token ||
+        null;
       let mustChangePassword = Boolean(response?.data?.mustChangePassword);
 
       // In pure cookie mode, if account wasn't in response, hydrate via getMe

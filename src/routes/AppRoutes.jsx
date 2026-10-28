@@ -43,12 +43,13 @@ import NotificationsPage from '../pages/account/NotificationsPage';
 import HelpPage from '../pages/help/HelpPage';
 import WhatsNewPage from '../pages/help/WhatsNewPage';
 
-import LiveDeskPage from '../pages/rto/LiveDeskPage';
 import EntriesPage from '../pages/rto/EntriesPage';
+import EnterPropertyPage from '../pages/rto/EnterPropertyPage';
+import RtoDetailPage from '../pages/rto/RtoDetailPage';
+import LiveDeskPage from '../pages/rto/LiveDeskPage';
 import ResultsPage from '../pages/rto/ResultsPage';
 import BiddersPage from '../pages/rto/BiddersPage';
 import ChequesPage from '../pages/rto/ChequesPage';
-import EnterPropertyPage from '../pages/rto/EnterPropertyPage';
 
 import OnboardingLandingPage from '../pages/onboarding/OnboardingLandingPage';
 import OnboardingSigninPage from '../pages/onboarding/OnboardingSigninPage';
@@ -98,6 +99,21 @@ function PermissionGuard({ required, requiredAny, redirectTo = '/' }) {
   }
 
   if (!hasAccess) {
+    return <Navigate to={redirectTo} replace />;
+  }
+
+  return <Outlet />;
+}
+
+function AgencyOnlyGuard({ redirectTo = '/' }) {
+  const { account, isMockData } = useApp();
+
+  if (isMockData) {
+    return <Outlet />;
+  }
+
+  // Real Time Offer is exclusively available to AGENCY accounts (developers get 403 / redirect)
+  if (account && account.accountType && account.accountType !== 'AGENCY') {
     return <Navigate to={redirectTo} replace />;
   }
 
@@ -237,14 +253,22 @@ export default function AppRoutes() {
         <Route path="/help" element={<HelpPage />} />
         <Route path="/help/whats-new" element={<WhatsNewPage />} />
 
-        {/* Real Time Offer Hub */}
-        <Route path="/rto" element={<LiveDeskPage />} />
-        <Route path="/rto/entries" element={<EntriesPage />} />
-        <Route path="/rto/results" element={<ResultsPage />} />
-        <Route path="/rto/bidders" element={<BiddersPage />} />
-        <Route path="/rto/cheques" element={<ChequesPage />} />
-        <Route path="/rto/new" element={<EnterPropertyPage />} />
-        <Route path="/rto/team" element={<TeamPage />} />
+        {/* Real Time Offer Hub (Agencies Only) */}
+        <Route element={<AgencyOnlyGuard redirectTo="/" />}>
+          <Route element={<PermissionGuard requiredAny={['listings.view', 'listings.create']} redirectTo="/" />}>
+            <Route path="/rto" element={<EntriesPage />} />
+            <Route path="/rto/entries" element={<EntriesPage />} />
+            <Route path="/rto/desk" element={<LiveDeskPage />} />
+            <Route path="/rto/results" element={<ResultsPage />} />
+            <Route path="/rto/bidders" element={<BiddersPage />} />
+            <Route path="/rto/cheques" element={<ChequesPage />} />
+            <Route path="/rto/team" element={<TeamPage />} />
+            <Route element={<PermissionGuard required="listings.create" redirectTo="/rto" />}>
+              <Route path="/rto/new" element={<EnterPropertyPage />} />
+            </Route>
+            <Route path="/rto/:id" element={<RtoDetailPage />} />
+          </Route>
+        </Route>
       </Route>
 
       {/* Fallback */}

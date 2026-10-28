@@ -64,7 +64,22 @@ export function getDeviceId() {
 // Backward compatibility helpers for token storage (cookies are primary)
 export function getAuthToken() {
   try {
-    return localStorage.getItem(AUTH_TOKEN_KEY) || sessionStorage.getItem(AUTH_TOKEN_KEY) || null;
+    const direct =
+      localStorage.getItem(AUTH_TOKEN_KEY) ||
+      sessionStorage.getItem(AUTH_TOKEN_KEY) ||
+      localStorage.getItem('token') ||
+      sessionStorage.getItem('token') ||
+      localStorage.getItem('authToken') ||
+      sessionStorage.getItem('authToken');
+    if (direct) return direct;
+
+    if (typeof document !== 'undefined' && document.cookie) {
+      const match = document.cookie.match(/(?:^|;\s*)(?:authToken|token|cmp_connect_auth_token)=([^;]+)/);
+      if (match && match[1]) {
+        return decodeURIComponent(match[1]);
+      }
+    }
+    return null;
   } catch {
     return null;
   }
@@ -73,11 +88,8 @@ export function getAuthToken() {
 export function setAuthToken(token, rememberMe = null) {
   try {
     if (token) {
-      if (rememberMe) {
-        localStorage.setItem(AUTH_TOKEN_KEY, token);
-      } else {
-        sessionStorage.setItem(AUTH_TOKEN_KEY, token);
-      }
+      localStorage.setItem(AUTH_TOKEN_KEY, token);
+      sessionStorage.setItem(AUTH_TOKEN_KEY, token);
     } else {
       clearAuthToken();
     }
@@ -187,7 +199,14 @@ async function apiRequest(endpoint, options = {}) {
         endpoint.includes('/auth/logout') ||
         endpoint.includes('/auth/invite');
 
+      const isRtoPath = endpoint.includes('/cmpConnect/rto');
+
       if (response.status === 401 && !isAuthPath && !options._retry) {
+        // RTO endpoints must NEVER wipe session or logout the user if remote server returns 401
+        if (isRtoPath || options._ignoreAuthRedirect) {
+          throw err;
+        }
+
         try {
           await executeTokenRefresh();
           // Retry the original request once
@@ -1401,6 +1420,127 @@ export const cmpConnectApi = {
       method: 'GET',
       token
     });
+  },
+
+  // ───────────────────────────────────────────────
+  // Real Time Offer (RTO) APIs — /api/cmpConnect/rto
+  // ───────────────────────────────────────────────
+
+  /**
+   * 58. RTO Options & Per-Type Rules
+   * GET /api/cmpConnect/rto/options
+   */
+  async getRtoOptions(token) {
+    return apiRequest('/api/cmpConnect/rto/options', {
+      method: 'GET',
+      token
+    });
+  },
+
+  /**
+   * 59. RTO Signed Upload Signature
+   * GET /api/cmpConnect/rto/upload-signature?propertyId=
+   */
+  async getRtoUploadSignature(propertyId, token) {
+    const qs = propertyId ? `?propertyId=${encodeURIComponent(propertyId)}` : '';
+    return apiRequest(`/api/cmpConnect/rto/upload-signature${qs}`, {
+      method: 'GET',
+      token
+    });
+  },
+
+  /**
+   * 60. List RTO Properties (Entries)
+   * GET /api/cmpConnect/rto/properties?...
+   */
+  async listRtoProperties(params = {}, token) {
+    const query = new URLSearchParams();
+    if (params.status && params.status !== 'all') query.set('status', params.status);
+    if (params.search) query.set('search', params.search);
+    if (params.agentId) query.set('agentId', params.agentId);
+    if (params.page) query.set('page', params.page);
+    if (params.limit) query.set('limit', params.limit);
+
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    return apiRequest(`/api/cmpConnect/rto/properties${qs}`, {
+      method: 'GET',
+      token
+    });
+  },
+
+  /**
+   * 61. Enter a Property into RTO
+   * POST /api/cmpConnect/rto/properties
+   */
+  async createRtoProperty(data, token) {
+    return apiRequest('/api/cmpConnect/rto/properties', {
+      method: 'POST',
+      token,
+      body: JSON.stringify(data)
+    });
+  },
+
+  /**
+   * 62. Get RTO Property Detail
+   * GET /api/cmpConnect/rto/properties/:id
+   */
+  async getRtoProperty(id, token) {
+    return apiRequest(`/api/cmpConnect/rto/properties/${id}`, {
+      method: 'GET',
+      token
+    });
+  },
+
+  /**
+   * 63. Update RTO Property (Only when REJECTED)
+   * PATCH /api/cmpConnect/rto/properties/:id
+   */
+  async updateRtoProperty(id, data, token) {
+    return apiRequest(`/api/cmpConnect/rto/properties/${id}`, {
+      method: 'PATCH',
+      token,
+      body: JSON.stringify(data)
+    });
+  },
+
+  /**
+   * 64. Get Live Offers / Bids for RTO Property
+   * GET /api/cmpConnect/rto/properties/:id/bids
+   */
+  async getRtoPropertyBids(id, token) {
+    return apiRequest(`/api/cmpConnect/rto/properties/${id}/bids`, {
+      method: 'GET',
+      token
+    });
+  },
+
+  /**
+   * Upload RTO file directly to Cloudinary using signed signature
+   */
+  async uploadRtoFileToCloudinary(file, sig) {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('api_key', sig.apiKey);
+    formData.append('timestamp', sig.timestamp);
+    formData.append('signature', sig.signature);
+    formData.append('folder', sig.folder);
+
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${sig.cloudName}/auto/upload`, {
+      method: 'POST',
+      body: formData
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error?.message || 'Cloudinary upload failed.');
+    }
+
+    const data = await res.json();
+    return {
+      url: data.secure_url || data.url,
+      public_id: data.public_id,
+      fileName: file.name
+    };
   }
 };
 

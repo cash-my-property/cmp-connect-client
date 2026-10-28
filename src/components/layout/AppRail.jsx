@@ -12,7 +12,9 @@ import {
   Settings,
   Radio,
   FileCheck,
-  DollarSign
+  DollarSign,
+  Plus,
+  Sparkles
 } from 'lucide-react';
 
 export default function AppRail() {
@@ -89,28 +91,37 @@ export default function AppRail() {
           </>
         ) : (
           <>
-            <NavLink to="/rto" end className={({ isActive }) => `rail-link ${isActive ? 'active' : ''}`} title="Live desk">
-              <Radio size={19} />
-              <span>Live desk</span>
-            </NavLink>
             {(!account || can('listings.view')) && (
-              <NavLink to="/rto/entries" className={({ isActive }) => `rail-link ${isActive ? 'active' : ''}`} title="Entries">
+              <NavLink to="/rto/desk" className={({ isActive }) => `rail-link ${isActive ? 'active' : ''}`} title="Live desk">
+                <Radio size={19} />
+                <span>Live desk</span>
+              </NavLink>
+            )}
+            {(!account || can('listings.view')) && (
+              <NavLink to="/rto" end className={({ isActive }) => `rail-link ${isActive ? 'active' : ''}`} title="Entries">
                 <Building size={19} />
                 <span>Entries</span>
               </NavLink>
             )}
-            {(!account || can('leads.view')) && (
+            {(!account || can('leads.view') || can('listings.view')) && (
               <NavLink to="/rto/bidders" className={({ isActive }) => `rail-link ${isActive ? 'active' : ''}`} title="Bidders">
                 <Users size={19} />
                 <span>Bidders</span>
               </NavLink>
             )}
-            {(!account || hasAny('contracts.view', 'transactions.view')) && (
+            {(!account || hasAny('contracts.view', 'transactions.view', 'listings.view')) && (
               <NavLink to="/rto/cheques" className={({ isActive }) => `rail-link ${isActive ? 'active' : ''}`} title="Cheques">
                 <DollarSign size={19} />
                 <span>Cheques</span>
               </NavLink>
             )}
+            {(!account || can('listings.view')) && (
+              <NavLink to="/rto/results" className={({ isActive }) => `rail-link ${isActive ? 'active' : ''}`} title="Results">
+                <Sparkles size={19} />
+                <span>Results</span>
+              </NavLink>
+            )}
+
             {(!account || hasAny('team.view', 'insights.agents_view', 'roles.view')) && (
               <NavLink to="/rto/team" className={({ isActive }) => `rail-link ${isActive ? 'active' : ''}`} title="Team">
                 <UserCheck size={19} />
