@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { NavLink, useParams, useNavigate } from 'react-router-dom';
+import { NavLink, useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Save,
   Check,
@@ -49,6 +49,8 @@ const formatDateTime = (isoString) => {
 export default function MemberProfilePage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const membersBasePath = location.pathname.startsWith('/rto') ? '/rto/members' : '/members';
   const { authToken, account } = useApp();
 
   const [isLoading, setIsLoading] = useState(true);
@@ -243,7 +245,7 @@ export default function MemberProfilePage() {
     try {
       await handleSaveAccount();
       await handleSaveProfile();
-      navigate('/team/members');
+      navigate(membersBasePath);
     } finally {
       setIsSaving(false);
     }
@@ -301,7 +303,7 @@ export default function MemberProfilePage() {
       >
         <div>
           <div className="row" style={{ gap: '8px', alignItems: 'center', marginBottom: '4px' }}>
-            <NavLink to="/team/members" className="btn btn-ghost btn-sm" style={{ padding: '0 4px' }}>
+            <NavLink to={membersBasePath} className="btn btn-ghost btn-sm" style={{ padding: '0 4px' }}>
               <ArrowLeft size={16} />
               <span>Back to Members</span>
             </NavLink>

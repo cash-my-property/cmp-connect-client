@@ -230,6 +230,12 @@ export default function AppRoutes() {
           </Route>
         </Route>
 
+        {/* Members Hub (Standalone) */}
+        <Route element={<PermissionGuard required="team.view" redirectTo="/" />}>
+          <Route path="/members" element={<MembersPage />} />
+          <Route path="/members/:id" element={<MemberProfilePage />} />
+        </Route>
+
         {/* Team Hub */}
         <Route element={<PermissionGuard requiredAny={['team.view', 'insights.agents_view', 'roles.view']} redirectTo="/" />}>
           <Route path="/team" element={<TeamPage />} />
@@ -255,17 +261,28 @@ export default function AppRoutes() {
 
         {/* Real Time Offer Hub (Agencies Only) */}
         <Route element={<AgencyOnlyGuard redirectTo="/" />}>
-          <Route element={<PermissionGuard requiredAny={['listings.view', 'listings.create']} redirectTo="/" />}>
+          <Route element={<PermissionGuard requiredAny={['listings.view', 'listings.create', 'team.view', 'insights.agents_view', 'roles.view']} redirectTo="/" />}>
             <Route path="/rto" element={<EntriesPage />} />
             <Route path="/rto/entries" element={<EntriesPage />} />
             <Route path="/rto/desk" element={<LiveDeskPage />} />
             <Route path="/rto/results" element={<ResultsPage />} />
             <Route path="/rto/bidders" element={<BiddersPage />} />
             <Route path="/rto/cheques" element={<ChequesPage />} />
+            <Route element={<PermissionGuard required="team.view" redirectTo="/rto" />}>
+              <Route path="/rto/members" element={<MembersPage />} />
+              <Route path="/rto/members/:id" element={<MemberProfilePage />} />
+            </Route>
             <Route path="/rto/team" element={<TeamPage />} />
+            <Route path="/rto/team/leaderboard" element={<TeamPage />} />
+            <Route path="/rto/team/agents/:id" element={<AgentSummaryPage />} />
+            <Route path="/rto/team/summary" element={<AgentSummaryPage />} />
+            <Route element={<PermissionGuard required="roles.view" redirectTo="/rto/team" />}>
+              <Route path="/rto/team/roles" element={<RolesPage />} />
+            </Route>
             <Route element={<PermissionGuard required="listings.create" redirectTo="/rto" />}>
               <Route path="/rto/new" element={<EnterPropertyPage />} />
             </Route>
+            <Route path="/rto/:id/edit" element={<EnterPropertyPage />} />
             <Route path="/rto/:id" element={<RtoDetailPage />} />
           </Route>
         </Route>

@@ -678,15 +678,31 @@ export const cmpConnectApi = {
   },
 
   /**
-   * Get Broker / Team Leaderboard
-   * GET /api/cmpConnect/team/leaderboard?search=
+   * Get Broker / Team Leaderboard (Listings)
+   * GET /api/cmpConnect/team/leaderboard?search=&platform=
    */
   async getLeaderboard(params = {}, token) {
     const query = new URLSearchParams();
     if (params.search) query.append('search', params.search);
+    if (params.platform) query.append('platform', params.platform);
 
     const qs = query.toString() ? `?${query.toString()}` : '';
     return apiRequest(`/api/cmpConnect/team/leaderboard${qs}`, {
+      method: 'GET',
+      token
+    });
+  },
+
+  /**
+   * Get Real Time Offer Leaderboard (sorted by RTO sold, sold value, live)
+   * GET /api/cmpConnect/team/leaderboard?platform=rto&search=
+   */
+  async getRtoLeaderboard(params = {}, token) {
+    const query = new URLSearchParams();
+    query.append('platform', 'rto');
+    if (params.search) query.append('search', params.search);
+
+    return apiRequest(`/api/cmpConnect/team/leaderboard?${query.toString()}`, {
       method: 'GET',
       token
     });
@@ -1492,7 +1508,7 @@ export const cmpConnectApi = {
   },
 
   /**
-   * 63. Update RTO Property (Only when REJECTED)
+   * 63. Update RTO Property (Save step / edit when DRAFT, AGENCY_REVIEW, AGENCY_REJECTED, REJECTED)
    * PATCH /api/cmpConnect/rto/properties/:id
    */
   async updateRtoProperty(id, data, token) {
@@ -1504,11 +1520,85 @@ export const cmpConnectApi = {
   },
 
   /**
+   * 63a. Submit RTO Property (DRAFT / AGENCY_REJECTED / REJECTED → AGENCY_REVIEW or AWAITING)
+   * POST /api/cmpConnect/rto/properties/:id/submit
+   */
+  async submitRtoProperty(id, token) {
+    return apiRequest(`/api/cmpConnect/rto/properties/${id}/submit`, {
+      method: 'POST',
+      token
+    });
+  },
+
+  /**
+   * 63a-2. Delete RTO Draft Property (Only when DRAFT and can.delete)
+   * DELETE /api/cmpConnect/rto/properties/:id
+   */
+  async deleteRtoProperty(id, token) {
+    return apiRequest(`/api/cmpConnect/rto/properties/${id}`, {
+      method: 'DELETE',
+      token
+    });
+  },
+
+  /**
+   * 63b. Agency Approve RTO Property (AGENCY_REVIEW → AWAITING)
+   * POST /api/cmpConnect/rto/properties/:id/approve
+   */
+  async approveRtoProperty(id, token) {
+    return apiRequest(`/api/cmpConnect/rto/properties/${id}/approve`, {
+      method: 'POST',
+      token
+    });
+  },
+
+  /**
+   * 63c. Agency Reject / Send Back RTO Property (AGENCY_REVIEW → AGENCY_REJECTED)
+   * POST /api/cmpConnect/rto/properties/:id/reject
+   * Payload: { reason: string } (3-500 chars)
+   */
+  async rejectRtoProperty(id, reason, token) {
+    return apiRequest(`/api/cmpConnect/rto/properties/${id}/reject`, {
+      method: 'POST',
+      token,
+      body: JSON.stringify(typeof reason === 'object' ? reason : { reason })
+    });
+  },
+
+  /**
    * 64. Get Live Offers / Bids for RTO Property
    * GET /api/cmpConnect/rto/properties/:id/bids
    */
   async getRtoPropertyBids(id, token) {
     return apiRequest(`/api/cmpConnect/rto/properties/${id}/bids`, {
+      method: 'GET',
+      token
+    });
+  },
+
+  /**
+   * 65. Get RTO Live Desk (running / paused / scheduled auctions + stat tiles)
+   * GET /api/cmpConnect/rto/desk
+   */
+  async getRtoDesk(token) {
+    return apiRequest('/api/cmpConnect/rto/desk', {
+      method: 'GET',
+      token
+    });
+  },
+
+  /**
+   * 66. Get RTO Results (closed auctions: SOLD / SOLD_FAIL + stats)
+   * GET /api/cmpConnect/rto/results?status=all|SOLD|SOLD_FAIL
+   */
+  async getRtoResults(params = {}, token) {
+    const query = new URLSearchParams();
+    if (params.status) query.append('status', params.status);
+    if (params.page) query.append('page', params.page);
+    if (params.limit) query.append('limit', params.limit);
+
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    return apiRequest(`/api/cmpConnect/rto/results${qs}`, {
       method: 'GET',
       token
     });

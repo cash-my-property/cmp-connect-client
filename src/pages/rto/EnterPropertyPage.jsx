@@ -1,13 +1,11 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { NavLink, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import cmpConnectApi from '../../services/cmpConnectApi';
 import GooglePlacesLocationInput from '../../components/common/GooglePlacesLocationInput';
 import {
-  Building,
   MapPin,
   FileText,
-  DollarSign,
   Image as ImageIcon,
   Check,
   ArrowRight,
@@ -17,22 +15,19 @@ import {
   Upload,
   AlertCircle,
   CheckCircle2,
-  Calendar,
-  ShieldCheck,
-  UserCheck,
-  Info,
   Sparkles,
-  ExternalLink,
+  Save,
   X
 } from 'lucide-react';
 
 const STEPS = [
   { num: 1, label: 'Classification & Type' },
   { num: 2, label: 'Location' },
-  { num: 3, label: 'Specifications & Price' },
+  { num: 3, label: 'Details' },
   { num: 4, label: 'Amenities' },
-  { num: 5, label: 'Photos & Documents' },
-  { num: 6, label: 'Review & Submit' }
+  { num: 5, label: 'Price and timing' },
+  { num: 6, label: 'Photos and documents' },
+  { num: 7, label: 'Review & Submit' }
 ];
 
 const CATEGORIES = [
@@ -45,11 +40,6 @@ const PLANS = [
   { id: 'OFF_PLAN', label: 'Off-Plan' }
 ];
 
-// Exact Real Time Offer Property Types:
-// Residential Ready: Apartment, Villa, Land
-// Residential Off-Plan: Apartment, Villa
-// Commercial Ready: Retail, Offices, Building
-// Commercial Off-Plan: Retail
 const PROPERTY_TYPES_MAP = {
   RESIDENTIAL: {
     READY: [
@@ -111,7 +101,6 @@ const DEFAULT_AMENITIES = {
   ]
 };
 
-// Backend document labels and keys matching RTO options.rules & options.docLabels
 const DEFAULT_DOC_LABELS = {
   exclusiveContract: 'Exclusive contract (Form A)',
   propertyTitleDeed: 'Title deed',
@@ -130,7 +119,6 @@ const DEFAULT_DOC_LABELS = {
   otherDocuments: 'Other documents'
 };
 
-// Backend anti-spam contact patterns (email, website link, UAE phone)
 const CONTACT_PATTERNS = [
   /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i,
   /(https?:\/\/|www\.)\S+/i,
@@ -158,12 +146,24 @@ const cleanContactDetails = (text) => {
 
 export default function EnterPropertyPage() {
   const navigate = useNavigate();
+  const { id: routeId } = useParams();
+  const [searchParams] = useSearchParams();
+  const initialPropertyId = routeId || searchParams.get('id') || null;
+
   const { isLiveData, authToken, can, account } = useApp();
+  const token = authToken || (typeof localStorage !== 'undefined' ? localStorage.getItem('cmp_connect_auth_token') : null);
+
+  const [propertyId, setPropertyId] = useState(initialPropertyId);
+  const [rtoRef, setRtoRef] = useState(null);
+  const [propertyStatus, setPropertyStatus] = useState('DRAFT');
+  const [serverCan, setServerCan] = useState({ edit: true, submit: true, delete: false });
+  const [serverSubmitIssues, setServerSubmitIssues] = useState(null);
 
   const [currentStep, setCurrentStep] = useState(1);
   const [options, setOptions] = useState(null);
   const [activeMembers, setActiveMembers] = useState([]);
-  const [isLoadingOptions, setIsLoadingOptions] = useState(false);
+  const [isLoadingInitial, setIsLoadingInitial] = useState(Boolean(initialPropertyId));
+  const [isSavingStep, setIsSavingStep] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadingDocKey, setUploadingDocKey] = useState(null);
@@ -171,19 +171,21 @@ export default function EnterPropertyPage() {
   const [stepError, setStepError] = useState(null);
   const [successBanner, setSuccessBanner] = useState(null);
 
-  // Form State
+  const defaultOpenDate = useMemo(() => {
+    const d = new Date(Date.now() + 86400000 * 2);
+    return d.toISOString().slice(0, 10);
+  }, []);
+
   const [formData, setFormData] = useState({
     propertyCategory: 'RESIDENTIAL',
     propertyPlan: 'READY',
     propertyType: 'APARTMENT',
     propertyTitle: '',
-    propertyTitleAr: '',
     propertyDescription: '',
-    propertyDescriptionAr: '',
     propertyLocation: 'Dubai Marina, Dubai',
     propertyLatitude: 25.08,
     propertyLongitude: 55.14,
-    propertyPrice: '', // Auction starting price
+    propertyPrice: '',
     propertyArea: '',
     propertyAreaUnit: 'sqft',
     propertyBedrooms: '2',
@@ -191,37 +193,150 @@ export default function EnterPropertyPage() {
     propertyBuiltUpArea: '',
     trakheesiNumber: '',
     emiratesIdExpiry: '',
+    auctionOpenDate: defaultOpenDate,
+    auctionOpenTime: '10:00',
+    auctionDurationDays: 7,
     propertyAmenities: [],
     propertyImages: [],
     documents: {},
     listedBy: ''
   });
 
+  // Sync detail response into state
+  const applyDetailToState = useCallback((p) => {
+    if (!p) return;
+    if (p.id || p._id) setPropertyId(p.id || p._id);
+    if (p.rtoRef || p.reference) setRtoRef(p.rtoRef || p.reference);
+    if (p.status) setPropertyStatus(p.status);
+    if (p.can) setServerCan(p.can);
+    if (Array.isArray(p.submitIssues)) setServerSubmitIssues(p.submitIssues);
+
+    const rawStart = p.schedule?.startAt || p.auctionStartAt || p.auction?.startTime || '';
+    let openDate = defaultOpenDate;
+    let openTime = '10:00';
+    if (rawStart) {
+      const dt = new Date(rawStart);
+      if (!isNaN(dt.getTime())) {
+        openDate = dt.toISOString().slice(0, 10);
+        openTime = dt.toTimeString().slice(0, 5);
+      }
+    }
+
+    // Normalize documents array or object into { [key]: { url, public_id, fileName } }
+    const docsMap = {};
+    if (Array.isArray(p.documents)) {
+      p.documents.forEach((d) => {
+        if (d && d.key && d.url) {
+          docsMap[d.key] = {
+            url: d.url,
+            public_id: d.public_id || '',
+            fileName: d.fileName || d.label || d.key
+          };
+        }
+      });
+    } else if (p.documents && typeof p.documents === 'object') {
+      Object.entries(p.documents).forEach(([k, d]) => {
+        if (d && d.url) {
+          docsMap[k] = {
+            url: d.url,
+            public_id: d.public_id || '',
+            fileName: d.fileName || k
+          };
+        }
+      });
+    }
+
+    const imagesArr = Array.isArray(p.images)
+      ? p.images
+      : Array.isArray(p.propertyImages)
+      ? p.propertyImages
+      : [];
+
+    setFormData((prev) => ({
+      ...prev,
+      propertyCategory: p.category || p.propertyCategory || prev.propertyCategory,
+      propertyPlan: p.plan || p.propertyPlan || prev.propertyPlan,
+      propertyType: p.type || p.propertyType || prev.propertyType,
+      propertyTitle: p.title ?? p.propertyTitle ?? prev.propertyTitle,
+      propertyDescription: p.description ?? p.propertyDescription ?? prev.propertyDescription,
+      propertyLocation: p.location ?? p.propertyLocation ?? prev.propertyLocation,
+      propertyLatitude: p.coordinates?.latitude ?? p.propertyLatitude ?? prev.propertyLatitude,
+      propertyLongitude: p.coordinates?.longitude ?? p.propertyLongitude ?? prev.propertyLongitude,
+      propertyPrice: p.startingPrice ?? p.propertyPrice ?? prev.propertyPrice,
+      propertyArea: p.area ?? p.propertyArea ?? prev.propertyArea,
+      propertyAreaUnit: p.areaUnit || p.propertyAreaUnit || prev.propertyAreaUnit,
+      propertyBedrooms: p.bedrooms ?? p.propertyBedrooms ?? prev.propertyBedrooms,
+      propertyWashrooms: p.washrooms ?? p.propertyWashrooms ?? prev.propertyWashrooms,
+      propertyBuiltUpArea: p.builtUpArea ?? p.propertyBuiltUpArea ?? prev.propertyBuiltUpArea,
+      trakheesiNumber: p.trakheesiNumber ?? prev.trakheesiNumber,
+      emiratesIdExpiry: p.emiratesIdExpiry ? String(p.emiratesIdExpiry).slice(0, 10) : prev.emiratesIdExpiry,
+      auctionOpenDate: openDate,
+      auctionOpenTime: openTime,
+      auctionDurationDays: p.schedule?.durationDays || p.auctionDurationDays || prev.auctionDurationDays,
+      propertyAmenities: Array.isArray(p.amenities)
+        ? p.amenities
+        : Array.isArray(p.propertyAmenities)
+        ? p.propertyAmenities
+        : prev.propertyAmenities,
+      propertyImages: imagesArr.length > 0 ? imagesArr.map((img) => ({ url: img.url, public_id: img.public_id })) : prev.propertyImages,
+      documents: Object.keys(docsMap).length > 0 ? docsMap : prev.documents,
+      listedBy: p.listedBy?.id || p.listedBy?._id || (typeof p.listedBy === 'string' ? p.listedBy : prev.listedBy)
+    }));
+  }, [defaultOpenDate]);
+
+  // Load existing draft/property if editing
+  useEffect(() => {
+    if (!initialPropertyId || !isLiveData || !token) {
+      setIsLoadingInitial(false);
+      return;
+    }
+    let active = true;
+    setIsLoadingInitial(true);
+    cmpConnectApi
+      .getRtoProperty(initialPropertyId, token)
+      .then((res) => {
+        if (!active) return;
+        if (res?.data) {
+          applyDetailToState(res.data);
+        }
+      })
+      .catch((err) => {
+        if (!active) return;
+        setStepError(err.message || 'Could not load property draft.');
+      })
+      .finally(() => {
+        if (active) setIsLoadingInitial(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [initialPropertyId, isLiveData, token, applyDetailToState]);
+
   // Fetch RTO options and rules
   useEffect(() => {
     async function loadOptions() {
-      if (!isLiveData || !authToken) return;
-      setIsLoadingOptions(true);
+      if (!isLiveData || !token) return;
       try {
-        const res = await cmpConnectApi.getRtoOptions(authToken);
+        const res = await cmpConnectApi.getRtoOptions(token);
         if (res?.data) {
           setOptions(res.data);
+          if (res.data.auctionDays && !initialPropertyId) {
+            setFormData((prev) => ({ ...prev, auctionDurationDays: res.data.auctionDays }));
+          }
         }
       } catch (err) {
         console.warn('[RTO options error, using fallback]', err);
-      } finally {
-        setIsLoadingOptions(false);
       }
     }
     loadOptions();
-  }, [isLiveData, authToken]);
+  }, [isLiveData, token, initialPropertyId]);
 
   // Fetch active team members if user has assign permission
   useEffect(() => {
     async function loadMembers() {
-      if (!isLiveData || !authToken || !can('listings.assign')) return;
+      if (!isLiveData || !token || !can('listings.assign')) return;
       try {
-        const res = await cmpConnectApi.listMembers({ status: 'ACTIVE', limit: 100 }, authToken);
+        const res = await cmpConnectApi.listMembers({ status: 'ACTIVE', limit: 100 }, token);
         if (Array.isArray(res?.data)) {
           setActiveMembers(res.data);
         }
@@ -230,15 +345,22 @@ export default function EnterPropertyPage() {
       }
     }
     loadMembers();
-  }, [isLiveData, authToken, can]);
+  }, [isLiveData, token, can]);
 
-  // Available types for selected category and plan (matching listings)
+  // Available types for selected category and plan
   const availableTypes = useMemo(() => {
+    const ruleTypes = options?.rules?.[formData.propertyCategory]?.[formData.propertyPlan];
+    if (ruleTypes && typeof ruleTypes === 'object') {
+      const typeLabels = options?.typeLabels || {};
+      return Object.keys(ruleTypes).map((k) => ({
+        id: k,
+        label: typeLabels[k] || k.charAt(0) + k.slice(1).toLowerCase()
+      }));
+    }
     const list = PROPERTY_TYPES_MAP[formData.propertyCategory]?.[formData.propertyPlan];
     return list || [{ id: 'APARTMENT', label: 'Apartment' }];
-  }, [formData.propertyCategory, formData.propertyPlan]);
+  }, [options, formData.propertyCategory, formData.propertyPlan]);
 
-  // Ensure valid property type when category/plan changes
   useEffect(() => {
     const validIds = availableTypes.map((t) => t.id);
     if (!validIds.includes(formData.propertyType)) {
@@ -246,11 +368,10 @@ export default function EnterPropertyPage() {
     }
   }, [availableTypes, formData.propertyType]);
 
-  // Conditional fields
   const showBedrooms = ['APARTMENT', 'VILLA'].includes(formData.propertyType);
-  const showBuiltUpArea = ['VILLA', 'BUILDING'].includes(formData.propertyType);
+  const showBuiltUpArea = ['VILLA', 'LAND', 'BUILDING'].includes(formData.propertyType);
+  const durationOptions = options?.durationDays || [3, 7, 10, 14];
 
-  // Available amenities
   const availableAmenities = useMemo(() => {
     if (options?.amenities?.[formData.propertyCategory]) {
       return options.amenities[formData.propertyCategory];
@@ -260,7 +381,6 @@ export default function EnterPropertyPage() {
 
   const docLabels = options?.docLabels || DEFAULT_DOC_LABELS;
 
-  // Active legal documents required & optional dynamically matching backend RTO rules for current category, plan & type
   const activeDocumentsList = useMemo(() => {
     const typeRule = options?.rules?.[formData.propertyCategory]?.[formData.propertyPlan]?.[formData.propertyType];
     if (typeRule) {
@@ -277,7 +397,6 @@ export default function EnterPropertyPage() {
       return [...req, ...opt];
     }
 
-    // Default compliant list for Ready Apartment / Villa
     const isOffPlan = formData.propertyPlan === 'OFF_PLAN';
     const isLand = formData.propertyType === 'LAND';
     const isCommercial = formData.propertyCategory === 'COMMERCIAL';
@@ -310,12 +429,74 @@ export default function EnterPropertyPage() {
     ];
   }, [options, formData.propertyCategory, formData.propertyPlan, formData.propertyType, docLabels]);
 
-  // Eligible agents with BRN for agency accounts
   const brnEligibleMembers = useMemo(() => {
     return activeMembers.filter((m) => Boolean(m.compliance?.brn));
   }, [activeMembers]);
 
-  // Toggle amenity
+  // Compute local submitIssues (used when serverSubmitIssues is not yet populated or to keep instant feedback)
+  const computedSubmitIssues = useMemo(() => {
+    const issues = [];
+    if (!formData.propertyTitle.trim()) {
+      issues.push({ step: 1, field: 'propertyTitle', message: 'Add a property title.' });
+    } else if (findContactDetail(formData.propertyTitle)) {
+      issues.push({ step: 1, field: 'propertyTitle', message: 'Remove contact details from the title.' });
+    }
+    if (!formData.propertyDescription.trim()) {
+      issues.push({ step: 1, field: 'propertyDescription', message: 'Add a property description.' });
+    } else if (findContactDetail(formData.propertyDescription)) {
+      issues.push({ step: 1, field: 'propertyDescription', message: 'Remove contact details from the description.' });
+    }
+    if (!formData.propertyLocation.trim()) {
+      issues.push({ step: 2, field: 'propertyLocation', message: 'Select the property location.' });
+    }
+    if (!Number(formData.propertyArea) || Number(formData.propertyArea) <= 0) {
+      issues.push({ step: 3, field: 'propertyArea', message: 'Enter the property area.' });
+    }
+    if (showBuiltUpArea && (!Number(formData.propertyBuiltUpArea) || Number(formData.propertyBuiltUpArea) <= 0)) {
+      issues.push({ step: 3, field: 'propertyBuiltUpArea', message: 'Enter the built-up area.' });
+    }
+    if (!formData.trakheesiNumber.trim()) {
+      issues.push({ step: 3, field: 'trakheesiNumber', message: 'Enter the Trakheesi / DLD permit number.' });
+    }
+    if (!formData.emiratesIdExpiry) {
+      issues.push({ step: 3, field: 'emiratesIdExpiry', message: "Enter the owner's Emirates ID expiry date." });
+    }
+    if (!Number(formData.propertyPrice) || Number(formData.propertyPrice) <= 0) {
+      issues.push({ step: 5, field: 'propertyPrice', message: 'Enter the starting price in AED.' });
+    }
+    if (!formData.auctionOpenDate || !formData.auctionOpenTime) {
+      issues.push({ step: 5, field: 'auctionStartAt', message: 'Choose when offers open (date and time).' });
+    } else {
+      const startIso = `${formData.auctionOpenDate}T${formData.auctionOpenTime}:00+04:00`;
+      if (new Date(startIso).getTime() <= Date.now()) {
+        issues.push({ step: 5, field: 'auctionStartAt', message: '"Offers open on" must be in the future.' });
+      }
+    }
+
+    const typeRule = options?.rules?.[formData.propertyCategory]?.[formData.propertyPlan]?.[formData.propertyType];
+    const minPhotos = typeRule?.images?.min || (formData.propertyType === 'LAND' ? 2 : ['RETAIL', 'OFFICES'].includes(formData.propertyType) ? 5 : 8);
+    if (formData.propertyImages.length < minPhotos) {
+      issues.push({
+        step: 6,
+        field: 'propertyImages',
+        message: `Add at least ${minPhotos} photos (${formData.propertyImages.length} added).`
+      });
+    }
+    activeDocumentsList.forEach((doc) => {
+      if (doc.required && !formData.documents[doc.key]?.url) {
+        issues.push({
+          step: 6,
+          field: `documents.${doc.key}`,
+          message: `Upload ${doc.label}.`
+        });
+      }
+    });
+
+    return issues;
+  }, [formData, showBuiltUpArea, options, activeDocumentsList]);
+
+  const activeSubmitIssues = serverSubmitIssues && serverSubmitIssues.length > 0 ? serverSubmitIssues : computedSubmitIssues;
+
   const handleToggleAmenity = (amenity) => {
     setFormData((prev) => {
       const exists = prev.propertyAmenities.includes(amenity);
@@ -324,6 +505,114 @@ export default function EnterPropertyPage() {
         : [...prev.propertyAmenities, amenity];
       return { ...prev, propertyAmenities: next };
     });
+  };
+
+  // Build payload for a specific step (Section 13.1)
+  const buildStepPayload = (stepNum) => {
+    if (stepNum === 1) {
+      const p = {
+        propertyCategory: formData.propertyCategory,
+        propertyPlan: formData.propertyPlan,
+        propertyType: formData.propertyType,
+        propertyTitle: formData.propertyTitle.trim(),
+        propertyDescription: formData.propertyDescription.trim()
+      };
+      if (can('listings.assign') && formData.listedBy) {
+        p.listedBy = formData.listedBy;
+      }
+      return p;
+    }
+    if (stepNum === 2) {
+      return {
+        propertyLocation: formData.propertyLocation.trim(),
+        propertyLatitude: Number(formData.propertyLatitude) || 25.08,
+        propertyLongitude: Number(formData.propertyLongitude) || 55.14
+      };
+    }
+    if (stepNum === 3) {
+      const p = {
+        propertyArea: formData.propertyArea ? Number(formData.propertyArea) : undefined,
+        propertyAreaUnit: formData.propertyAreaUnit || 'sqft',
+        trakheesiNumber: formData.trakheesiNumber.trim() || undefined,
+        emiratesIdExpiry: formData.emiratesIdExpiry || undefined
+      };
+      if (showBedrooms) {
+        p.propertyBedrooms = String(formData.propertyBedrooms);
+        p.propertyWashrooms = String(formData.propertyWashrooms);
+      }
+      if (showBuiltUpArea && formData.propertyBuiltUpArea) {
+        p.propertyBuiltUpArea = Number(formData.propertyBuiltUpArea);
+      }
+      return p;
+    }
+    if (stepNum === 4) {
+      return {
+        propertyAmenities: formData.propertyAmenities
+      };
+    }
+    if (stepNum === 5) {
+      const p = {};
+      if (formData.propertyPrice) p.propertyPrice = Number(formData.propertyPrice);
+      if (formData.auctionOpenDate && formData.auctionOpenTime) {
+        p.auctionStartAt = `${formData.auctionOpenDate}T${formData.auctionOpenTime}:00+04:00`;
+      }
+      if (formData.auctionDurationDays) {
+        p.auctionDurationDays = Number(formData.auctionDurationDays);
+      }
+      return p;
+    }
+    if (stepNum === 6) {
+      return {
+        propertyImages: formData.propertyImages,
+        documents: formData.documents
+      };
+    }
+    return {};
+  };
+
+  // Save current step to server (Step 1: POST /rto/properties -> DRAFT; Steps 2-6: PATCH /rto/properties/:id)
+  const saveStepToServer = async (stepNum) => {
+    if (!isLiveData || !token) return true;
+    const stepPayload = buildStepPayload(stepNum);
+
+    setIsSavingStep(true);
+    try {
+      if (stepNum === 1 && !propertyId) {
+        const res = await cmpConnectApi.createRtoProperty(stepPayload, token);
+        if (res?.data) {
+          applyDetailToState(res.data);
+          const newId = res.data.id || res.data._id;
+          if (newId) {
+            window.history.replaceState(null, '', `/rto/${newId}/edit`);
+          }
+        }
+        return true;
+      } else if (propertyId) {
+        const res = await cmpConnectApi.updateRtoProperty(propertyId, stepPayload, token);
+        if (res?.data) {
+          applyDetailToState(res.data);
+        }
+        return true;
+      }
+      return true;
+    } catch (err) {
+      // If the backend is still running the older single-submit schema on POST /rto/properties (where Step 1 alone returns 400 for missing price/images),
+      // allow proceeding locally in the wizard so final Submit can send the full payload!
+      const msg = err.message || '';
+      const isLegacyFullCreateValidation =
+        stepNum === 1 &&
+        !propertyId &&
+        err.status === 400 &&
+        (msg.includes('propertyLocation') || msg.includes('propertyPrice') || msg.includes('propertyImages') || msg.includes('required'));
+
+      if (isLegacyFullCreateValidation) {
+        return true;
+      }
+      setStepError(msg || 'Could not save step.');
+      return false;
+    } finally {
+      setIsSavingStep(false);
+    }
   };
 
   // Cloudinary Direct Upload for Photos
@@ -335,7 +624,7 @@ export default function EnterPropertyPage() {
     setStepError(null);
 
     try {
-      const sigRes = await cmpConnectApi.getRtoUploadSignature('', authToken);
+      const sigRes = await cmpConnectApi.getRtoUploadSignature(propertyId || '', token);
       const sig = sigRes?.data?.images || sigRes?.data;
       if (!sig || !sig.signature) throw new Error('Could not obtain upload signature.');
 
@@ -347,11 +636,10 @@ export default function EnterPropertyPage() {
         ...prev,
         propertyImages: [...prev.propertyImages, ...newPhotos]
       }));
-      setSuccessBanner(`${results.length} photo(s) uploaded successfully.`);
+      setSuccessBanner(`${results.length} photo(s) uploaded.`);
       setTimeout(() => setSuccessBanner(null), 3000);
     } catch (err) {
-      console.error('[RTO Photo upload error]', err);
-      setStepError(err.message || 'Image upload to Cloudinary failed.');
+      setStepError(err.message || 'Image upload failed.');
     } finally {
       setUploadingImage(false);
       e.target.value = '';
@@ -374,9 +662,9 @@ export default function EnterPropertyPage() {
     setStepError(null);
 
     try {
-      const sigRes = await cmpConnectApi.getRtoUploadSignature('', authToken);
+      const sigRes = await cmpConnectApi.getRtoUploadSignature(propertyId || '', token);
       const sig = sigRes?.data?.docs || sigRes?.data;
-      if (!sig || !sig.signature) throw new Error('Could not obtain doc upload signature from CMP server.');
+      if (!sig || !sig.signature) throw new Error('Could not obtain document upload signature.');
 
       const result = await cmpConnectApi.uploadRtoFileToCloudinary(file, sig);
       setFormData((prev) => ({
@@ -393,8 +681,7 @@ export default function EnterPropertyPage() {
       setSuccessBanner(`Document uploaded: ${file.name}`);
       setTimeout(() => setSuccessBanner(null), 3000);
     } catch (err) {
-      console.error('[RTO Doc upload error]', err);
-      setStepError(err.message || 'Document upload to Cloudinary failed. Check your network or session.');
+      setStepError(err.message || 'Document upload failed.');
     } finally {
       setUploadingDocKey(null);
       e.target.value = '';
@@ -412,9 +699,9 @@ export default function EnterPropertyPage() {
   // Auto-fill valid Cloudinary signed documents for testing
   const handleAutoFillSampleDocs = async () => {
     setStepError(null);
-    setIsSubmitting(true);
+    setIsSavingStep(true);
     try {
-      const sigRes = await cmpConnectApi.getRtoUploadSignature('', authToken);
+      const sigRes = await cmpConnectApi.getRtoUploadSignature(propertyId || '', token);
       const sig = sigRes?.data?.docs || sigRes?.data?.images || sigRes?.data;
       if (!sig || !sig.folder) {
         throw new Error('Please ensure you are logged into CMP Connect.');
@@ -441,95 +728,52 @@ export default function EnterPropertyPage() {
         propertyImages: prev.propertyImages.length >= 8 ? prev.propertyImages : samplePhotos,
         documents: { ...prev.documents, ...sampleDocs }
       }));
-      setSuccessBanner('All required legal documents & photos attached with Cloudinary paths!');
+      setSuccessBanner('Sample legal documents & photos attached!');
       setTimeout(() => setSuccessBanner(null), 3500);
     } catch (e) {
-      console.error(e);
       setStepError(e.message || 'Auto-fill failed.');
     } finally {
-      setIsSubmitting(false);
+      setIsSavingStep(false);
     }
   };
 
-  // Step Validation & Navigation
-  const handleNextStep = () => {
-    setStepError(null);
-
-    // Validate Step 1
-    if (currentStep === 1) {
+  // Validate Step 1 required fields + anti-contact rules before creating/updating draft
+  const validateStepBeforeSave = (stepNum) => {
+    if (stepNum === 1) {
       if (!formData.propertyTitle.trim()) {
         setStepError('Property title is required.');
-        return;
+        return false;
       }
       const titleContact = findContactDetail(formData.propertyTitle);
       if (titleContact) {
-        setStepError(`Property title cannot contain contact details ("${titleContact}"). Buyers contact you through CMP.`);
-        return;
+        setStepError(`Property title cannot contain contact details ("${titleContact}").`);
+        return false;
       }
       if (!formData.propertyDescription.trim()) {
         setStepError('Property description is required.');
-        return;
+        return false;
       }
       const descContact = findContactDetail(formData.propertyDescription);
       if (descContact) {
-        setStepError(`Description cannot contain contact details ("${descContact}"). Please remove phone numbers, emails, or websites, or click "Auto-remove contact info".`);
-        return;
+        setStepError(`Description cannot contain contact details ("${descContact}").`);
+        return false;
       }
       if (can('listings.assign') && account?.accountType === 'AGENCY' && !account?.compliance?.brn && !account?.brn && !formData.listedBy) {
-        setStepError('As an administrator without a registered broker licence (BRN), you must choose an assigned agent.');
-        return;
+        setStepError('As an administrator without a BRN, please select an assigned listing agent.');
+        return false;
       }
     }
+    return true;
+  };
 
-    // Validate Step 2
-    if (currentStep === 2) {
-      if (!formData.propertyLocation.trim()) {
-        setStepError('Property location is required. Please select a verified community or address.');
-        return;
-      }
-    }
+  const handleNextStep = async () => {
+    setStepError(null);
+    if (!validateStepBeforeSave(currentStep)) return;
 
-    // Validate Step 3
-    if (currentStep === 3) {
-      const price = Number(formData.propertyPrice);
-      if (!price || price <= 0) {
-        setStepError('Starting auction price in AED is required.');
-        return;
-      }
-      const area = Number(formData.propertyArea);
-      if (!area || area <= 0) {
-        setStepError('Property area in sqft is required.');
-        return;
-      }
-      if (!formData.trakheesiNumber.trim()) {
-        setStepError('Trakheesi permit number is required for DLD compliance.');
-        return;
-      }
-      if (!formData.emiratesIdExpiry) {
-        setStepError('Owner Emirates ID expiry date is required.');
-        return;
-      }
-    }
+    const ok = await saveStepToServer(currentStep);
+    if (!ok) return;
 
-    // Validate Step 5
-    if (currentStep === 5) {
-      const typeRule = options?.rules?.[formData.propertyCategory]?.[formData.propertyPlan]?.[formData.propertyType];
-      const minPhotos = typeRule?.images?.min || (formData.propertyType === 'LAND' ? 2 : (['RETAIL', 'OFFICES'].includes(formData.propertyType) ? 5 : 8));
-
-      if (formData.propertyImages.length < minPhotos) {
-        setStepError(`Please upload at least ${minPhotos} high-resolution photos (currently ${formData.propertyImages.length} uploaded).`);
-        return;
-      }
-      const missingRequiredDoc = activeDocumentsList.find(
-        (d) => d.required && !formData.documents[d.key]?.url
-      );
-      if (missingRequiredDoc) {
-        setStepError(`Mandatory legal document missing: ${missingRequiredDoc.label}.`);
-        return;
-      }
-    }
-
-    if (currentStep < 6) {
+    if (currentStep < 7) {
       setCurrentStep((prev) => prev + 1);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -543,61 +787,126 @@ export default function EnterPropertyPage() {
     }
   };
 
-  // Final Form Submission
+  // Save draft button
+  const handleSaveDraft = async () => {
+    setStepError(null);
+    if (!validateStepBeforeSave(currentStep)) return;
+    const ok = await saveStepToServer(currentStep);
+    if (ok) {
+      setSuccessBanner('Draft saved.');
+      setTimeout(() => setSuccessBanner(null), 2500);
+    }
+  };
+
+  // Delete draft button (DELETE /rto/properties/:id)
+  const handleDeleteDraft = async () => {
+    if (!propertyId) {
+      navigate('/rto');
+      return;
+    }
+    if (!window.confirm('Delete this draft property?')) return;
+    setIsSubmitting(true);
+    setStepError(null);
+    try {
+      await cmpConnectApi.deleteRtoProperty(propertyId, token);
+      navigate('/rto');
+    } catch (err) {
+      setStepError(err.message || 'Failed to delete draft.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Final Submit (POST /rto/properties/:id/submit, with fallback if propertyId was not yet created)
   const handleSubmitProperty = async () => {
     setStepError(null);
 
-    const titleContact = findContactDetail(formData.propertyTitle);
-    if (titleContact) {
-      setStepError(`Property title cannot contain contact details ("${titleContact}"). Buyers contact you through CMP.`);
-      setCurrentStep(1);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      return;
-    }
-
-    const descContact = findContactDetail(formData.propertyDescription);
-    if (descContact) {
-      setStepError(`Description cannot contain contact details ("${descContact}"). Buyers contact you through CMP.`);
-      setCurrentStep(1);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (activeSubmitIssues.length > 0) {
+      setStepError(`Finish the property before submitting: ${activeSubmitIssues[0].message}`);
       return;
     }
 
     setIsSubmitting(true);
-
     try {
-      const payload = {
-        propertyCategory: formData.propertyCategory,
-        propertyPlan: formData.propertyPlan,
-        propertyType: formData.propertyType,
-        propertyTitle: formData.propertyTitle.trim(),
-        propertyDescription: formData.propertyDescription.trim(),
-        propertyLocation: formData.propertyLocation.trim(),
-        propertyLatitude: Number(formData.propertyLatitude) || 25.08,
-        propertyLongitude: Number(formData.propertyLongitude) || 55.14,
-        propertyPrice: Number(formData.propertyPrice),
-        propertyArea: Number(formData.propertyArea),
-        propertyAreaUnit: 'sqft',
-        propertyBedrooms: showBedrooms ? String(formData.propertyBedrooms) : undefined,
-        propertyWashrooms: showBedrooms ? String(formData.propertyWashrooms) : undefined,
-        propertyBuiltUpArea: showBuiltUpArea && formData.propertyBuiltUpArea ? Number(formData.propertyBuiltUpArea) : null,
-        trakheesiNumber: formData.trakheesiNumber.trim(),
-        emiratesIdExpiry: formData.emiratesIdExpiry,
-        propertyAmenities: formData.propertyAmenities,
-        propertyImages: formData.propertyImages,
-        documents: formData.documents,
-        listedBy: can('listings.assign') && formData.listedBy ? formData.listedBy : undefined
-      };
+      if (propertyId) {
+        // Save all latest fields first, then call POST /rto/properties/:id/submit
+        const auctionStartAt = `${formData.auctionOpenDate}T${formData.auctionOpenTime || '10:00'}:00+04:00`;
+        await cmpConnectApi.updateRtoProperty(
+          propertyId,
+          {
+            propertyCategory: formData.propertyCategory,
+            propertyPlan: formData.propertyPlan,
+            propertyType: formData.propertyType,
+            propertyTitle: formData.propertyTitle.trim(),
+            propertyDescription: formData.propertyDescription.trim(),
+            propertyLocation: formData.propertyLocation.trim(),
+            propertyLatitude: Number(formData.propertyLatitude) || 25.08,
+            propertyLongitude: Number(formData.propertyLongitude) || 55.14,
+            propertyPrice: Number(formData.propertyPrice),
+            propertyArea: Number(formData.propertyArea),
+            propertyAreaUnit: formData.propertyAreaUnit || 'sqft',
+            propertyBedrooms: showBedrooms ? String(formData.propertyBedrooms) : undefined,
+            propertyWashrooms: showBedrooms ? String(formData.propertyWashrooms) : undefined,
+            propertyBuiltUpArea: showBuiltUpArea && formData.propertyBuiltUpArea ? Number(formData.propertyBuiltUpArea) : null,
+            trakheesiNumber: formData.trakheesiNumber.trim(),
+            emiratesIdExpiry: formData.emiratesIdExpiry,
+            propertyAmenities: formData.propertyAmenities,
+            propertyImages: formData.propertyImages,
+            documents: formData.documents,
+            auctionStartAt,
+            auctionDurationDays: Number(formData.auctionDurationDays) || 7
+          },
+          token
+        );
 
-      await cmpConnectApi.createRtoProperty(payload, authToken);
-      alert('Property successfully entered into Real Time Offer! It is now with CMP for moderation review.');
-      navigate('/rto');
+        const res = await cmpConnectApi.submitRtoProperty(propertyId, token);
+        const serverMsg = res?.message || (can('listings.approve') ? 'Sent to CMP for review.' : 'Sent to your agency for approval.');
+        alert(serverMsg);
+        navigate(`/rto/${propertyId}`);
+      } else {
+        // Fallback when backend has not yet created a draft ID in Step 1
+        const auctionStartAt = `${formData.auctionOpenDate}T${formData.auctionOpenTime || '10:00'}:00+04:00`;
+        const payload = {
+          propertyCategory: formData.propertyCategory,
+          propertyPlan: formData.propertyPlan,
+          propertyType: formData.propertyType,
+          propertyTitle: formData.propertyTitle.trim(),
+          propertyDescription: formData.propertyDescription.trim(),
+          propertyLocation: formData.propertyLocation.trim(),
+          propertyLatitude: Number(formData.propertyLatitude) || 25.08,
+          propertyLongitude: Number(formData.propertyLongitude) || 55.14,
+          propertyPrice: Number(formData.propertyPrice),
+          propertyArea: Number(formData.propertyArea),
+          propertyAreaUnit: formData.propertyAreaUnit || 'sqft',
+          propertyBedrooms: showBedrooms ? String(formData.propertyBedrooms) : undefined,
+          propertyWashrooms: showBedrooms ? String(formData.propertyWashrooms) : undefined,
+          propertyBuiltUpArea: showBuiltUpArea && formData.propertyBuiltUpArea ? Number(formData.propertyBuiltUpArea) : null,
+          trakheesiNumber: formData.trakheesiNumber.trim(),
+          emiratesIdExpiry: formData.emiratesIdExpiry,
+          propertyAmenities: formData.propertyAmenities,
+          propertyImages: formData.propertyImages,
+          documents: formData.documents,
+          auctionStartAt,
+          auctionDurationDays: Number(formData.auctionDurationDays) || 7,
+          listedBy: can('listings.assign') && formData.listedBy ? formData.listedBy : undefined
+        };
+
+        const res = await cmpConnectApi.createRtoProperty(payload, token);
+        const createdId = res?.data?.id || res?.data?._id;
+        // If create returned a DRAFT on the new backend, immediately call submit!
+        if (createdId && res?.data?.status === 'DRAFT') {
+          const subRes = await cmpConnectApi.submitRtoProperty(createdId, token);
+          alert(subRes?.message || 'Property submitted.');
+          navigate(`/rto/${createdId}`);
+          return;
+        }
+        const serverMsg = res?.message || (can('listings.approve') ? 'Sent to CMP for review.' : 'Sent to your agency for approval.');
+        alert(serverMsg);
+        navigate(createdId ? `/rto/${createdId}` : '/rto');
+      }
     } catch (err) {
-      console.error('[RTO submit error]', err);
-      const msg = err.message || 'Submission failed. Please check your network connection.';
+      const msg = err.message || 'Submission failed.';
       setStepError(msg);
-
-      // If backend reports contact details in title or description, navigate back to Step 1
       if (msg.toLowerCase().includes('title') || msg.toLowerCase().includes('description') || msg.toLowerCase().includes('contact details')) {
         setCurrentStep(1);
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -607,20 +916,63 @@ export default function EnterPropertyPage() {
     }
   };
 
+  if (isLoadingInitial) {
+    return (
+      <div style={{ padding: '64px 0', textAlign: 'center' }}>
+        <Loader2 size={28} className="spin faint" style={{ margin: '0 auto 12px' }} />
+        <p className="muted" style={{ fontSize: '14px' }}>Loading Real Time Offer property draft…</p>
+      </div>
+    );
+  }
+
   return (
     <div>
       {/* Top Header */}
-      <div style={{ marginBottom: '20px' }}>
-        <div className="row" style={{ gap: '10px', alignItems: 'center', marginBottom: '6px' }}>
-          <NavLink to="/rto" className="btn btn-ghost btn-sm">
-            <ArrowLeft size={16} />
-            <span>Back to Entries</span>
-          </NavLink>
+      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+        <div>
+          <div className="row" style={{ gap: '10px', alignItems: 'center', marginBottom: '6px' }}>
+            <NavLink to="/rto" className="btn btn-ghost btn-sm">
+              <ArrowLeft size={16} />
+              <span>Back to Entries</span>
+            </NavLink>
+            {rtoRef && (
+              <span className="badge badge-neutral" style={{ fontSize: '11.5px', fontWeight: 700 }}>
+                {rtoRef} · {propertyStatus}
+              </span>
+            )}
+          </div>
+          <h1 style={{ fontSize: '26px', margin: 0, fontWeight: 800 }}>
+            {propertyId ? 'Continue Real Time Offer Entry' : 'Enter a property for Real Time Offer'}
+          </h1>
+          <p className="muted" style={{ margin: '4px 0 0', fontSize: '14px' }}>
+            Step-by-step wizard — Step 1 creates a draft, every step saves automatically, and Review checks completeness before submitting.
+          </p>
         </div>
-        <h1 style={{ fontSize: '26px', margin: 0, fontWeight: 800 }}>Enter a property for Real Time Offer</h1>
-        <p className="muted" style={{ margin: '4px 0 0', fontSize: '14px' }}>
-          Step-by-step compliant entry wizard for 7-day CMP-managed real-time auctions.
-        </p>
+
+        <div className="row" style={{ gap: '8px' }}>
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            onClick={handleSaveDraft}
+            disabled={isSavingStep || isSubmitting}
+          >
+            {isSavingStep ? <Loader2 size={14} className="spin" /> : <Save size={14} />}
+            <span>{isSavingStep ? 'Saving…' : 'Save draft'}</span>
+          </button>
+
+          {propertyId && serverCan?.delete && (
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              style={{ borderColor: 'var(--cmp-danger)', color: 'var(--cmp-danger)' }}
+              onClick={handleDeleteDraft}
+              disabled={isSubmitting}
+            >
+              <Trash2 size={14} />
+              <span>Delete draft</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Global Alerts */}
@@ -677,13 +1029,14 @@ export default function EnterPropertyPage() {
             {STEPS.map((st) => {
               const isActive = currentStep === st.num;
               const isDone = currentStep > st.num;
+              const canJump = Boolean(propertyId) || st.num <= currentStep;
 
               return (
                 <li key={st.num}>
                   <button
                     type="button"
                     onClick={() => {
-                      if (st.num < currentStep) {
+                      if (canJump) {
                         setCurrentStep(st.num);
                         setStepError(null);
                       }
@@ -696,8 +1049,8 @@ export default function EnterPropertyPage() {
                       padding: '10px 12px',
                       borderRadius: 'var(--cmp-radius-md)',
                       border: 'none',
-                      cursor: st.num <= currentStep ? 'pointer' : 'default',
-                      opacity: st.num > currentStep ? 0.6 : 1,
+                      cursor: canJump ? 'pointer' : 'default',
+                      opacity: canJump ? 1 : 0.6,
                       font: 'inherit',
                       fontSize: '13.5px',
                       textAlign: 'start',
@@ -739,11 +1092,11 @@ export default function EnterPropertyPage() {
               Auction Rules
             </span>
             <p className="muted" style={{ margin: '8px 0 0', fontSize: '12.5px', lineHeight: '1.5' }}>
-              • CMP reviews legal prospectus before scheduling.
+              • Step 1 saves a draft; every step updates with PATCH.
               <br />
-              • Auction runs for <strong>7 days</strong> with automatic 10m extension on late bids.
+              • Agent entries go to your agency for approval first; Owner/Admin entries go straight to CMP.
               <br />
-              • All buyer offers are fully binding and verified.
+              • Late offers add 10 minutes to the clock.
             </p>
           </div>
         </aside>
@@ -754,10 +1107,10 @@ export default function EnterPropertyPage() {
           {currentStep === 1 && (
             <div>
               <h2 style={{ fontSize: '18px', margin: '0 0 4px', fontWeight: 700 }}>
-                1. Property Classification & Type
+                1. Classification, Type & Description
               </h2>
               <p className="muted" style={{ margin: '0 0 20px', fontSize: '13.5px' }}>
-                Select property category, status and type matching Dubai Land Department standard classification.
+                Select property category, plan and type, then add the title and description to create your draft.
               </p>
 
               {/* Category */}
@@ -784,7 +1137,7 @@ export default function EnterPropertyPage() {
                           propertyCategory: newCat,
                           propertyType: validTypes.some((t) => t.id === prev.propertyType)
                             ? prev.propertyType
-                            : (validTypes[0]?.id || 'APARTMENT')
+                            : validTypes[0]?.id || 'APARTMENT'
                         }));
                       }}
                     >
@@ -818,7 +1171,7 @@ export default function EnterPropertyPage() {
                           propertyPlan: newPlan,
                           propertyType: validTypes.some((t) => t.id === prev.propertyType)
                             ? prev.propertyType
-                            : (validTypes[0]?.id || 'APARTMENT')
+                            : validTypes[0]?.id || 'APARTMENT'
                         }));
                       }}
                     >
@@ -884,7 +1237,7 @@ export default function EnterPropertyPage() {
                     style={{ width: '100%', fontSize: '13.5px' }}
                   />
                   <span className="faint" style={{ fontSize: '11.5px', display: 'block', marginTop: '3px' }}>
-                    No phone numbers, emails, or company URLs allowed in title.
+                    No phone numbers, emails, or website URLs allowed.
                   </span>
                   {findContactDetail(formData.propertyTitle) && (
                     <div
@@ -939,9 +1292,6 @@ export default function EnterPropertyPage() {
                     onChange={(e) => setFormData((prev) => ({ ...prev, propertyDescription: e.target.value }))}
                     style={{ width: '100%', fontSize: '13.5px' }}
                   />
-                  <span className="faint" style={{ fontSize: '11.5px', display: 'block', marginTop: '3px' }}>
-                    Do not include phone numbers, emails, or company websites. Buyers contact and place bids directly through CMP.
-                  </span>
                   {findContactDetail(formData.propertyDescription) && (
                     <div
                       style={{
@@ -959,7 +1309,7 @@ export default function EnterPropertyPage() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12.5px', color: '#ef4444' }}>
                         <AlertCircle size={16} style={{ flexShrink: 0 }} />
                         <span>
-                          Contact info detected: <strong>"{findContactDetail(formData.propertyDescription)}"</strong>. Remove phone/email/links to comply with CMP policy.
+                          Contact info detected: <strong>"{findContactDetail(formData.propertyDescription)}"</strong>
                         </span>
                       </div>
                       <button
@@ -981,11 +1331,10 @@ export default function EnterPropertyPage() {
                   )}
                 </div>
 
-                {/* Assigned Agent (with listings.assign permission) */}
                 {can('listings.assign') && (
                   <div>
                     <label className="field-label" style={{ display: 'block', marginBottom: '4px', fontWeight: 600 }}>
-                      Assigned Listing Agent *
+                      Listed under (Agent) *
                     </label>
                     <select
                       value={formData.listedBy}
@@ -1009,10 +1358,10 @@ export default function EnterPropertyPage() {
           {currentStep === 2 && (
             <div>
               <h2 style={{ fontSize: '18px', margin: '0 0 4px', fontWeight: 700 }}>
-                2. Property Location
+                2. Location
               </h2>
               <p className="muted" style={{ margin: '0 0 20px', fontSize: '13.5px' }}>
-                Enter the building, sub-community, or area. Google Places will pinpoint exact coordinates.
+                Enter the building, sub-community, or area.
               </p>
 
               <div style={{ marginBottom: '20px' }}>
@@ -1047,42 +1396,23 @@ export default function EnterPropertyPage() {
             </div>
           )}
 
-          {/* STEP 3: Specifications & Price */}
+          {/* STEP 3: Details */}
           {currentStep === 3 && (
             <div>
               <h2 style={{ fontSize: '18px', margin: '0 0 4px', fontWeight: 700 }}>
-                3. Specifications & Auction Price
+                3. Details & Regulatory Permits
               </h2>
               <p className="muted" style={{ margin: '0 0 20px', fontSize: '13.5px' }}>
-                Enter starting auction price and physical specifications.
+                Enter area, rooms, Trakheesi permit and owner Emirates ID expiry.
               </p>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '18px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px', marginBottom: '18px' }}>
                 <div>
                   <label className="field-label" style={{ display: 'block', marginBottom: '4px', fontWeight: 600 }}>
-                    Starting Auction Price (AED) *
+                    Property Area *
                   </label>
                   <input
                     type="number"
-                    required
-                    min="1"
-                    placeholder="e.g. 2000000"
-                    value={formData.propertyPrice}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, propertyPrice: e.target.value }))}
-                    style={{ width: '100%', fontSize: '13.5px' }}
-                  />
-                  <span className="faint" style={{ fontSize: '11.5px', display: 'block', marginTop: '3px' }}>
-                    The auction starts at this exact price. No reserve or guide price.
-                  </span>
-                </div>
-
-                <div>
-                  <label className="field-label" style={{ display: 'block', marginBottom: '4px', fontWeight: 600 }}>
-                    Property Area (sqft) *
-                  </label>
-                  <input
-                    type="number"
-                    required
                     min="1"
                     placeholder="e.g. 1420"
                     value={formData.propertyArea}
@@ -1090,16 +1420,29 @@ export default function EnterPropertyPage() {
                     style={{ width: '100%', fontSize: '13.5px' }}
                   />
                 </div>
+                <div>
+                  <label className="field-label" style={{ display: 'block', marginBottom: '4px', fontWeight: 600 }}>
+                    Area Unit *
+                  </label>
+                  <select
+                    value={formData.propertyAreaUnit}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, propertyAreaUnit: e.target.value }))}
+                    style={{ width: '100%', fontSize: '13.5px' }}
+                  >
+                    <option value="sqft">sqft</option>
+                    <option value="sqm">sqm</option>
+                  </select>
+                </div>
               </div>
 
-              {/* Conditional Built-up Area */}
               {showBuiltUpArea && (
                 <div style={{ marginBottom: '18px' }}>
                   <label className="field-label" style={{ display: 'block', marginBottom: '4px', fontWeight: 600 }}>
-                    Built-up Area (sqft)
+                    Built-up Area (sqft) *
                   </label>
                   <input
                     type="number"
+                    min="1"
                     placeholder="e.g. 2100"
                     value={formData.propertyBuiltUpArea}
                     onChange={(e) => setFormData((prev) => ({ ...prev, propertyBuiltUpArea: e.target.value }))}
@@ -1108,7 +1451,6 @@ export default function EnterPropertyPage() {
                 </div>
               )}
 
-              {/* Conditional Bedrooms & Washrooms */}
               {showBedrooms && (
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '18px' }}>
                   <div>
@@ -1144,37 +1486,30 @@ export default function EnterPropertyPage() {
                 </div>
               )}
 
-              {/* Regulatory Compliance fields */}
-              <div style={{ borderTop: '1px solid var(--cmp-border)', paddingTop: '18px', marginTop: '18px' }}>
-                <h3 style={{ fontSize: '15px', fontWeight: 700, marginBottom: '12px' }}>Regulatory Compliance</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div>
+                  <label className="field-label" style={{ display: 'block', marginBottom: '4px', fontWeight: 600 }}>
+                    Trakheesi Permit Number *
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 7134567890"
+                    value={formData.trakheesiNumber}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, trakheesiNumber: e.target.value }))}
+                    style={{ width: '100%', fontSize: '13.5px' }}
+                  />
+                </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                  <div>
-                    <label className="field-label" style={{ display: 'block', marginBottom: '4px', fontWeight: 600 }}>
-                      Trakheesi Permit Number *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. 7134567890"
-                      value={formData.trakheesiNumber}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, trakheesiNumber: e.target.value }))}
-                      style={{ width: '100%', fontSize: '13.5px' }}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="field-label" style={{ display: 'block', marginBottom: '4px', fontWeight: 600 }}>
-                      Owner Emirates ID Expiry *
-                    </label>
-                    <input
-                      type="date"
-                      required
-                      value={formData.emiratesIdExpiry}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, emiratesIdExpiry: e.target.value }))}
-                      style={{ width: '100%', fontSize: '13.5px' }}
-                    />
-                  </div>
+                <div>
+                  <label className="field-label" style={{ display: 'block', marginBottom: '4px', fontWeight: 600 }}>
+                    Owner Emirates ID Expiry *
+                  </label>
+                  <input
+                    type="date"
+                    value={formData.emiratesIdExpiry}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, emiratesIdExpiry: e.target.value }))}
+                    style={{ width: '100%', fontSize: '13.5px' }}
+                  />
                 </div>
               </div>
             </div>
@@ -1185,7 +1520,7 @@ export default function EnterPropertyPage() {
             <div>
               <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
                 <div>
-                  <h2 style={{ fontSize: '18px', margin: '0 0 2px', fontWeight: 700 }}>4. Property Amenities</h2>
+                  <h2 style={{ fontSize: '18px', margin: '0 0 2px', fontWeight: 700 }}>4. Amenities</h2>
                   <p className="muted" style={{ margin: 0, fontSize: '13.5px' }}>
                     Select features and amenities available with the property.
                   </p>
@@ -1245,21 +1580,101 @@ export default function EnterPropertyPage() {
             </div>
           )}
 
-          {/* STEP 5: Photos & Documents */}
+          {/* STEP 5: Price and timing */}
           {currentStep === 5 && (
             <div>
               <h2 style={{ fontSize: '18px', margin: '0 0 4px', fontWeight: 700 }}>
-                5. Photos & Legal Documents
+                5. Price and timing
               </h2>
               <p className="muted" style={{ margin: '0 0 20px', fontSize: '13.5px' }}>
-                Upload at least 8 high-resolution photos and required ownership documents for CMP moderation.
+                Set the starting auction price and choose when offers open and how long they stay open.
+              </p>
+
+              <div style={{ marginBottom: '22px' }}>
+                <label className="field-label" style={{ display: 'block', marginBottom: '4px', fontWeight: 600 }}>
+                  Starting Price (AED) *
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  placeholder="e.g. 2000000"
+                  value={formData.propertyPrice}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, propertyPrice: e.target.value }))}
+                  style={{ width: '100%', maxWidth: '360px', fontSize: '14px' }}
+                />
+                <span className="faint" style={{ fontSize: '11.5px', display: 'block', marginTop: '4px' }}>
+                  The auction starts at this exact price. No reserve price, no guide price, no buyer&apos;s fee.
+                </span>
+              </div>
+
+              <div style={{ borderTop: '1px solid var(--cmp-border)', paddingTop: '18px' }}>
+                <h3 style={{ fontSize: '15px', fontWeight: 700, marginBottom: '12px' }}>Timing and terms</h3>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
+                  <div>
+                    <label className="field-label" style={{ display: 'block', marginBottom: '4px', fontWeight: 600 }}>
+                      Offers open on *
+                    </label>
+                    <input
+                      type="date"
+                      min={new Date().toISOString().slice(0, 10)}
+                      value={formData.auctionOpenDate}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, auctionOpenDate: e.target.value }))}
+                      style={{ width: '100%', fontSize: '13.5px' }}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="field-label" style={{ display: 'block', marginBottom: '4px', fontWeight: 600 }}>
+                      At (Dubai time, +04:00) *
+                    </label>
+                    <input
+                      type="time"
+                      value={formData.auctionOpenTime}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, auctionOpenTime: e.target.value }))}
+                      style={{ width: '100%', fontSize: '13.5px' }}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="field-label" style={{ display: 'block', marginBottom: '4px', fontWeight: 600 }}>
+                      Offers stay open for *
+                    </label>
+                    <select
+                      value={formData.auctionDurationDays}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, auctionDurationDays: Number(e.target.value) }))}
+                      style={{ width: '100%', fontSize: '13.5px' }}
+                    >
+                      {durationOptions.map((days) => (
+                        <option key={days} value={days}>
+                          {days} days
+                        </option>
+                      ))}
+                    </select>
+                    <span className="faint" style={{ fontSize: '11.5px', display: 'block', marginTop: '4px' }}>
+                      Late offers add 10 minutes to the clock.
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 6: Photos and documents */}
+          {currentStep === 6 && (
+            <div>
+              <h2 style={{ fontSize: '18px', margin: '0 0 4px', fontWeight: 700 }}>
+                6. Photos and documents
+              </h2>
+              <p className="muted" style={{ margin: '0 0 20px', fontSize: '13.5px' }}>
+                Upload high-resolution photos and required legal documents.
               </p>
 
               {/* Photos Upload Section */}
               <div style={{ marginBottom: '28px' }}>
                 <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                   <label className="field-label" style={{ fontWeight: 700 }}>
-                    Photos ({formData.propertyImages.length}/25, Min 8 required) *
+                    Photos ({formData.propertyImages.length}/25) *
                   </label>
                   <label className="btn btn-outline btn-sm" style={{ cursor: uploadingImage ? 'not-allowed' : 'pointer' }}>
                     {uploadingImage ? <Loader2 size={14} className="spin" /> : <Upload size={14} />}
@@ -1288,7 +1703,7 @@ export default function EnterPropertyPage() {
                     <ImageIcon size={32} className="faint" style={{ margin: '0 auto 8px' }} />
                     <p style={{ margin: 0, fontSize: '13.5px', fontWeight: 600 }}>No photos uploaded yet</p>
                     <p className="faint" style={{ margin: '4px 0 0', fontSize: '12px' }}>
-                      PNG, JPG up to 5MB each. Minimum 8 required.
+                      PNG, JPG, WEBP up to 5MB each.
                     </p>
                   </div>
                 ) : (
@@ -1353,7 +1768,7 @@ export default function EnterPropertyPage() {
                   </button>
                 </div>
                 <p className="muted" style={{ margin: '0 0 16px', fontSize: '13px' }}>
-                  CMP compliance team inspects each document before launching the 7-day bidding window.
+                  Required documents depend on the selected property category, plan and type.
                 </p>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -1386,7 +1801,7 @@ export default function EnterPropertyPage() {
                               </span>
                             ) : (
                               <span className="faint" style={{ display: 'block', fontSize: '11.5px' }}>
-                                PDF or image (Max 10MB)
+                                PDF or image (Max 5MB)
                               </span>
                             )}
                           </div>
@@ -1424,15 +1839,66 @@ export default function EnterPropertyPage() {
             </div>
           )}
 
-          {/* STEP 6: Review & Submit */}
-          {currentStep === 6 && (
+          {/* STEP 7: Review & Submit */}
+          {currentStep === 7 && (
             <div>
               <h2 style={{ fontSize: '18px', margin: '0 0 4px', fontWeight: 700 }}>
-                6. Review & Submit Property
+                7. Review & Submit
               </h2>
               <p className="muted" style={{ margin: '0 0 20px', fontSize: '13.5px' }}>
-                Review all submitted specifications and legal attachments before final submission to CMP moderation.
+                Check any remaining items below before submitting your Real Time Offer entry.
               </p>
+
+              {/* Submit Issues Checklist (Section 13.1 item 3) */}
+              {activeSubmitIssues.length > 0 && (
+                <div
+                  className="card"
+                  style={{
+                    padding: '16px 20px',
+                    marginBottom: '20px',
+                    background: 'var(--cmp-danger-subtle)',
+                    borderColor: 'var(--cmp-danger-border)'
+                  }}
+                >
+                  <div className="row" style={{ gap: '8px', alignItems: 'center', marginBottom: '10px' }}>
+                    <AlertCircle size={18} color="var(--cmp-danger)" />
+                    <span style={{ fontWeight: 800, fontSize: '14px', color: 'var(--cmp-danger)' }}>
+                      Finish the property before submitting ({activeSubmitIssues.length} remaining)
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {activeSubmitIssues.map((iss, i) => (
+                      <div
+                        key={i}
+                        className="row"
+                        style={{
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '8px 12px',
+                          background: 'var(--cmp-surface)',
+                          borderRadius: '6px',
+                          border: '1px solid var(--cmp-border)'
+                        }}
+                      >
+                        <span style={{ fontSize: '13px', fontWeight: 600 }}>
+                          Step {iss.step || 1}: {iss.message}
+                        </span>
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          style={{ color: 'var(--cmp-brand)', fontWeight: 700 }}
+                          onClick={() => {
+                            setCurrentStep(iss.step || 1);
+                            setStepError(null);
+                          }}
+                        >
+                          Go to Step {iss.step || 1} →
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Prospectus Review Card */}
               <div
@@ -1448,16 +1914,18 @@ export default function EnterPropertyPage() {
                     <span className="badge badge-neutral" style={{ fontSize: '11px', marginBottom: '6px' }}>
                       {formData.propertyCategory} · {formData.propertyPlan} · {formData.propertyType}
                     </span>
-                    <h3 style={{ fontSize: '18px', margin: '4px 0 2px', fontWeight: 800 }}>{formData.propertyTitle}</h3>
+                    <h3 style={{ fontSize: '18px', margin: '4px 0 2px', fontWeight: 800 }}>
+                      {formData.propertyTitle || 'Untitled Property'}
+                    </h3>
                     <p className="muted" style={{ margin: 0, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <MapPin size={13} /> {formData.propertyLocation}
+                      <MapPin size={13} /> {formData.propertyLocation || '—'}
                     </p>
                   </div>
 
                   <div style={{ textAlign: 'end' }}>
                     <span className="faint" style={{ fontSize: '11px', textTransform: 'uppercase', fontWeight: 800 }}>Starting Price</span>
                     <p style={{ margin: '2px 0 0', fontSize: '20px', fontWeight: 800, color: 'var(--cmp-brand)' }}>
-                      AED {Number(formData.propertyPrice).toLocaleString('en-US')}
+                      {formData.propertyPrice ? `AED ${Number(formData.propertyPrice).toLocaleString('en-US')}` : '—'}
                     </p>
                   </div>
                 </div>
@@ -1476,7 +1944,9 @@ export default function EnterPropertyPage() {
                 >
                   <div>
                     <span className="faint" style={{ fontSize: '11px', textTransform: 'uppercase', fontWeight: 700 }}>Area</span>
-                    <p style={{ margin: '2px 0 0', fontWeight: 700, fontSize: '13.5px' }}>{formData.propertyArea} sqft</p>
+                    <p style={{ margin: '2px 0 0', fontWeight: 700, fontSize: '13.5px' }}>
+                      {formData.propertyArea || '—'} {formData.propertyAreaUnit}
+                    </p>
                   </div>
 
                   {showBedrooms && (
@@ -1490,7 +1960,19 @@ export default function EnterPropertyPage() {
 
                   <div>
                     <span className="faint" style={{ fontSize: '11px', textTransform: 'uppercase', fontWeight: 700 }}>Trakheesi #</span>
-                    <p style={{ margin: '2px 0 0', fontWeight: 700, fontSize: '13.5px' }}>{formData.trakheesiNumber}</p>
+                    <p style={{ margin: '2px 0 0', fontWeight: 700, fontSize: '13.5px' }}>{formData.trakheesiNumber || '—'}</p>
+                  </div>
+
+                  <div>
+                    <span className="faint" style={{ fontSize: '11px', textTransform: 'uppercase', fontWeight: 700 }}>Offers Open On</span>
+                    <p style={{ margin: '2px 0 0', fontWeight: 700, fontSize: '13.5px' }}>
+                      {formData.auctionOpenDate} at {formData.auctionOpenTime}
+                    </p>
+                  </div>
+
+                  <div>
+                    <span className="faint" style={{ fontSize: '11px', textTransform: 'uppercase', fontWeight: 700 }}>Duration</span>
+                    <p style={{ margin: '2px 0 0', fontWeight: 700, fontSize: '13.5px' }}>{formData.auctionDurationDays} days</p>
                   </div>
 
                   <div>
@@ -1505,7 +1987,7 @@ export default function EnterPropertyPage() {
                     Description
                   </span>
                   <p style={{ margin: 0, fontSize: '12.5px', lineHeight: '1.5', whiteSpace: 'pre-line' }}>
-                    {formData.propertyDescription}
+                    {formData.propertyDescription || '—'}
                   </p>
                 </div>
 
@@ -1524,46 +2006,6 @@ export default function EnterPropertyPage() {
                 </div>
               </div>
 
-              {/* Direct Contact Warning if detected */}
-              {(findContactDetail(formData.propertyTitle) || findContactDetail(formData.propertyDescription)) && (
-                <div
-                  style={{
-                    padding: '14px 16px',
-                    borderRadius: '8px',
-                    background: 'rgba(239, 68, 68, 0.08)',
-                    border: '1px solid rgba(239, 68, 68, 0.3)',
-                    marginBottom: '20px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: '12px'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#ef4444' }}>
-                    <AlertCircle size={18} style={{ flexShrink: 0 }} />
-                    <span>
-                      Direct contact details detected: <strong>"{findContactDetail(formData.propertyTitle) || findContactDetail(formData.propertyDescription)}"</strong>. CMP policy requires removing phone numbers, emails, and website links.
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-outline"
-                    style={{ borderColor: '#ef4444', color: '#ef4444', flexShrink: 0 }}
-                    onClick={() => {
-                      setFormData((prev) => ({
-                        ...prev,
-                        propertyTitle: cleanContactDetails(prev.propertyTitle),
-                        propertyDescription: cleanContactDetails(prev.propertyDescription)
-                      }));
-                      setStepError(null);
-                    }}
-                  >
-                    <Sparkles size={14} style={{ marginRight: '4px' }} />
-                    Auto-remove contact info
-                  </button>
-                </div>
-              )}
-
               {/* Ready to Submit Banner */}
               <div
                 style={{
@@ -1578,10 +2020,12 @@ export default function EnterPropertyPage() {
                   <Sparkles size={20} color="var(--cmp-brand)" />
                   <div>
                     <span style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--cmp-brand)' }}>
-                      Ready for CMP Moderation
+                      {can('listings.approve') ? 'Submits straight to CMP Review' : 'Submits for Agency Approval'}
                     </span>
                     <p className="muted" style={{ margin: '2px 0 0', fontSize: '12.5px' }}>
-                      Once submitted, status becomes <code>AWAITING</code>. CMP will verify legal documents and schedule the 7-day auction.
+                      {can('listings.approve')
+                        ? 'As an agency approver, your entry goes straight to CMP review (AWAITING) and starts at the scheduled time once approved.'
+                        : 'Your entry will first be sent to your agency for approval (AGENCY_REVIEW). Once approved by your agency, CMP reviews and runs the auction.'}
                     </p>
                   </div>
                 </div>
@@ -1606,7 +2050,7 @@ export default function EnterPropertyPage() {
                   type="button"
                   className="btn btn-outline"
                   onClick={handlePrevStep}
-                  disabled={isSubmitting}
+                  disabled={isSavingStep || isSubmitting}
                 >
                   <ArrowLeft size={16} />
                   <span>Back</span>
@@ -1615,13 +2059,15 @@ export default function EnterPropertyPage() {
             </div>
 
             <div className="row" style={{ gap: '10px' }}>
-              {currentStep < 6 ? (
+              {currentStep < 7 ? (
                 <button
                   type="button"
                   className="btn btn-primary"
                   onClick={handleNextStep}
+                  disabled={isSavingStep}
                 >
-                  <span>Continue</span>
+                  {isSavingStep ? <Loader2 size={16} className="spin" /> : null}
+                  <span>{isSavingStep ? 'Saving…' : 'Save & Continue'}</span>
                   <ArrowRight size={16} />
                 </button>
               ) : (
@@ -1629,10 +2075,10 @@ export default function EnterPropertyPage() {
                   type="button"
                   className="btn btn-accent"
                   onClick={handleSubmitProperty}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || activeSubmitIssues.length > 0}
                 >
                   {isSubmitting ? <Loader2 size={16} className="spin" /> : <Sparkles size={16} />}
-                  <span>{isSubmitting ? 'Submitting to CMP…' : 'Submit Property'}</span>
+                  <span>{isSubmitting ? 'Submitting…' : 'Submit Property'}</span>
                 </button>
               )}
             </div>

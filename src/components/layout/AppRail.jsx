@@ -11,33 +11,59 @@ import {
   HelpCircle,
   Settings,
   Radio,
-  FileCheck,
   DollarSign,
-  Plus,
-  Sparkles
+  Sparkles,
+  PanelLeftClose,
+  PanelLeftOpen
 } from 'lucide-react';
 
-export default function AppRail() {
+export default function AppRail({ isExpanded = false, onToggleExpand }) {
   const { platform, account, can, hasAny } = useApp();
   const location = useLocation();
   const isRto = platform === 'auctions' || location.pathname.startsWith('/rto');
 
   return (
-    <nav className="app-rail" aria-label="Main" data-side={isRto ? 'rto' : 'listings'}>
-      <NavLink className="rail-logo" aria-label="Home" to={isRto ? '/rto' : '/'}>
-        <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true">
-          <path
-            d="M4 15 L16 5 L28 15 V27 a1 1 0 0 1-1 1 H5 a1 1 0 0 1-1-1 Z"
-            fill="none"
-            stroke={isRto ? '#E3A972' : '#6ED4A1'}
-            strokeWidth="2.4"
-            strokeLinejoin="round"
-          />
-          <circle cx="16" cy="19" r="5" fill={isRto ? '#6ED4A1' : '#E3A972'} />
-        </svg>
-      </NavLink>
+    <nav
+      className={`app-rail ${isExpanded ? 'expanded' : 'collapsed'}`}
+      aria-label="Main"
+      data-side={isRto ? 'rto' : 'listings'}
+    >
+      <div className="rail-top">
+        <NavLink className="rail-logo" aria-label="Home" to={isRto ? '/rto' : '/'}>
+          <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true" style={{ flexShrink: 0 }}>
+            <path
+              d="M4 15 L16 5 L28 15 V27 a1 1 0 0 1-1 1 H5 a1 1 0 0 1-1-1 Z"
+              fill="none"
+              stroke={isRto ? '#E3A972' : '#6ED4A1'}
+              strokeWidth="2.4"
+              strokeLinejoin="round"
+            />
+            <circle cx="16" cy="19" r="5" fill={isRto ? '#6ED4A1' : '#E3A972'} />
+          </svg>
+          {isExpanded && (
+            <div className="rail-brand-text">
+              <span className="rail-brand-title">CMP Connect</span>
+              <span className="rail-side-inline">{isRto ? 'Real Time' : 'Listings'}</span>
+            </div>
+          )}
+        </NavLink>
 
-      <span className="rail-side">{isRto ? 'Real Time' : 'Listings'}</span>
+        {onToggleExpand && (
+          <button
+            type="button"
+            className="rail-toggle-btn"
+            onClick={onToggleExpand}
+            title={isExpanded ? 'Collapse sidebar' : 'Expand sidebar'}
+            aria-label={isExpanded ? 'Collapse sidebar' : 'Expand sidebar'}
+          >
+            {isExpanded ? <PanelLeftClose size={17} /> : <PanelLeftOpen size={17} />}
+          </button>
+        )}
+      </div>
+
+      {!isExpanded && (
+        <span className="rail-side">{isRto ? 'Real Time' : 'Listings'}</span>
+      )}
 
       <div className="rail-group">
         {!isRto ? (
@@ -82,8 +108,15 @@ export default function AppRail() {
               </NavLink>
             )}
 
-            {(!account || hasAny('team.view', 'insights.agents_view', 'roles.view')) && (
-              <NavLink to="/team" className={({ isActive }) => `rail-link ${isActive ? 'active' : ''}`} title="Team">
+            {(!account || can('team.view')) && (
+              <NavLink to="/members" className={({ isActive }) => `rail-link ${isActive || location.pathname.startsWith('/team/members') ? 'active' : ''}`} title="Members">
+                <Users size={19} />
+                <span>Members</span>
+              </NavLink>
+            )}
+
+            {(!account || hasAny('insights.agents_view', 'roles.view')) && (
+              <NavLink to="/team" className={({ isActive }) => `rail-link ${isActive && !location.pathname.startsWith('/team/members') ? 'active' : ''}`} title="Team">
                 <UserCheck size={19} />
                 <span>Team</span>
               </NavLink>
@@ -122,7 +155,14 @@ export default function AppRail() {
               </NavLink>
             )}
 
-            {(!account || hasAny('team.view', 'insights.agents_view', 'roles.view')) && (
+            {(!account || can('team.view')) && (
+              <NavLink to="/rto/members" className={({ isActive }) => `rail-link ${isActive ? 'active' : ''}`} title="Members">
+                <Users size={19} />
+                <span>Members</span>
+              </NavLink>
+            )}
+
+            {(!account || hasAny('insights.agents_view', 'roles.view')) && (
               <NavLink to="/rto/team" className={({ isActive }) => `rail-link ${isActive ? 'active' : ''}`} title="Team">
                 <UserCheck size={19} />
                 <span>Team</span>

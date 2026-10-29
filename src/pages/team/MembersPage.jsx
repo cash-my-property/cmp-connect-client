@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import {
   Plus,
   Search,
@@ -193,6 +193,9 @@ const initialMockMembers = [
 
 export default function MembersPage() {
   const { account, authToken, can, dataMode, isMockData } = useApp();
+  const location = useLocation();
+  const isRtoContext = location.pathname.startsWith('/rto');
+  const membersBasePath = isRtoContext ? '/rto/members' : '/members';
   const isAgency = account?.accountType !== 'DEVELOPER';
 
   const [mockMembers, setMockMembers] = useState(initialMockMembers);
@@ -1205,7 +1208,7 @@ export default function MembersPage() {
                         <div>
                           <div className="row" style={{ gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
                             <NavLink
-                              to={`/team/members/${m.id || m._id}`}
+                              to={`${membersBasePath}/${m.id || m._id}`}
                               style={{ color: 'var(--cmp-brand)', fontWeight: 700, fontSize: '14px', textDecoration: 'none' }}
                             >
                               {displayName}

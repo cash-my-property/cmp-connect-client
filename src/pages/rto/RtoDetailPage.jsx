@@ -23,6 +23,7 @@ import {
   ChevronRight,
   Eye,
   Edit3,
+  Trash2,
   X,
   UploadCloud,
   Check
@@ -50,7 +51,7 @@ function formatCountdown(targetMs) {
 export default function RtoDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { isLiveData, account, authToken } = useApp();
+  const { isLiveData, account, authToken, can: appCan } = useApp();
 
   const [property, setProperty] = useState(null);
   const [bidsData, setBidsData] = useState(null);
@@ -62,7 +63,14 @@ export default function RtoDetailPage() {
   // Remaining time in ms for live auction countdown
   const [timeRemaining, setTimeRemaining] = useState(0);
 
-  // Fix and Resend Modal State
+  // Agency Review (Approve / Send back) state
+  const [agencyActionLoading, setAgencyActionLoading] = useState(false);
+  const [agencyActionError, setAgencyActionError] = useState(null);
+  const [agencyActionSuccess, setAgencyActionSuccess] = useState(null);
+  const [isRejectBoxOpen, setIsRejectBoxOpen] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
+
+  // Fix and Resend / Edit Modal State
   const [isFixModalOpen, setIsFixModalOpen] = useState(false);
   const [fixSubmitting, setFixSubmitting] = useState(false);
   const [fixError, setFixError] = useState(null);
@@ -73,7 +81,10 @@ export default function RtoDetailPage() {
     propertyPrice: '',
     propertyArea: '',
     trakheesiNumber: '',
-    emiratesIdExpiry: ''
+    emiratesIdExpiry: '',
+    auctionOpenDate: '',
+    auctionOpenTime: '10:00',
+    auctionDurationDays: 7
   });
 
   const token = authToken || (typeof localStorage !== 'undefined' ? localStorage.getItem('cmp_connect_auth_token') : null);
@@ -104,6 +115,20 @@ export default function RtoDetailPage() {
             setTimeRemaining(p.auction.remainingMs);
           }
 
+          // Parse schedule startAt for edit form
+          const rawStart = p.schedule?.startAt || p.auction?.startTime || '';
+          let openDate = '';
+          let openTime = '10:00';
+          if (rawStart) {
+            const dt = new Date(rawStart);
+            if (!isNaN(dt.getTime())) {
+              openDate = dt.toISOString().slice(0, 10);
+              openTime = dt.toTimeString().slice(0, 5);
+            }
+          } else {
+            openDate = new Date(Date.now() + 86400000 * 2).toISOString().slice(0, 10);
+          }
+
           // Populate fix form default values
           setFixForm({
             propertyTitle: p.title || p.propertyTitle || '',
@@ -111,7 +136,10 @@ export default function RtoDetailPage() {
             propertyPrice: p.startingPrice ?? p.propertyPrice ?? '',
             propertyArea: p.area ?? p.propertyArea ?? '',
             trakheesiNumber: p.trakheesiNumber || '',
-            emiratesIdExpiry: p.emiratesIdExpiry ? p.emiratesIdExpiry.substring(0, 10) : ''
+            emiratesIdExpiry: p.emiratesIdExpiry ? p.emiratesIdExpiry.substring(0, 10) : '',
+            auctionOpenDate: openDate,
+            auctionOpenTime: openTime,
+            auctionDurationDays: p.schedule?.durationDays || 7
           });
         } else {
           // If in mock data mode or endpoint returned 401/404, fallback to mock object
@@ -165,7 +193,77 @@ export default function RtoDetailPage() {
     return () => clearInterval(poll);
   }, [property?.status, loadData]);
 
-  // Handle Fix and Resend submit
+  // Handle Agency Approve (AGENCY_REVIEW → AWAITING)
+  const handleAgencyApprove = async () => {
+    setAgencyActionLoading(true);
+    setAgencyActionError(null);
+    setAgencyActionSuccess(null);
+    try {
+      const res = await cmpConnectApi.approveRtoProperty(id, token);
+      setAgencyActionSuccess(res?.message || 'Approved and sent to CMP for review.');
+      await loadData(true);
+    } catch (err) {
+      setAgencyActionError(err.message || 'Failed to approve property.');
+    } finally {
+      setAgencyActionLoading(false);
+    }
+  };
+
+  // Handle Agency Send Back / Reject (AGENCY_REVIEW → AGENCY_REJECTED)
+  const handleAgencyReject = async (e) => {
+    e.preventDefault();
+    const trimmed = rejectReason.trim();
+    if (trimmed.length < 3) {
+      setAgencyActionError('Please enter a reason (at least 3 characters).');
+      return;
+    }
+    setAgencyActionLoading(true);
+    setAgencyActionError(null);
+    setAgencyActionSuccess(null);
+    try {
+      const res = await cmpConnectApi.rejectRtoProperty(id, trimmed, token);
+      setAgencyActionSuccess(res?.message || 'Property sent back to the agent.');
+      setIsRejectBoxOpen(false);
+      setRejectReason('');
+      await loadData(true);
+    } catch (err) {
+      setAgencyActionError(err.message || 'Failed to send back property.');
+    } finally {
+      setAgencyActionLoading(false);
+    }
+  };
+
+  // Handle Submit (DRAFT / AGENCY_REJECTED / REJECTED → AGENCY_REVIEW or AWAITING)
+  const handleSubmitEntry = async () => {
+    setAgencyActionLoading(true);
+    setAgencyActionError(null);
+    setAgencyActionSuccess(null);
+    try {
+      const res = await cmpConnectApi.submitRtoProperty(id, token);
+      setAgencyActionSuccess(res?.message || 'Property submitted successfully.');
+      await loadData(true);
+    } catch (err) {
+      setAgencyActionError(err.message || 'Failed to submit property.');
+    } finally {
+      setAgencyActionLoading(false);
+    }
+  };
+
+  // Handle Delete Draft (DELETE /rto/properties/:id)
+  const handleDeleteDraft = async () => {
+    if (!window.confirm('Delete this draft property?')) return;
+    setAgencyActionLoading(true);
+    setAgencyActionError(null);
+    try {
+      await cmpConnectApi.deleteRtoProperty(id, token);
+      navigate('/rto');
+    } catch (err) {
+      setAgencyActionError(err.message || 'Failed to delete draft.');
+      setAgencyActionLoading(false);
+    }
+  };
+
+  // Handle Fix and Resend / Edit submit
   const handleFixSubmit = async (e) => {
     e.preventDefault();
     setFixSubmitting(true);
@@ -180,8 +278,27 @@ export default function RtoDetailPage() {
         trakheesiNumber: fixForm.trakheesiNumber.trim(),
         emiratesIdExpiry: fixForm.emiratesIdExpiry
       };
+      if (fixForm.auctionOpenDate && fixForm.auctionOpenTime) {
+        payload.auctionStartAt = `${fixForm.auctionOpenDate}T${fixForm.auctionOpenTime}:00+04:00`;
+      }
+      if (fixForm.auctionDurationDays) {
+        payload.auctionDurationDays = Number(fixForm.auctionDurationDays);
+      }
 
-      await cmpConnectApi.updateRtoProperty(id, payload, token);
+      const patchRes = await cmpConnectApi.updateRtoProperty(id, payload, token);
+      // Per Section 13: PATCH saves steps/edits without changing status; POST /:id/submit resubmits when DRAFT, AGENCY_REJECTED, or REJECTED
+      const updatedStatus = patchRes?.data?.status || property?.status;
+      if (['DRAFT', 'AGENCY_REJECTED', 'REJECTED'].includes(updatedStatus)) {
+        try {
+          await cmpConnectApi.submitRtoProperty(id, token);
+        } catch (subErr) {
+          // Ignore 404 if backend is still on legacy PATCH-resubmit
+          if (subErr.status && subErr.status !== 404) {
+            throw subErr;
+          }
+        }
+      }
+
       setFixSuccess(true);
       setTimeout(() => {
         setIsFixModalOpen(false);
@@ -243,7 +360,15 @@ export default function RtoDetailPage() {
   const reference = property?.rtoRef || property?.reference || id;
 
   const auction = property?.auction || {};
+  const schedule = property?.schedule || {};
   const can = property?.can || {};
+  const submitIssues = Array.isArray(property?.submitIssues) ? property.submitIssues : [];
+  const canEdit = Boolean(can?.edit);
+  const canSubmit = Boolean(can?.submit);
+  const canDelete = Boolean(can?.delete);
+  const canAgencyApprove = Boolean(can?.agencyApprove);
+  const canAgencyReject = Boolean(can?.agencyReject);
+  const historyList = Array.isArray(property?.history) ? property.history : [];
   const documents = property?.documents || [];
   const propertyImages = (Array.isArray(property?.images) && property.images.length > 0)
     ? property.images
@@ -303,21 +428,343 @@ export default function RtoDetailPage() {
             <span>{isRefreshing ? 'Updating…' : 'Refresh'}</span>
           </button>
 
-          {status === 'REJECTED' && can?.edit && (
+          {canDelete && (
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              style={{ borderColor: 'var(--cmp-danger)', color: 'var(--cmp-danger)' }}
+              onClick={handleDeleteDraft}
+              disabled={agencyActionLoading}
+            >
+              <Trash2 size={14} />
+              <span>Delete</span>
+            </button>
+          )}
+
+          {canEdit && (
+            <NavLink
+              to={`/rto/${id}/edit`}
+              className="btn btn-outline btn-sm"
+            >
+              <Edit3 size={14} />
+              <span>{status === 'DRAFT' ? 'Continue in wizard' : 'Edit in wizard'}</span>
+            </NavLink>
+          )}
+
+          {canEdit && status !== 'DRAFT' && (
             <button
               type="button"
               className="btn btn-accent btn-sm"
               onClick={() => setIsFixModalOpen(true)}
             >
               <Edit3 size={14} />
-              <span>Fix and resend</span>
+              <span>{status === 'AGENCY_REVIEW' ? 'Quick edit' : 'Fix and resend'}</span>
+            </button>
+          )}
+
+          {canAgencyApprove && (
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={handleAgencyApprove}
+              disabled={agencyActionLoading}
+            >
+              <Check size={14} />
+              <span>{agencyActionLoading ? 'Approving…' : 'Approve entry'}</span>
+            </button>
+          )}
+
+          {canAgencyReject && (
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              style={{ borderColor: 'var(--cmp-danger)', color: 'var(--cmp-danger)' }}
+              onClick={() => setIsRejectBoxOpen((prev) => !prev)}
+              disabled={agencyActionLoading}
+            >
+              <X size={14} />
+              <span>Send back</span>
+            </button>
+          )}
+
+          {canSubmit && (
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={handleSubmitEntry}
+              disabled={agencyActionLoading || submitIssues.length > 0}
+            >
+              <Sparkles size={14} />
+              <span>{agencyActionLoading ? 'Submitting…' : 'Submit'}</span>
             </button>
           )}
         </div>
       </div>
 
+      {/* Agency Action Feedback */}
+      {agencyActionError && (
+        <div
+          className="card"
+          style={{
+            padding: '12px 16px',
+            marginBottom: '16px',
+            background: 'var(--cmp-danger-subtle)',
+            borderColor: 'var(--cmp-danger-border)',
+            color: 'var(--cmp-danger)',
+            fontSize: '13.5px',
+            fontWeight: 600
+          }}
+        >
+          {agencyActionError}
+        </div>
+      )}
+
+      {agencyActionSuccess && (
+        <div
+          className="card"
+          style={{
+            padding: '12px 16px',
+            marginBottom: '16px',
+            background: 'var(--cmp-brand-subtle)',
+            borderColor: 'var(--cmp-brand-border)',
+            color: 'var(--cmp-brand)',
+            fontSize: '13.5px',
+            fontWeight: 600
+          }}
+        >
+          ✓ {agencyActionSuccess}
+        </div>
+      )}
+
       {/* Main Status Hero Banner */}
       <div style={{ marginBottom: '24px' }}>
+        {status === 'DRAFT' && (
+          <div
+            className="card"
+            style={{
+              padding: '20px 24px',
+              background: 'var(--cmp-surface-subtle)',
+              borderColor: 'var(--cmp-border)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '16px'
+            }}
+          >
+            <div>
+              <div className="row" style={{ gap: '8px', alignItems: 'center' }}>
+                <Edit3 size={19} className="faint" />
+                <span style={{ fontWeight: 800, fontSize: '14px' }}>
+                  Draft entry
+                </span>
+              </div>
+              <p className="muted" style={{ margin: '4px 0 0', fontSize: '13.5px' }}>
+                {submitIssues.length > 0
+                  ? `${submitIssues.length} item(s) still needed before submitting.`
+                  : 'All steps are complete. Ready to submit.'}
+              </p>
+            </div>
+
+            <div className="row" style={{ gap: '8px' }}>
+              <NavLink to={`/rto/${id}/edit`} className="btn btn-accent btn-sm">
+                <Edit3 size={14} />
+                <span>Continue</span>
+              </NavLink>
+              {canSubmit && (
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={handleSubmitEntry}
+                  disabled={agencyActionLoading}
+                >
+                  <Sparkles size={14} />
+                  <span>{agencyActionLoading ? 'Submitting…' : 'Submit'}</span>
+                </button>
+              )}
+              {canDelete && (
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  style={{ borderColor: 'var(--cmp-danger)', color: 'var(--cmp-danger)' }}
+                  onClick={handleDeleteDraft}
+                  disabled={agencyActionLoading}
+                >
+                  <Trash2 size={14} />
+                  <span>Delete</span>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {submitIssues.length > 0 && (
+          <div
+            className="card"
+            style={{
+              padding: '16px 20px',
+              marginTop: '12px',
+              background: 'var(--cmp-warning-subtle, rgba(234, 179, 8, 0.08))',
+              borderColor: 'var(--cmp-warning-border, rgba(234, 179, 8, 0.3))'
+            }}
+          >
+            <span style={{ fontWeight: 800, fontSize: '13px', color: '#B45309', display: 'block', marginBottom: '8px' }}>
+              Remaining items before submit ({submitIssues.length})
+            </span>
+            <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '13px', display: 'grid', gap: '4px' }}>
+              {submitIssues.map((iss, idx) => (
+                <li key={idx}>
+                  <strong>Step {iss.step || 1}:</strong> {iss.message}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {status === 'AGENCY_REVIEW' && (
+          <div
+            className="card"
+            style={{
+              padding: '20px 24px',
+              background: 'var(--cmp-warning-subtle, rgba(234, 179, 8, 0.08))',
+              borderColor: 'var(--cmp-warning-border, rgba(234, 179, 8, 0.3))'
+            }}
+          >
+            <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+              <div>
+                <div className="row" style={{ gap: '8px', alignItems: 'center' }}>
+                  <Clock size={19} color="#D97706" />
+                  <span style={{ fontWeight: 800, fontSize: '14px', color: '#B45309' }}>
+                    Waiting for agency approval
+                  </span>
+                </div>
+                <p className="muted" style={{ margin: '4px 0 0', fontSize: '13.5px' }}>
+                  {canAgencyApprove
+                    ? 'Review this agent entry and approve it to send it to CMP, or send it back with a note.'
+                    : 'Your agency owner or admin will review this entry before sending it to CMP.'}
+                </p>
+              </div>
+
+              {(canAgencyApprove || canAgencyReject) && (
+                <div className="row" style={{ gap: '8px' }}>
+                  {canAgencyApprove && (
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      disabled={agencyActionLoading}
+                      onClick={handleAgencyApprove}
+                    >
+                      <Check size={15} />
+                      <span>{agencyActionLoading ? 'Approving…' : 'Approve'}</span>
+                    </button>
+                  )}
+                  {canAgencyReject && (
+                    <button
+                      type="button"
+                      className="btn btn-outline btn-sm"
+                      style={{ borderColor: 'var(--cmp-danger)', color: 'var(--cmp-danger)' }}
+                      disabled={agencyActionLoading}
+                      onClick={() => setIsRejectBoxOpen((prev) => !prev)}
+                    >
+                      <X size={15} />
+                      <span>Send back</span>
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {isRejectBoxOpen && (
+              <form
+                onSubmit={handleAgencyReject}
+                style={{
+                  marginTop: '16px',
+                  paddingTop: '16px',
+                  borderTop: '1px solid var(--cmp-border)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '10px'
+                }}
+              >
+                <label className="field-label" style={{ fontSize: '12.5px', fontWeight: 700 }}>
+                  Reason for sending back to the agent (3–500 characters) *
+                </label>
+                <textarea
+                  rows={3}
+                  required
+                  minLength={3}
+                  maxLength={500}
+                  placeholder="Explain what needs to be fixed before sending to CMP…"
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  style={{ width: '100%', fontSize: '13.5px' }}
+                />
+                <div className="row" style={{ justifyContent: 'flex-end', gap: '8px' }}>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => {
+                      setIsRejectBoxOpen(false);
+                      setRejectReason('');
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn btn-sm"
+                    style={{ background: 'var(--cmp-danger)', color: '#fff', border: 'none' }}
+                    disabled={agencyActionLoading}
+                  >
+                    {agencyActionLoading ? 'Sending back…' : 'Confirm send back'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        )}
+
+        {status === 'AGENCY_REJECTED' && (
+          <div
+            className="card"
+            style={{
+              padding: '20px 24px',
+              background: 'var(--cmp-danger-subtle)',
+              borderColor: 'var(--cmp-danger-border)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '16px'
+            }}
+          >
+            <div>
+              <div className="row" style={{ gap: '8px', alignItems: 'center' }}>
+                <AlertCircle size={20} color="var(--cmp-danger)" />
+                <span style={{ fontWeight: 800, fontSize: '14px', color: 'var(--cmp-danger)' }}>
+                  Sent back by agency
+                </span>
+              </div>
+              <p style={{ margin: '6px 0 0', fontSize: '14px', fontWeight: 600 }}>
+                {rejectionReason || 'Your agency requested updates before sending this entry to CMP.'}
+              </p>
+              <p className="faint" style={{ margin: '4px 0 0', fontSize: '12.5px' }}>
+                Update the required details and click &quot;Fix and resend&quot;.
+              </p>
+            </div>
+
+            {canEdit && (
+              <button
+                type="button"
+                className="btn btn-accent"
+                onClick={() => setIsFixModalOpen(true)}
+              >
+                <Edit3 size={15} />
+                <span>Fix and resend</span>
+              </button>
+            )}
+          </div>
+        )}
         {status === 'APPROVED' && (
           <div
             className="card"
@@ -460,7 +907,7 @@ export default function RtoDetailPage() {
               </p>
             </div>
 
-            {can?.edit && (
+            {canEdit && (
               <button
                 type="button"
                 className="btn btn-accent"
@@ -489,7 +936,7 @@ export default function RtoDetailPage() {
               </span>
             </div>
             <p className="muted" style={{ margin: '4px 0 0', fontSize: '13.5px' }}>
-              Submitted to CMP moderation. Once verified and scheduled, the 7-day live auction will commence automatically.
+              Submitted to CMP moderation. Once verified and scheduled, the live auction will commence automatically.
             </p>
           </div>
         )}
@@ -510,7 +957,7 @@ export default function RtoDetailPage() {
               </span>
             </div>
             <p className="muted" style={{ margin: '4px 0 0', fontSize: '13.5px' }}>
-              Legal documents and permits have passed moderation. CMP operations is scheduling the auction time window.
+              Legal documents and permits have passed moderation. CMP operations is finalizing the auction schedule.
             </p>
           </div>
         )}
@@ -527,7 +974,7 @@ export default function RtoDetailPage() {
             <div className="row" style={{ gap: '8px', alignItems: 'center' }}>
               <Calendar size={19} color="var(--cmp-brand)" />
               <span style={{ fontWeight: 800, fontSize: '14px', color: 'var(--cmp-brand)' }}>
-                Scheduled to start {auction.startTime ? new Date(auction.startTime).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }) : 'soon'}
+                Starts {(auction.startTime || schedule.startAt) ? new Date(auction.startTime || schedule.startAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }) : 'soon'}
               </span>
             </div>
             <p className="muted" style={{ margin: '4px 0 0', fontSize: '13.5px' }}>
@@ -702,6 +1149,24 @@ export default function RtoDetailPage() {
                 <span className="faint" style={{ fontSize: '11px', textTransform: 'uppercase', fontWeight: 700 }}>Trakheesi Permit</span>
                 <p style={{ margin: '2px 0 0', fontWeight: 700, fontSize: '15px' }}>{property.trakheesiNumber || '—'}</p>
               </div>
+
+              {(schedule?.startAt || property?.auctionStartAt) && (
+                <div>
+                  <span className="faint" style={{ fontSize: '11px', textTransform: 'uppercase', fontWeight: 700 }}>Offers Open</span>
+                  <p style={{ margin: '2px 0 0', fontWeight: 700, fontSize: '14px' }}>
+                    {new Date(schedule?.startAt || property?.auctionStartAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}
+                  </p>
+                </div>
+              )}
+
+              {(schedule?.durationDays || property?.auctionDurationDays) && (
+                <div>
+                  <span className="faint" style={{ fontSize: '11px', textTransform: 'uppercase', fontWeight: 700 }}>Offers Open For</span>
+                  <p style={{ margin: '2px 0 0', fontWeight: 700, fontSize: '15px' }}>
+                    {schedule?.durationDays || property?.auctionDurationDays} days
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Description */}
@@ -920,10 +1385,53 @@ export default function RtoDetailPage() {
               </div>
             </div>
           </div>
+
+          {/* Activity & Review History */}
+          {historyList.length > 0 && (
+            <div className="card" style={{ padding: '16px' }}>
+              <span className="faint" style={{ fontSize: '11px', textTransform: 'uppercase', fontWeight: 700, display: 'block', marginBottom: '10px' }}>
+                Submission & Review History
+              </span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {historyList.map((evt, idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      padding: '8px 10px',
+                      borderRadius: '6px',
+                      background: 'var(--cmp-surface-subtle)',
+                      border: '1px solid var(--cmp-border)'
+                    }}
+                  >
+                    <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '12.5px', fontWeight: 700 }}>
+                        {evt.label || evt.action || evt.status || 'Update'}
+                      </span>
+                      {evt.at && (
+                        <span className="faint" style={{ fontSize: '11px' }}>
+                          {new Date(evt.at).toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' })}
+                        </span>
+                      )}
+                    </div>
+                    {evt.reason && (
+                      <p className="muted" style={{ margin: '4px 0 0', fontSize: '12px' }}>
+                        Reason: {evt.reason}
+                      </p>
+                    )}
+                    {evt.by && (
+                      <span className="faint" style={{ display: 'block', marginTop: '2px', fontSize: '11px' }}>
+                        By {evt.by?.fullName || evt.by?.name || evt.by}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Fix and Resend Modal Drawer */}
+      {/* Fix and Resend / Edit Modal Drawer */}
       {isFixModalOpen && (
         <div
           role="dialog"
@@ -952,9 +1460,13 @@ export default function RtoDetailPage() {
           >
             <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <div>
-                <h2 style={{ fontSize: '18px', margin: 0, fontWeight: 700 }}>Fix & Resend Property</h2>
+                <h2 style={{ fontSize: '18px', margin: 0, fontWeight: 700 }}>
+                  {status === 'AGENCY_REVIEW' ? 'Edit Property Details' : 'Fix & Resend Property'}
+                </h2>
                 <p className="faint" style={{ margin: '2px 0 0', fontSize: '12.5px' }}>
-                  Update details and resubmit for CMP moderation.
+                  {status === 'AGENCY_REVIEW'
+                    ? 'Update details before approving or while waiting for agency review.'
+                    : 'Update details and resubmit for review.'}
                 </p>
               </div>
               <button
@@ -1010,7 +1522,7 @@ export default function RtoDetailPage() {
                   textAlign: 'center'
                 }}
               >
-                ✓ Changes submitted! Property returned to CMP review.
+                ✓ Changes saved and submitted!
               </div>
             )}
 
@@ -1071,6 +1583,63 @@ export default function RtoDetailPage() {
                 </div>
               </div>
 
+              {/* Timing and terms */}
+              <div
+                style={{
+                  padding: '12px',
+                  borderRadius: '8px',
+                  background: 'var(--cmp-surface-subtle)',
+                  border: '1px solid var(--cmp-border)'
+                }}
+              >
+                <span style={{ fontSize: '12.5px', fontWeight: 700, display: 'block', marginBottom: '8px' }}>
+                  Timing and terms
+                </span>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
+                  <div>
+                    <label className="field-label" style={{ fontSize: '11.5px', fontWeight: 600, display: 'block', marginBottom: '4px' }}>
+                      Offers open on
+                    </label>
+                    <input
+                      type="date"
+                      value={fixForm.auctionOpenDate}
+                      onChange={(e) => setFixForm((prev) => ({ ...prev, auctionOpenDate: e.target.value }))}
+                      style={{ width: '100%', fontSize: '12.5px' }}
+                    />
+                  </div>
+                  <div>
+                    <label className="field-label" style={{ fontSize: '11.5px', fontWeight: 600, display: 'block', marginBottom: '4px' }}>
+                      At (+04:00)
+                    </label>
+                    <input
+                      type="time"
+                      value={fixForm.auctionOpenTime}
+                      onChange={(e) => setFixForm((prev) => ({ ...prev, auctionOpenTime: e.target.value }))}
+                      style={{ width: '100%', fontSize: '12.5px' }}
+                    />
+                  </div>
+                  <div>
+                    <label className="field-label" style={{ fontSize: '11.5px', fontWeight: 600, display: 'block', marginBottom: '4px' }}>
+                      Offers stay open for
+                    </label>
+                    <select
+                      value={fixForm.auctionDurationDays}
+                      onChange={(e) => setFixForm((prev) => ({ ...prev, auctionDurationDays: e.target.value }))}
+                      style={{ width: '100%', fontSize: '12.5px' }}
+                    >
+                      {[3, 7, 10, 14].map((d) => (
+                        <option key={d} value={String(d)}>
+                          {d} days
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <p className="faint" style={{ margin: '6px 0 0', fontSize: '11.5px' }}>
+                  Late offers add 10 minutes to the clock.
+                </p>
+              </div>
+
               <div>
                 <label className="field-label" style={{ fontSize: '12.5px', fontWeight: 600, display: 'block', marginBottom: '4px' }}>
                   Emirates ID Expiry
@@ -1111,7 +1680,11 @@ export default function RtoDetailPage() {
                   className="btn btn-accent"
                   disabled={fixSubmitting}
                 >
-                  {fixSubmitting ? 'Resubmitting…' : 'Submit for review'}
+                  {fixSubmitting
+                    ? 'Saving…'
+                    : status === 'AGENCY_REVIEW'
+                      ? 'Save changes'
+                      : 'Submit for review'}
                 </button>
               </div>
             </form>

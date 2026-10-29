@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { NavLink, useParams } from 'react-router-dom';
+import { NavLink, useParams, useLocation } from 'react-router-dom';
 import {
   Eye,
   X,
@@ -30,6 +30,8 @@ function formatVolume(amount) {
 
 export default function AgentSummaryPage() {
   const { id } = useParams();
+  const location = useLocation();
+  const isRtoContext = location.pathname.startsWith('/rto');
   const { authToken, account, isLiveData, isMockData } = useApp();
   const [activeTab, setActiveTab] = useState('Overview');
   const [isAwayMode, setIsAwayMode] = useState(false);
@@ -60,6 +62,7 @@ export default function AgentSummaryPage() {
     closedSalesVolume: 0,
     avgResponseTime: null,
     leadsHandled: 0,
+    realTimeOffer: null,
     reviews: []
   });
 
@@ -111,6 +114,15 @@ export default function AgentSummaryPage() {
         closedSalesVolume: 18400000,
         avgResponseTime: '11 mins',
         leadsHandled: 142,
+        realTimeOffer: {
+          entered: 4,
+          live: 1,
+          scheduled: 1,
+          sold: 1,
+          unsold: 1,
+          soldValue: 2350000,
+          sellThrough: 50
+        },
         reviews: [
           {
             author: 'Tareq Al-Hashemi',
@@ -142,31 +154,47 @@ export default function AgentSummaryPage() {
             .join('')
             .toUpperCase() || 'AG';
 
+          const isVerifiedBroker = Boolean(
+            sumData.elite?.criteria?.verified ||
+            m.verified ||
+            m.verificationStatus === 'VERIFIED'
+          );
+
           setIsAwayMode(Boolean(sumData.awayMode?.active));
 
           setAgent({
             id: m.id || targetId || '',
             name,
             initials,
-            email: m.email || '—',
-            phone: m.mobile || '—',
+            photo: m.photo || null,
+            email: m.email || null,
+            phone: m.mobile || null,
             role: m.role?.name || (typeof m.role === 'string' ? m.role : 'Agent'),
             brn: m.brn || '',
-            verificationStatus: m.verificationStatus || (m.brn ? 'VERIFIED' : 'UNVERIFIED'),
-            isVerified: Boolean(m.verified || m.verificationStatus === 'VERIFIED'),
-            tier: sumData.elite?.level || 'Rising',
+            verificationStatus: isVerifiedBroker ? 'VERIFIED' : (m.verificationStatus || 'UNVERIFIED'),
+            isVerified: isVerifiedBroker,
+            tier: sumData.elite?.level || null,
+            eliteCriteriaMet: sumData.elite?.criteriaMet ?? (isVerifiedBroker ? 1 : 0),
+            eliteCriteriaTotal: sumData.elite?.criteriaTotal ?? 4,
             score: sumData.agentScore != null ? sumData.agentScore : null,
             rating: sumData.feedback?.averageRating != null ? sumData.feedback.averageRating : null,
-            reviewsCount: sumData.feedback?.ratingsCount || 0,
-            unattended: sumData.feedback?.unattendedEnquiries || 0,
+            reviewsCount: sumData.feedback?.ratingsCount ?? null,
+            unattended: sumData.feedback?.unattendedEnquiries ?? null,
             responseRate: sumData.responseRate?.overall != null ? sumData.responseRate.overall : null,
-            liveListings: sumData.liveProperties?.total || 0,
-            claimedDeals: sumData.transactions12m?.claimed || 0,
-            unclaimedDeals: sumData.transactions12m?.notClaimed || 0,
-            totalDeals: sumData.transactions12m?.total || 0,
-            closedSalesVolume: 0,
+            responseSeries: sumData.responseRate?.series || null,
+            liveListings: sumData.liveProperties?.total ?? 0,
+            standardListings: sumData.liveProperties?.standard ?? null,
+            featuredListings: sumData.liveProperties?.featured ?? null,
+            premiumListings: sumData.liveProperties?.premium ?? null,
+            claimedDeals: sumData.transactions12m?.claimed ?? 0,
+            unclaimedDeals: sumData.transactions12m?.notClaimed ?? 0,
+            totalDeals: sumData.transactions12m?.total ?? 0,
+            closedSalesVolume: sumData.realTimeOffer?.soldValue ?? 0,
             avgResponseTime: null,
-            listingQuality: sumData.liveProperties?.listingQuality || null
+            listingQuality: sumData.liveProperties?.listingQuality != null ? sumData.liveProperties.listingQuality : null,
+            realTimeOffer: sumData.realTimeOffer || null,
+            canSetAway: sumData.can?.setAway ?? true,
+            awaySince: sumData.awayMode?.since || null
           });
           return;
         }
@@ -318,7 +346,7 @@ export default function AgentSummaryPage() {
           <Eye size={15} />
           <span>Agent summary: {agent.name}</span>
           <NavLink
-            to="/team"
+            to={isRtoContext ? '/rto/team' : '/team'}
             aria-label="Exit agent view"
             style={{ display: 'inline-flex', color: 'inherit', marginLeft: '6px' }}
           >
@@ -341,31 +369,33 @@ export default function AgentSummaryPage() {
           Agent summary
         </h1>
         <div className="row" style={{ gap: '8px' }}>
-          <button
-            type="button"
-            className={`btn btn-sm ${isAwayMode ? 'btn-primary' : 'btn-outline'}`}
-            disabled={isTogglingAway}
-            onClick={async () => {
-              const targetId = id || account?.id || account?._id;
-              if (!targetId) return;
-              const nextAway = !isAwayMode;
-              setIsTogglingAway(true);
-              try {
-                if (authToken) {
-                  await cmpConnectApi.setMemberAway(targetId, nextAway, authToken);
+          {(agent.canSetAway !== false) && (
+            <button
+              type="button"
+              className={`btn btn-sm ${isAwayMode ? 'btn-primary' : 'btn-outline'}`}
+              disabled={isTogglingAway}
+              onClick={async () => {
+                const targetId = id || account?.id || account?._id;
+                if (!targetId) return;
+                const nextAway = !isAwayMode;
+                setIsTogglingAway(true);
+                try {
+                  if (authToken) {
+                    await cmpConnectApi.setMemberAway(targetId, nextAway, authToken);
+                  }
+                  setIsAwayMode(nextAway);
+                } catch (err) {
+                  alert(err.message || 'Failed to toggle away mode.');
+                } finally {
+                  setIsTogglingAway(false);
                 }
-                setIsAwayMode(nextAway);
-              } catch (err) {
-                alert(err.message || 'Failed to toggle away mode.');
-              } finally {
-                setIsTogglingAway(false);
-              }
-            }}
-            style={{ gap: '6px' }}
-          >
-            <span>Away mode: {isAwayMode ? 'Active' : 'Off'}</span>
-            <Calendar size={14} />
-          </button>
+              }}
+              style={{ gap: '6px' }}
+            >
+              <span>Away mode: {isAwayMode ? 'Active' : 'Off'}</span>
+              <Calendar size={14} />
+            </button>
+          )}
         </div>
       </div>
 
@@ -373,7 +403,217 @@ export default function AgentSummaryPage() {
         <div className="card" style={{ padding: '40px', textAlign: 'center', color: 'var(--cmp-text-muted)' }}>
           Loading agent summary...
         </div>
+      ) : isRtoContext ? (
+        /* ==============================================================
+           REAL TIME OFFER AGENT SUMMARY VIEW (/rto/team/agents/:id)
+           ============================================================== */
+        <div style={{ display: 'grid', gap: '16px' }}>
+          {/* Top Agent Real Time Offer Profile Card */}
+          <section
+            className="card row"
+            style={{
+              padding: '22px',
+              justifyContent: 'space-between',
+              gap: '16px',
+              flexWrap: 'wrap',
+              alignItems: 'center'
+            }}
+          >
+            <div style={{ flex: '1 1 260px' }}>
+              <div className="row" style={{ gap: '8px', alignItems: 'center', marginBottom: '4px' }}>
+                <h2 style={{ fontSize: '20px', margin: 0 }}>{agent.name}</h2>
+                {agent.isVerified ? (
+                  <span
+                    className="badge badge-success"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px' }}
+                  >
+                    <CheckCircle size={13} /> Verified Broker
+                  </span>
+                ) : (
+                  <span className="badge badge-warning" style={{ fontSize: '12px' }}>
+                    Verification Pending
+                  </span>
+                )}
+              </div>
+              <p className="muted" style={{ margin: '0 0 16px', fontSize: '13.5px' }}>
+                {agent.brn ? `BRN: ${agent.brn} · ` : ''}
+                {agent.role || 'Agent'} · Real Time Offer Auction Summary
+              </p>
+
+              <div className="row" style={{ gap: '20px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <div>
+                  <span style={{ fontSize: '26px', fontWeight: 800, color: 'var(--cmp-text)' }}>
+                    {agent.realTimeOffer?.entered ?? 0}
+                  </span>
+                  <span className="faint" style={{ display: 'block', fontSize: '12px' }}>
+                    Properties entered
+                  </span>
+                </div>
+                <div style={{ height: '32px', width: '1px', background: 'var(--cmp-border)' }} />
+                <div>
+                  <span style={{ fontSize: '26px', fontWeight: 800, color: 'var(--cmp-brand)' }}>
+                    {agent.realTimeOffer?.live ?? 0}
+                  </span>
+                  <span className="faint" style={{ display: 'block', fontSize: '12px' }}>
+                    Live on desk
+                    {(agent.realTimeOffer?.scheduled || 0) > 0
+                      ? ` (+${agent.realTimeOffer.scheduled} scheduled)`
+                      : ''}
+                  </span>
+                </div>
+                <div style={{ height: '32px', width: '1px', background: 'var(--cmp-border)' }} />
+                <div>
+                  <span style={{ fontSize: '26px', fontWeight: 800, color: 'var(--cmp-success)' }}>
+                    {agent.realTimeOffer?.sold ?? 0}
+                  </span>
+                  <span className="faint" style={{ display: 'block', fontSize: '12px' }}>
+                    Auctions sold
+                  </span>
+                </div>
+                <div style={{ height: '32px', width: '1px', background: 'var(--cmp-border)' }} />
+                <div>
+                  <span style={{ fontSize: '26px', fontWeight: 800, color: 'var(--cmp-brand)' }}>
+                    {agent.realTimeOffer?.soldValue != null
+                      ? formatVolume(agent.realTimeOffer.soldValue)
+                      : '—'}
+                  </span>
+                  <span className="faint" style={{ display: 'block', fontSize: '12px' }}>
+                    Total sold value
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Avatar Badge */}
+            <div style={{ position: 'relative', width: '84px', height: '84px', flexShrink: 0 }}>
+              {agent.photo ? (
+                <img
+                  src={agent.photo}
+                  alt={agent.name}
+                  style={{ width: '84px', height: '84px', borderRadius: '50%', objectFit: 'cover' }}
+                />
+              ) : (
+                <div
+                  style={{
+                    width: '84px',
+                    height: '84px',
+                    borderRadius: '50%',
+                    display: 'grid',
+                    placeItems: 'center',
+                    background: 'var(--cmp-brand-subtle)',
+                    color: 'var(--cmp-brand)',
+                    fontWeight: 700,
+                    fontSize: '28px'
+                  }}
+                >
+                  {agent.initials}
+                </div>
+              )}
+              {agent.isVerified && (
+                <span
+                  title="CMP Verified Broker"
+                  style={{
+                    position: 'absolute',
+                    top: '-4px',
+                    right: '-4px',
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '50%',
+                    background: 'var(--cmp-success)',
+                    color: '#fff',
+                    display: 'grid',
+                    placeItems: 'center',
+                    border: '2px solid var(--cmp-surface)'
+                  }}
+                >
+                  <CheckCircle size={18} />
+                </span>
+              )}
+            </div>
+          </section>
+
+          {/* Real Time Offer Metrics Grid */}
+          <section className="card" style={{ padding: '20px' }}>
+            <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
+              <div>
+                <h2 style={{ fontSize: '16px', margin: 0 }}>Real Time Offer performance</h2>
+                <p className="muted" style={{ margin: '2px 0 0', fontSize: '12.5px' }}>
+                  Auction entries, live lots, sell-through rate and closed auction value.
+                </p>
+              </div>
+              <div className="row" style={{ gap: '8px' }}>
+                <NavLink to="/rto/desk" className="btn btn-outline btn-sm">
+                  Live desk
+                </NavLink>
+                <NavLink to="/rto" className="btn btn-outline btn-sm">
+                  View entries
+                </NavLink>
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+                gap: '12px'
+              }}
+            >
+              <div className="card" style={{ padding: '14px 16px', background: 'var(--cmp-surface-sunken)' }}>
+                <span className="faint" style={{ fontSize: '11px', textTransform: 'uppercase', fontWeight: 700 }}>Entered</span>
+                <p style={{ margin: '4px 0 0', fontSize: '24px', fontWeight: 800 }}>
+                  {agent.realTimeOffer?.entered ?? 0}
+                </p>
+                <span className="faint" style={{ fontSize: '11px' }}>Total properties</span>
+              </div>
+              <div className="card" style={{ padding: '14px 16px', background: 'var(--cmp-surface-sunken)' }}>
+                <span className="faint" style={{ fontSize: '11px', textTransform: 'uppercase', fontWeight: 700 }}>Live</span>
+                <p style={{ margin: '4px 0 0', fontSize: '24px', fontWeight: 800, color: 'var(--cmp-brand)' }}>
+                  {agent.realTimeOffer?.live ?? 0}
+                </p>
+                <span className="faint" style={{ fontSize: '11px' }}>Taking offers now</span>
+              </div>
+              <div className="card" style={{ padding: '14px 16px', background: 'var(--cmp-surface-sunken)' }}>
+                <span className="faint" style={{ fontSize: '11px', textTransform: 'uppercase', fontWeight: 700 }}>Scheduled</span>
+                <p style={{ margin: '4px 0 0', fontSize: '24px', fontWeight: 800 }}>
+                  {agent.realTimeOffer?.scheduled ?? 0}
+                </p>
+                <span className="faint" style={{ fontSize: '11px' }}>Upcoming on desk</span>
+              </div>
+              <div className="card" style={{ padding: '14px 16px', background: 'var(--cmp-surface-sunken)' }}>
+                <span className="faint" style={{ fontSize: '11px', textTransform: 'uppercase', fontWeight: 700 }}>Sold</span>
+                <p style={{ margin: '4px 0 0', fontSize: '24px', fontWeight: 800, color: 'var(--cmp-success)' }}>
+                  {agent.realTimeOffer?.sold ?? 0}
+                </p>
+                <span className="faint" style={{ fontSize: '11px' }}>Closed with buyer</span>
+              </div>
+              <div className="card" style={{ padding: '14px 16px', background: 'var(--cmp-surface-sunken)' }}>
+                <span className="faint" style={{ fontSize: '11px', textTransform: 'uppercase', fontWeight: 700 }}>Not sold</span>
+                <p style={{ margin: '4px 0 0', fontSize: '24px', fontWeight: 800 }}>
+                  {agent.realTimeOffer?.unsold ?? 0}
+                </p>
+                <span className="faint" style={{ fontSize: '11px' }}>Closed with no offers</span>
+              </div>
+              <div className="card" style={{ padding: '14px 16px', background: 'var(--cmp-surface-sunken)' }}>
+                <span className="faint" style={{ fontSize: '11px', textTransform: 'uppercase', fontWeight: 700 }}>Sell-through</span>
+                <p style={{ margin: '4px 0 0', fontSize: '24px', fontWeight: 800 }}>
+                  {agent.realTimeOffer?.sellThrough != null ? `${agent.realTimeOffer.sellThrough}%` : '—'}
+                </p>
+                <span className="faint" style={{ fontSize: '11px' }}>Of closed auctions</span>
+              </div>
+              <div className="card" style={{ padding: '14px 16px', background: 'var(--cmp-surface-sunken)' }}>
+                <span className="faint" style={{ fontSize: '11px', textTransform: 'uppercase', fontWeight: 700 }}>Sold value</span>
+                <p style={{ margin: '4px 0 0', fontSize: '22px', fontWeight: 800, color: 'var(--cmp-brand)' }}>
+                  {agent.realTimeOffer?.soldValue != null ? formatVolume(agent.realTimeOffer.soldValue) : '—'}
+                </p>
+                <span className="faint" style={{ fontSize: '11px' }}>Total auction volume</span>
+              </div>
+            </div>
+          </section>
+        </div>
       ) : (
+        /* ==============================================================
+           LISTINGS AGENT SUMMARY VIEW (/team/agents/:id)
+           ============================================================== */
         <>
           {/* Segmented Tab List */}
           <div role="tablist" className="segmented" style={{ marginBottom: '18px' }}>
@@ -427,7 +667,11 @@ export default function AgentSummaryPage() {
                       </div>
                       <p className="muted" style={{ margin: '0 0 14px', fontSize: '13.5px' }}>
                         {agent.brn ? `BRN: ${agent.brn} · ` : ''}
-                        {agent.role} · {agent.email}
+                        {agent.role || 'Agent'}
+                        {agent.eliteCriteriaTotal != null
+                          ? ` · Criteria: ${agent.eliteCriteriaMet ?? 0}/${agent.eliteCriteriaTotal}`
+                          : ''}
+                        {agent.email && agent.email !== '—' ? ` · ${agent.email}` : ''}
                       </p>
                       <div className="row" style={{ gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
                         <div>
@@ -449,7 +693,7 @@ export default function AgentSummaryPage() {
                         </div>
                         <div style={{ flex: '1 1 120px' }}>
                           <p className="faint" style={{ margin: '0 0 4px', fontSize: '12px' }}>
-                            Compliance & standing
+                            Elite criteria ({agent.eliteCriteriaMet ?? (agent.isVerified ? 1 : 0)}/{agent.eliteCriteriaTotal ?? 4} met)
                           </p>
                           <div
                             className="meter"
@@ -463,7 +707,7 @@ export default function AgentSummaryPage() {
                           >
                             <div
                               style={{
-                                width: agent.isVerified ? '100%' : '25%',
+                                width: `${Math.min(100, Math.round(((agent.eliteCriteriaMet ?? (agent.isVerified ? 1 : 0)) / (agent.eliteCriteriaTotal || 4)) * 100))}%`,
                                 height: '100%',
                                 background: agent.isVerified ? 'var(--cmp-success)' : 'var(--cmp-warning)'
                               }}
@@ -518,21 +762,34 @@ export default function AgentSummaryPage() {
 
                   {/* Avatar Badge */}
                   <div style={{ position: 'relative', width: '84px', height: '84px', flexShrink: 0 }}>
-                    <div
-                      style={{
-                        width: '84px',
-                        height: '84px',
-                        borderRadius: '50%',
-                        display: 'grid',
-                        placeItems: 'center',
-                        background: 'var(--cmp-brand-subtle)',
-                        color: 'var(--cmp-brand)',
-                        fontWeight: 700,
-                        fontSize: '28px'
-                      }}
-                    >
-                      {agent.initials}
-                    </div>
+                    {agent.photo ? (
+                      <img
+                        src={agent.photo}
+                        alt={agent.name}
+                        style={{
+                          width: '84px',
+                          height: '84px',
+                          borderRadius: '50%',
+                          objectFit: 'cover'
+                        }}
+                      />
+                    ) : (
+                      <div
+                        style={{
+                          width: '84px',
+                          height: '84px',
+                          borderRadius: '50%',
+                          display: 'grid',
+                          placeItems: 'center',
+                          background: 'var(--cmp-brand-subtle)',
+                          color: 'var(--cmp-brand)',
+                          fontWeight: 700,
+                          fontSize: '28px'
+                        }}
+                      >
+                        {agent.initials}
+                      </div>
+                    )}
                     {isLiveData ? (
                       agent.isVerified && (
                         <span
@@ -583,13 +840,19 @@ export default function AgentSummaryPage() {
                     Customer feedback
                   </h2>
                   <p style={{ margin: '14px 0 0', display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-                    <span style={{ fontSize: '32px', fontWeight: 800 }}>{agent.unattended}</span>
+                    <span style={{ fontSize: '32px', fontWeight: 800 }}>
+                      {agent.unattended != null ? agent.unattended : 'N/A'}
+                    </span>
                     <span className="muted" style={{ fontSize: '13px' }}>Unattended enquiry</span>
                   </p>
                   {isLiveData ? (
                     <p className="muted" style={{ margin: '6px 0 0', fontSize: '13.5px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <Star size={14} style={{ color: 'var(--cmp-text-faint)' }} />
-                      <span>{agent.reviewsCount > 0 ? `${agent.rating} rating · ${agent.reviewsCount} verified reviews` : 'No verified client reviews yet'}</span>
+                      <span>
+                        {agent.rating != null
+                          ? `${agent.rating} rating · ${agent.reviewsCount || 0} verified reviews`
+                          : 'Rating: N/A · No verified client reviews yet'}
+                      </span>
                     </p>
                   ) : (
                     <p className="muted" style={{ margin: '6px 0 0', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -616,28 +879,38 @@ export default function AgentSummaryPage() {
                       <line x1="48" x2="744" y1="20" y2="20" stroke="var(--cmp-border)" strokeWidth="1" />
                       <text x="40" y="24" textAnchor="end" fontSize="11" fill="var(--cmp-text-faint)">100%</text>
 
-                      {/* Gradient Area */}
-                      <path
-                        d="M48,45 L120,40 L200,38 L300,35 L400,32 L500,28 L600,26 L744,22 L744,150 L48,150 Z"
-                        fill="var(--cmp-brand)"
-                        opacity="0.12"
-                      />
-                      {/* Line */}
-                      <path
-                        d="M48,45 L120,40 L200,38 L300,35 L400,32 L500,28 L600,26 L744,22"
-                        fill="none"
-                        stroke="var(--cmp-brand)"
-                        strokeWidth="2.5"
-                        strokeLinecap="round"
-                      />
-                      <circle cx="744" cy="22" r="4.5" fill="var(--cmp-brand)" stroke="var(--cmp-surface)" strokeWidth="2" />
+                      {(!isLiveData || agent.responseRate != null) ? (
+                        <>
+                          {/* Gradient Area */}
+                          <path
+                            d="M48,45 L120,40 L200,38 L300,35 L400,32 L500,28 L600,26 L744,22 L744,150 L48,150 Z"
+                            fill="var(--cmp-brand)"
+                            opacity="0.12"
+                          />
+                          {/* Line */}
+                          <path
+                            d="M48,45 L120,40 L200,38 L300,35 L400,32 L500,28 L600,26 L744,22"
+                            fill="none"
+                            stroke="var(--cmp-brand)"
+                            strokeWidth="2.5"
+                            strokeLinecap="round"
+                          />
+                          <circle cx="744" cy="22" r="4.5" fill="var(--cmp-brand)" stroke="var(--cmp-surface)" strokeWidth="2" />
+                        </>
+                      ) : (
+                        <text x="396" y="92" textAnchor="middle" fontSize="13" fill="var(--cmp-text-muted)">
+                          Response rate series N/A (no website enquiries yet)
+                        </text>
+                      )}
                     </svg>
                   </div>
 
                   <div className="row" style={{ justifyContent: 'space-between', marginTop: '6px', fontSize: '13.5px' }}>
-                    <span>Overall agent response rate: <strong>{agent.responseRate != null ? `${agent.responseRate}%` : '—'}</strong></span>
+                    <span>Overall agent response rate: <strong>{agent.responseRate != null ? `${agent.responseRate}%` : 'N/A'}</strong></span>
                     {isLiveData ? (
-                      <span className="badge badge-neutral">Standard</span>
+                      <span className="badge badge-neutral">
+                        {agent.score != null ? `Agent score: ${agent.score}` : 'Agent score: N/A'}
+                      </span>
                     ) : (
                       <span className="badge badge-success">Top 5% in Dubai</span>
                     )}
@@ -692,17 +965,22 @@ export default function AgentSummaryPage() {
                   <ul className="row" style={{ listStyle: 'none', margin: 0, padding: 0, gap: '10px', flexWrap: 'wrap', fontSize: '12px', justifyContent: 'center' }}>
                     <li className="row" style={{ gap: '4px', alignItems: 'center' }}>
                       <span style={{ width: '8px', height: '8px', borderRadius: '2px', background: 'var(--cmp-accent)' }} />
-                      <span className="muted">Standard: <strong>{agent.liveListings}</strong></span>
+                      <span className="muted">Standard: <strong>{isLiveData ? (agent.standardListings != null ? agent.standardListings : 'N/A') : agent.liveListings}</strong></span>
                     </li>
                     <li className="row" style={{ gap: '4px', alignItems: 'center' }}>
                       <span style={{ width: '8px', height: '8px', borderRadius: '2px', background: 'var(--cmp-brand)' }} />
-                      <span className="muted">Featured: <strong>0</strong></span>
+                      <span className="muted">Featured: <strong>{isLiveData ? (agent.featuredListings != null ? agent.featuredListings : 'N/A') : 0}</strong></span>
                     </li>
                     <li className="row" style={{ gap: '4px', alignItems: 'center' }}>
                       <span style={{ width: '8px', height: '8px', borderRadius: '2px', background: 'var(--cmp-text-faint)' }} />
-                      <span className="muted">Premium: <strong>0</strong></span>
+                      <span className="muted">Premium: <strong>{isLiveData ? (agent.premiumListings != null ? agent.premiumListings : 'N/A') : 0}</strong></span>
                     </li>
                   </ul>
+                  {isLiveData && (
+                    <p className="faint" style={{ margin: 0, fontSize: '11.5px', textAlign: 'center' }}>
+                      Listing quality: <strong>{agent.listingQuality != null ? `${agent.listingQuality}%` : 'N/A'}</strong>
+                    </p>
+                  )}
 
                   <NavLink to="/properties" className="btn btn-outline btn-sm">
                     View properties

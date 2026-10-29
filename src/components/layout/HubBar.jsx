@@ -12,7 +12,6 @@ import {
   Radio,
   Plus,
   LogOut,
-  User,
   Settings,
   Sparkles
 } from 'lucide-react';
@@ -66,30 +65,50 @@ export default function HubBar() {
   // Derive active hub information based on current URL path
   const getHubInfo = () => {
     if (pathname.startsWith('/rto')) {
-      const isNew = pathname === '/rto/new';
-      const isTeam = pathname === '/rto/team';
+      const isNew = pathname === '/rto/new' || pathname.endsWith('/edit');
+      const isTeam = pathname === '/rto/team' || pathname.startsWith('/rto/team/');
+      const isMembers = pathname === '/rto/members' || pathname.startsWith('/rto/members/');
       const isEntries = pathname === '/rto/entries' || pathname === '/rto';
       const isResults = pathname === '/rto/results';
       const isBidders = pathname === '/rto/bidders';
       const isCheques = pathname === '/rto/cheques';
       const isDesk = pathname === '/rto/desk';
-      const isDetail = pathname.startsWith('/rto/') && !isNew && !isTeam && !isEntries && !isResults && !isBidders && !isCheques && !isDesk;
+      const isDetail = pathname.startsWith('/rto/') && !isNew && !isTeam && !isMembers && !isEntries && !isResults && !isBidders && !isCheques && !isDesk;
+
+      if (isMembers) {
+        return {
+          title: 'Members',
+          blurb: 'Manage your agency team members, invitations, roles and RERA verification.',
+          tabs: []
+        };
+      }
+
+      if (isTeam) {
+        const rtoTeamTabs = [];
+        if (!account || can('insights.agents_view')) rtoTeamTabs.push({ label: 'Leaderboard', path: '/rto/team' });
+        if (!account || can('roles.view')) rtoTeamTabs.push({ label: 'Roles & access', path: '/rto/team/roles' });
+        return {
+          title: 'Team',
+          blurb: 'How your people are performing on Real Time Offer and what they can access.',
+          tabs: rtoTeamTabs
+        };
+      }
 
       let title = 'Real Time Offer';
-      let blurb = '7-day auctions managed by CMP. Enter properties and monitor live buyer offers.';
+      let blurb = 'Live property auctions managed by CMP. Enter properties and monitor live buyer offers.';
 
       if (isNew) {
         title = 'Enter a property';
-        blurb = 'Submit an agency property for a 7-day Real Time Offer auction managed by CMP.';
+        blurb = 'Submit an agency property for a Real Time Offer auction managed by CMP.';
       } else if (isDetail) {
         title = 'Auction Desk';
-        blurb = 'Live 7-day auction countdown, buyer offers and property details.';
+        blurb = 'Live auction countdown, buyer offers, agency approval and property details.';
       } else if (isDesk) {
         title = 'Live Desk';
         blurb = 'Every property of yours taking instant bids against a live countdown clock.';
       } else if (isEntries) {
         title = 'Real Time Offer Entries';
-        blurb = 'Properties submitted by your agency for 7-day Real Time Offer auctions managed by CMP.';
+        blurb = 'Properties submitted by your agency for Real Time Offer auctions managed by CMP.';
       } else if (isResults) {
         title = 'Auction Results';
         blurb = 'Closed auctions, final sale prices and performance history.';
@@ -99,9 +118,6 @@ export default function HubBar() {
       } else if (isCheques) {
         title = 'Security Cheques';
         blurb = 'Manage security deposit cheques for participating buyers.';
-      } else if (isTeam) {
-        title = 'Auction Team';
-        blurb = 'Team members authorized to enter properties and view auctions.';
       }
 
       const tabs = [];
@@ -115,9 +131,6 @@ export default function HubBar() {
       }
       if (!account || hasAny('contracts.view', 'transactions.view', 'listings.view')) {
         tabs.push({ label: 'Cheques', path: '/rto/cheques' });
-      }
-      if (!account || hasAny('team.view', 'insights.agents_view', 'roles.view')) {
-        tabs.push({ label: 'Team', path: '/rto/team' });
       }
 
       return {
@@ -214,15 +227,21 @@ export default function HubBar() {
         tabs
       };
     }
+    if (pathname.startsWith('/members') || pathname.startsWith('/team/members')) {
+      return {
+        title: 'Members',
+        blurb: 'Manage your agency team members, invitations, roles and RERA verification.',
+        tabs: []
+      };
+    }
     if (pathname.startsWith('/team')) {
       const teamTabs = [];
       if (!account || can('insights.agents_view')) teamTabs.push({ label: 'Leaderboard', path: '/team' });
-      if (!account || can('team.view')) teamTabs.push({ label: 'Members', path: '/team/members' });
       if (!account || can('roles.view')) teamTabs.push({ label: 'Roles & access', path: '/team/roles' });
 
       return {
         title: 'Team',
-        blurb: 'Your people, how they are performing and what they can access.',
+        blurb: 'How your people are performing and what they can access.',
         tabs: teamTabs
       };
     }
@@ -525,7 +544,7 @@ export default function HubBar() {
           <NavLink
             key={tab.path}
             to={tab.path}
-            end={tab.path === '/' || tab.path === '/properties' || tab.path === '/clients' || tab.path === '/growth' || tab.path === '/wallet' || tab.path === '/team' || tab.path === '/account' || tab.path === '/help' || tab.path === '/rto'}
+            end={tab.path === '/' || tab.path === '/properties' || tab.path === '/clients' || tab.path === '/growth' || tab.path === '/wallet' || tab.path === '/team' || tab.path === '/rto/team' || tab.path === '/account' || tab.path === '/help' || tab.path === '/rto'}
             className={({ isActive }) => (isActive ? 'active' : '')}
           >
             {tab.label}

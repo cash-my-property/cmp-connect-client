@@ -4,6 +4,11 @@
   display: grid;
   grid-template-columns: 84px minmax(0, 1fr);
   min-height: 100vh;
+  transition: grid-template-columns 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.portal-shell.rail-expanded {
+  grid-template-columns: 224px minmax(0, 1fr);
 }
 
 /* ------------------------------------------------------------- Left Rail */
@@ -20,18 +25,90 @@
   color: #C9D8CF;
   z-index: 40;
   border-right: 1px solid rgba(255, 255, 255, 0.06);
+  overflow-x: hidden;
+  overflow-y: auto;
+  transition: padding 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.app-rail.expanded {
+  padding: 14px 12px;
+}
+
+.rail-top {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.app-rail.expanded .rail-top {
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  padding: 2px 4px 8px;
 }
 
 .rail-logo {
-  display: grid;
-  place-items: center;
-  height: 46px;
-  border-radius: 14px;
-  margin-bottom: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 40px;
+  border-radius: 12px;
+  text-decoration: none;
+  color: #FFFFFF;
   transition: transform var(--cmp-duration-fast) var(--cmp-ease);
 }
+
 .rail-logo:hover {
-  transform: scale(1.05);
+  transform: scale(1.03);
+}
+
+.rail-brand-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.15;
+}
+
+.rail-brand-title {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: #FFFFFF;
+  white-space: nowrap;
+}
+
+.rail-side-inline {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6ED4A1;
+  margin-top: 2px;
+}
+
+.app-rail[data-side='rto'] .rail-side-inline {
+  color: #E3A972;
+}
+
+.rail-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: #A8BDB1;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all var(--cmp-duration-fast) var(--cmp-ease);
+}
+
+.rail-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #FFFFFF;
 }
 
 .rail-side {
@@ -42,7 +119,7 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: #6ED4A1;
-  margin: -4px 0 8px;
+  margin: -2px 0 6px;
 }
 
 .app-rail[data-side='rto'] .rail-side {
@@ -74,6 +151,17 @@
   transition: all var(--cmp-duration-fast) var(--cmp-ease);
 }
 
+.app-rail.expanded .rail-link {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 10px 12px;
+  font-size: 13.5px;
+  text-align: left;
+  white-space: nowrap;
+}
+
 .rail-link:hover {
   background: rgba(255, 255, 255, 0.06);
   color: #FFFFFF;
@@ -98,6 +186,13 @@
   width: 3px;
   border-radius: 0 3px 3px 0;
   background: #E3A972;
+}
+
+.app-rail.expanded .rail-link[aria-current='page']::before,
+.app-rail.expanded .rail-link.active::before {
+  left: -12px;
+  top: 8px;
+  bottom: 8px;
 }
 
 /* ------------------------------------------------------------- Main Content Column */

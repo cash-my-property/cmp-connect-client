@@ -18,6 +18,9 @@ import {
   List as ListIcon,
   ChevronRight,
   Edit3,
+  Trash2,
+  Check,
+  X,
   MapPin,
   Users
 } from 'lucide-react';
@@ -44,12 +47,15 @@ function formatCountdown(targetDate) {
 
 const STATUS_FILTERS = [
   { key: 'all', label: 'All' },
-  { key: 'APPROVED', label: 'Live' },
-  { key: 'AWAITING', label: 'In review' },
+  { key: 'DRAFT', label: 'Drafts' },
+  { key: 'AGENCY_REVIEW', label: 'Waiting for agency' },
+  { key: 'AGENCY_REJECTED', label: 'Sent back by agency' },
+  { key: 'AWAITING', label: 'Waiting for CMP' },
   { key: 'PRE_APPROVED', label: 'Pre-approved' },
   { key: 'SCHEDULED', label: 'Scheduled' },
-  { key: 'REJECTED', label: 'Rejected' },
+  { key: 'APPROVED', label: 'Live' },
   { key: 'PAUSED', label: 'Paused' },
+  { key: 'REJECTED', label: 'Sent back by CMP' },
   { key: 'SOLD', label: 'Sold' },
   { key: 'SOLD_FAIL', label: 'No offers' }
 ];
@@ -61,6 +67,9 @@ export default function EntriesPage() {
   const [entries, setEntries] = useState([]);
   const [counts, setCounts] = useState({
     all: 0,
+    DRAFT: 0,
+    AGENCY_REVIEW: 0,
+    AGENCY_REJECTED: 0,
     APPROVED: 0,
     AWAITING: 0,
     PRE_APPROVED: 0,
@@ -77,6 +86,10 @@ export default function EntriesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState(null);
+  const [actionLoadingId, setActionLoadingId] = useState(null);
+  const [actionMessage, setActionMessage] = useState(null);
+  const [rejectModalItem, setRejectModalItem] = useState(null);
+  const [rejectReason, setRejectReason] = useState('');
 
   const token = authToken || (typeof localStorage !== 'undefined' ? localStorage.getItem('cmp_connect_auth_token') : null);
 
@@ -156,8 +169,85 @@ export default function EntriesPage() {
     });
   }, [entries, searchQuery]);
 
+  const handleDeleteDraft = async (e, id) => {
+    e.stopPropagation();
+    if (!window.confirm('Delete this draft property?')) return;
+    try {
+      await cmpConnectApi.deleteRtoProperty(id, token);
+      fetchEntries(true);
+    } catch (err) {
+      setError(err.message || 'Failed to delete draft.');
+    }
+  };
+
+  const handleApproveItem = async (e, item) => {
+    e.stopPropagation();
+    const id = item.id || item._id;
+    setActionLoadingId(id);
+    setError(null);
+    setActionMessage(null);
+    try {
+      const res = await cmpConnectApi.approveRtoProperty(id, token);
+      setActionMessage(res?.message || 'Property approved and sent to CMP for review.');
+      fetchEntries(true);
+    } catch (err) {
+      setError(err.message || 'Failed to approve property.');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleOpenRejectModal = (e, item) => {
+    e.stopPropagation();
+    setRejectModalItem(item);
+    setRejectReason('');
+  };
+
+  const handleRejectSubmit = async (e) => {
+    e.preventDefault();
+    if (!rejectModalItem) return;
+    const trimmed = rejectReason.trim();
+    if (trimmed.length < 3) {
+      setError('Please enter a reason (at least 3 characters).');
+      return;
+    }
+    const id = rejectModalItem.id || rejectModalItem._id;
+    setActionLoadingId(id);
+    setError(null);
+    setActionMessage(null);
+    try {
+      const res = await cmpConnectApi.rejectRtoProperty(id, trimmed, token);
+      setActionMessage(res?.message || 'Property sent back to the agent.');
+      setRejectModalItem(null);
+      setRejectReason('');
+      fetchEntries(true);
+    } catch (err) {
+      setError(err.message || 'Failed to send back property.');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
   const renderStatusBadge = (status, item) => {
     switch (status) {
+      case 'DRAFT':
+        return (
+          <span className="row" style={{ gap: '6px', fontSize: '12.5px', color: 'var(--cmp-text-muted)', fontWeight: 700 }}>
+            <Edit3 size={14} /> Draft
+          </span>
+        );
+      case 'AGENCY_REVIEW':
+        return (
+          <span className="row" style={{ gap: '6px', fontSize: '12.5px', color: '#D97706', fontWeight: 700 }}>
+            <Clock size={14} /> Waiting for agency approval
+          </span>
+        );
+      case 'AGENCY_REJECTED':
+        return (
+          <span className="row" style={{ gap: '6px', fontSize: '12.5px', color: 'var(--cmp-danger)', fontWeight: 700 }}>
+            <AlertCircle size={14} /> Sent back by agency
+          </span>
+        );
       case 'APPROVED':
         return (
           <span className="row" style={{ gap: '6px', fontSize: '12.5px', color: 'var(--cmp-success)', fontWeight: 700 }}>
@@ -173,13 +263,13 @@ export default function EntriesPage() {
       case 'PRE_APPROVED':
         return (
           <span className="row" style={{ gap: '6px', fontSize: '12.5px', color: '#2563EB', fontWeight: 600 }}>
-            <CheckCircle2 size={14} /> Pre-approved
+            <CheckCircle2 size={14} /> Checked by CMP, waiting for final approval
           </span>
         );
       case 'SCHEDULED':
         return (
           <span className="row" style={{ gap: '6px', fontSize: '12.5px', color: 'var(--cmp-brand)', fontWeight: 600 }}>
-            <Calendar size={14} /> Starts {item?.auction?.startTime ? new Date(item.auction.startTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Soon'}
+            <Calendar size={14} /> Starts {(item?.auction?.startTime || item?.schedule?.startAt) ? new Date(item.auction?.startTime || item.schedule?.startAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Soon'}
           </span>
         );
       case 'REJECTED':
@@ -354,6 +444,23 @@ export default function EntriesPage() {
       </div>
 
       {/* Content Rendering: Loading / Error / Empty / Grid / Table */}
+      {actionMessage && (
+        <div
+          className="card"
+          style={{
+            padding: '12px 16px',
+            marginBottom: '16px',
+            background: 'var(--cmp-brand-subtle)',
+            borderColor: 'var(--cmp-brand-border)',
+            color: 'var(--cmp-brand)',
+            fontSize: '13.5px',
+            fontWeight: 600
+          }}
+        >
+          ✓ {actionMessage}
+        </div>
+      )}
+
       {isLoading ? (
         <div style={{ padding: '64px 0', textAlign: 'center' }}>
           <RefreshCw size={26} className="spin faint" style={{ margin: '0 auto 10px' }} />
@@ -420,7 +527,7 @@ export default function EntriesPage() {
                   border: isLive ? '1px solid var(--cmp-success-border, #10B981)' : undefined,
                   transition: 'transform 0.15s ease, box-shadow 0.15s ease'
                 }}
-                onClick={() => navigate(`/rto/${id}`)}
+                onClick={() => navigate(item.status === 'DRAFT' ? `/rto/${id}/edit` : `/rto/${id}`)}
               >
                 {/* Photo Thumbnail */}
                 <div
@@ -562,22 +669,86 @@ export default function EntriesPage() {
                       alignItems: 'center',
                       marginTop: '12px',
                       paddingTop: '10px',
-                      borderTop: '1px solid var(--cmp-surface-subtle)'
+                      borderTop: '1px solid var(--cmp-surface-subtle)',
+                      flexWrap: 'wrap',
+                      gap: '8px'
                     }}
                   >
                     <span className="faint" style={{ fontSize: '12px' }}>
                       {agentName}
                     </span>
 
-                    <NavLink
-                      to={`/rto/${id}`}
-                      className="btn btn-ghost btn-sm"
-                      style={{ padding: '2px 6px', fontSize: '12.5px', color: 'var(--cmp-brand)' }}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <span>View details</span>
-                      <ChevronRight size={14} />
-                    </NavLink>
+                    {item.status === 'DRAFT' ? (
+                      <div className="row" style={{ gap: '6px' }} onClick={(e) => e.stopPropagation()}>
+                        {item.can?.delete && (
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm"
+                            style={{ padding: '2px 6px', fontSize: '12px', color: 'var(--cmp-danger)' }}
+                            onClick={(e) => handleDeleteDraft(e, id)}
+                            title="Delete draft"
+                          >
+                            <Trash2 size={13} />
+                            <span>Delete</span>
+                          </button>
+                        )}
+                        {item.can?.edit && (
+                          <NavLink
+                            to={`/rto/${id}/edit`}
+                            className="btn btn-accent btn-sm"
+                            style={{ padding: '2px 8px', fontSize: '12px' }}
+                          >
+                            <span>Continue</span>
+                            <ChevronRight size={13} />
+                          </NavLink>
+                        )}
+                      </div>
+                    ) : (item.can?.agencyApprove || item.can?.agencyReject) ? (
+                      <div className="row" style={{ gap: '6px' }} onClick={(e) => e.stopPropagation()}>
+                        {item.can?.agencyApprove && (
+                          <button
+                            type="button"
+                            className="btn btn-primary btn-sm"
+                            style={{ padding: '3px 10px', fontSize: '12px', height: '28px' }}
+                            disabled={actionLoadingId === id}
+                            onClick={(e) => handleApproveItem(e, item)}
+                            title="Approve and send to CMP"
+                          >
+                            <Check size={13} />
+                            <span>{actionLoadingId === id ? 'Approving…' : 'Approve'}</span>
+                          </button>
+                        )}
+                        {item.can?.agencyReject && (
+                          <button
+                            type="button"
+                            className="btn btn-outline btn-sm"
+                            style={{
+                              padding: '3px 10px',
+                              fontSize: '12px',
+                              height: '28px',
+                              borderColor: 'var(--cmp-danger)',
+                              color: 'var(--cmp-danger)'
+                            }}
+                            disabled={actionLoadingId === id}
+                            onClick={(e) => handleOpenRejectModal(e, item)}
+                            title="Send back to agent"
+                          >
+                            <X size={13} />
+                            <span>Send back</span>
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <NavLink
+                        to={`/rto/${id}`}
+                        className="btn btn-ghost btn-sm"
+                        style={{ padding: '2px 6px', fontSize: '12.5px', color: 'var(--cmp-brand)' }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <span>View details</span>
+                        <ChevronRight size={14} />
+                      </NavLink>
+                    )}
                   </div>
                 </div>
               </div>
@@ -614,7 +785,7 @@ export default function EntriesPage() {
                 return (
                   <tr
                     key={id}
-                    onClick={() => navigate(`/rto/${id}`)}
+                    onClick={() => navigate(item.status === 'DRAFT' ? `/rto/${id}/edit` : `/rto/${id}`)}
                     style={{ cursor: 'pointer' }}
                   >
                     <td style={{ minWidth: '220px' }}>
@@ -646,13 +817,68 @@ export default function EntriesPage() {
                       {agentName}
                     </td>
                     <td style={{ textAlign: 'end' }}>
-                      <NavLink
-                        to={`/rto/${id}`}
-                        className="btn btn-outline btn-sm"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        Inspect
-                      </NavLink>
+                      {item.status === 'DRAFT' ? (
+                        <div className="row" style={{ gap: '6px', justifyContent: 'flex-end' }} onClick={(e) => e.stopPropagation()}>
+                          {item.can?.delete && (
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-sm"
+                              style={{ color: 'var(--cmp-danger)' }}
+                              onClick={(e) => handleDeleteDraft(e, id)}
+                            >
+                              Delete
+                            </button>
+                          )}
+                          {item.can?.edit && (
+                            <NavLink
+                              to={`/rto/${id}/edit`}
+                              className="btn btn-accent btn-sm"
+                            >
+                              Continue
+                            </NavLink>
+                          )}
+                        </div>
+                      ) : (item.can?.agencyApprove || item.can?.agencyReject) ? (
+                        <div className="row" style={{ gap: '6px', justifyContent: 'flex-end' }} onClick={(e) => e.stopPropagation()}>
+                          {item.can?.agencyApprove && (
+                            <button
+                              type="button"
+                              className="btn btn-primary btn-sm"
+                              disabled={actionLoadingId === id}
+                              onClick={(e) => handleApproveItem(e, item)}
+                            >
+                              <Check size={13} />
+                              <span>{actionLoadingId === id ? 'Approving…' : 'Approve'}</span>
+                            </button>
+                          )}
+                          {item.can?.agencyReject && (
+                            <button
+                              type="button"
+                              className="btn btn-outline btn-sm"
+                              style={{ borderColor: 'var(--cmp-danger)', color: 'var(--cmp-danger)' }}
+                              disabled={actionLoadingId === id}
+                              onClick={(e) => handleOpenRejectModal(e, item)}
+                            >
+                              <X size={13} />
+                              <span>Send back</span>
+                            </button>
+                          )}
+                          <NavLink
+                            to={`/rto/${id}`}
+                            className="btn btn-ghost btn-sm"
+                          >
+                            Inspect
+                          </NavLink>
+                        </div>
+                      ) : (
+                        <NavLink
+                          to={`/rto/${id}`}
+                          className="btn btn-outline btn-sm"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          Inspect
+                        </NavLink>
+                      )}
                     </td>
                   </tr>
                 );
@@ -661,12 +887,110 @@ export default function EntriesPage() {
           </table>
         </div>
       )}
+
+      {/* Agency Send Back / Reject Modal */}
+      {rejectModalItem && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.6)',
+            zIndex: 1000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px'
+          }}
+          onClick={() => setRejectModalItem(null)}
+        >
+          <div
+            className="card"
+            style={{
+              width: '100%',
+              maxWidth: '480px',
+              padding: '24px',
+              background: 'var(--cmp-surface)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <div>
+                <h2 style={{ fontSize: '18px', margin: 0, fontWeight: 700 }}>Send Back to Agent</h2>
+                <p className="faint" style={{ margin: '2px 0 0', fontSize: '12.5px' }}>
+                  {rejectModalItem.title || rejectModalItem.propertyTitle} ({rejectModalItem.rtoRef || rejectModalItem.reference || rejectModalItem.id || rejectModalItem._id})
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => setRejectModalItem(null)}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleRejectSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div>
+                <label className="field-label" style={{ fontSize: '12.5px', fontWeight: 700, display: 'block', marginBottom: '6px' }}>
+                  Reason for sending back (3–500 characters) *
+                </label>
+                <textarea
+                  rows={4}
+                  required
+                  minLength={3}
+                  maxLength={500}
+                  placeholder="Explain what the agent needs to fix before you approve this entry for CMP…"
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  style={{ width: '100%', fontSize: '13.5px' }}
+                />
+              </div>
+
+              <div className="row" style={{ justifyContent: 'flex-end', gap: '8px', marginTop: '6px' }}>
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  onClick={() => setRejectModalItem(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-sm"
+                  style={{ background: 'var(--cmp-danger)', color: '#fff', border: 'none' }}
+                  disabled={Boolean(actionLoadingId)}
+                >
+                  {actionLoadingId ? 'Sending back…' : 'Confirm send back'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 function getMockEntries() {
   return [
+    {
+      _id: 'CMP-RTO-1000',
+      reference: 'CRID-88A1K2M9',
+      propertyTitle: 'Sea view 3 bed apartment in Bluewaters',
+      propertyLocation: 'Bluewaters Island, Dubai',
+      propertyCategory: 'RESIDENTIAL',
+      propertyPlan: 'READY',
+      propertyType: 'APARTMENT',
+      propertyPrice: 5400000,
+      propertyImages: [{ url: 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=600&auto=format&fit=crop&q=80' }],
+      status: 'AGENCY_REVIEW',
+      auction: {},
+      approvedBuyers: 0,
+      listedBy: { name: 'Tariq Shakoor', brn: '990101' },
+      can: { edit: true, agencyApprove: true, agencyReject: true }
+    },
     {
       _id: 'CMP-RTO-1001',
       reference: 'CMP-RTO-1001',
@@ -772,7 +1096,10 @@ function getMockEntries() {
 
 function getMockCounts() {
   return {
-    all: 5,
+    all: 6,
+    DRAFT: 0,
+    AGENCY_REVIEW: 1,
+    AGENCY_REJECTED: 0,
     APPROVED: 2,
     AWAITING: 1,
     PRE_APPROVED: 0,
