@@ -265,9 +265,10 @@ export default function AppRoutes() {
             <Route path="/rto" element={<EntriesPage />} />
             <Route path="/rto/entries" element={<EntriesPage />} />
             <Route path="/rto/desk" element={<LiveDeskPage />} />
-            <Route path="/rto/results" element={<ResultsPage />} />
+            <Route path="/rto/offers" element={<BiddersPage />} />
             <Route path="/rto/bidders" element={<BiddersPage />} />
-            <Route path="/rto/cheques" element={<ChequesPage />} />
+            <Route path="/rto/cheques" element={<BiddersPage />} />
+            <Route path="/rto/results" element={<ResultsPage />} />
             <Route element={<PermissionGuard required="team.view" redirectTo="/rto" />}>
               <Route path="/rto/members" element={<MembersPage />} />
               <Route path="/rto/members/:id" element={<MemberProfilePage />} />

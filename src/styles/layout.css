@@ -95,15 +95,22 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
+  width: 34px;
+  height: 34px;
+  justify-self: center;
+  margin-bottom: 4px;
+  border-radius: 9px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.04);
   color: #A8BDB1;
   cursor: pointer;
   flex-shrink: 0;
   transition: all var(--cmp-duration-fast) var(--cmp-ease);
+}
+
+.app-rail.expanded .rail-toggle-btn {
+  justify-self: start;
+  margin-left: 5px;
 }
 
 .rail-toggle-btn:hover {

@@ -47,18 +47,6 @@ export default function AppRail({ isExpanded = false, onToggleExpand }) {
             </div>
           )}
         </NavLink>
-
-        {onToggleExpand && (
-          <button
-            type="button"
-            className="rail-toggle-btn"
-            onClick={onToggleExpand}
-            title={isExpanded ? 'Collapse sidebar' : 'Expand sidebar'}
-            aria-label={isExpanded ? 'Collapse sidebar' : 'Expand sidebar'}
-          >
-            {isExpanded ? <PanelLeftClose size={17} /> : <PanelLeftOpen size={17} />}
-          </button>
-        )}
       </div>
 
       {!isExpanded && (
@@ -136,16 +124,22 @@ export default function AppRail({ isExpanded = false, onToggleExpand }) {
                 <span>Entries</span>
               </NavLink>
             )}
-            {(!account || can('leads.view') || can('listings.view')) && (
-              <NavLink to="/rto/bidders" className={({ isActive }) => `rail-link ${isActive ? 'active' : ''}`} title="Bidders">
-                <Users size={19} />
-                <span>Bidders</span>
-              </NavLink>
-            )}
-            {(!account || hasAny('contracts.view', 'transactions.view', 'listings.view')) && (
-              <NavLink to="/rto/cheques" className={({ isActive }) => `rail-link ${isActive ? 'active' : ''}`} title="Cheques">
+            {(!account || hasAny('leads.view', 'contracts.view', 'transactions.view', 'listings.view')) && (
+              <NavLink
+                to="/rto/offers"
+                className={({ isActive }) =>
+                  `rail-link ${
+                    isActive ||
+                    location.pathname.startsWith('/rto/bidders') ||
+                    location.pathname.startsWith('/rto/cheques')
+                      ? 'active'
+                      : ''
+                  }`
+                }
+                title="Offers"
+              >
                 <DollarSign size={19} />
-                <span>Cheques</span>
+                <span>Offers</span>
               </NavLink>
             )}
             {(!account || can('listings.view')) && (
@@ -173,6 +167,17 @@ export default function AppRail({ isExpanded = false, onToggleExpand }) {
       </div>
 
       <div className="rail-group rail-bottom">
+        {onToggleExpand && (
+          <button
+            type="button"
+            className="rail-toggle-btn"
+            onClick={onToggleExpand}
+            title={isExpanded ? 'Collapse sidebar' : 'Expand sidebar'}
+            aria-label={isExpanded ? 'Collapse sidebar' : 'Expand sidebar'}
+          >
+            {isExpanded ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}
+          </button>
+        )}
         <NavLink to="/help" className={({ isActive }) => `rail-link ${isActive ? 'active' : ''}`} title="Help & Guides">
           <HelpCircle size={19} />
           <span>Help</span>

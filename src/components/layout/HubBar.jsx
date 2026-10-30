@@ -70,10 +70,9 @@ export default function HubBar() {
       const isMembers = pathname === '/rto/members' || pathname.startsWith('/rto/members/');
       const isEntries = pathname === '/rto/entries' || pathname === '/rto';
       const isResults = pathname === '/rto/results';
-      const isBidders = pathname === '/rto/bidders';
-      const isCheques = pathname === '/rto/cheques';
+      const isOffers = pathname === '/rto/offers' || pathname === '/rto/bidders' || pathname === '/rto/cheques';
       const isDesk = pathname === '/rto/desk';
-      const isDetail = pathname.startsWith('/rto/') && !isNew && !isTeam && !isMembers && !isEntries && !isResults && !isBidders && !isCheques && !isDesk;
+      const isDetail = pathname.startsWith('/rto/') && !isNew && !isTeam && !isMembers && !isEntries && !isResults && !isOffers && !isDesk;
 
       if (isMembers) {
         return {
@@ -112,25 +111,21 @@ export default function HubBar() {
       } else if (isResults) {
         title = 'Auction Results';
         blurb = 'Closed auctions, final sale prices and performance history.';
-      } else if (isBidders) {
-        title = 'Registered Buyers';
-        blurb = 'Review pre-qualified buyers and identity verification status.';
-      } else if (isCheques) {
-        title = 'Security Cheques';
-        blurb = 'Manage security deposit cheques for participating buyers.';
+      } else if (isOffers) {
+        title = 'Offers';
+        blurb = 'Registered buyers, live offer activity, identity verification and 10% security deposit cheques.';
       }
 
       const tabs = [];
       if (!account || can('listings.view')) {
         tabs.push({ label: 'Live desk', path: '/rto/desk' });
         tabs.push({ label: 'Entries', path: '/rto' });
+      }
+      if (!account || hasAny('leads.view', 'contracts.view', 'transactions.view', 'listings.view')) {
+        tabs.push({ label: 'Offers', path: '/rto/offers' });
+      }
+      if (!account || can('listings.view')) {
         tabs.push({ label: 'Results', path: '/rto/results' });
-      }
-      if (!account || can('leads.view') || can('listings.view')) {
-        tabs.push({ label: 'Registrations', path: '/rto/bidders' });
-      }
-      if (!account || hasAny('contracts.view', 'transactions.view', 'listings.view')) {
-        tabs.push({ label: 'Cheques', path: '/rto/cheques' });
       }
 
       return {
@@ -545,7 +540,13 @@ export default function HubBar() {
             key={tab.path}
             to={tab.path}
             end={tab.path === '/' || tab.path === '/properties' || tab.path === '/clients' || tab.path === '/growth' || tab.path === '/wallet' || tab.path === '/team' || tab.path === '/rto/team' || tab.path === '/account' || tab.path === '/help' || tab.path === '/rto'}
-            className={({ isActive }) => (isActive ? 'active' : '')}
+            className={({ isActive }) =>
+              isActive ||
+              (tab.path === '/rto/offers' &&
+                (pathname.startsWith('/rto/bidders') || pathname.startsWith('/rto/cheques')))
+                ? 'active'
+                : ''
+            }
           >
             {tab.label}
           </NavLink>
