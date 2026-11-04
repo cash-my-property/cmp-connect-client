@@ -32,8 +32,7 @@ export default function GooglePlacesLocationInput({
     import.meta.env.VITE_GOOGLE_MAPS_API_KEY ||
     import.meta.env.VITE_GOOGLE_PLACES_API_KEY ||
     import.meta.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ||
-    (typeof window !== 'undefined' ? window.GOOGLE_MAPS_API_KEY : '') ||
-    'AIzaSyAa6MFidWTUkHvqhB5tDI_gl_JXccsOWoo';
+    (typeof window !== 'undefined' ? window.GOOGLE_MAPS_API_KEY : '');
 
   // Keep internal state in sync with external value
   useEffect(() => {
