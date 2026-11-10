@@ -108,8 +108,9 @@ function getSeriesValue(point, kpiKey) {
   }
 }
 
+// Permission redirect alag wrapper mein — andar wale component ke hooks hamesha ek hi order mein chalen
 export default function PerformancePage() {
-  const { isLiveData, isMockData, authToken, account, can } = useApp();
+  const { isMockData, account, can } = useApp();
 
   if (!isMockData && account && !can('insights.listings_view')) {
     if (can('insights.leads_view')) {
@@ -123,6 +124,12 @@ export default function PerformancePage() {
     }
     return <Navigate to="/" replace />;
   }
+
+  return <PerformanceContent />;
+}
+
+function PerformanceContent() {
+  const { isLiveData, authToken } = useApp();
 
   const [showSecurityBanner, setShowSecurityBanner] = useState(true);
   const [selectedKpi, setSelectedKpi] = useState('published');
@@ -139,7 +146,6 @@ export default function PerformancePage() {
   const [performanceData, setPerformanceData] = useState(null);
   const [overviewData, setOverviewData] = useState(null);
   const [isLoadingPerformance, setIsLoadingPerformance] = useState(false);
-  const [isLoadingOverview, setIsLoadingOverview] = useState(false);
 
   // Fetch Section 1: Performance figures from GET /api/cmpConnect/insights/performance
   const fetchPerformance = useCallback(async () => {
@@ -167,7 +173,6 @@ export default function PerformancePage() {
   // Fetch Section 2: Overview numbers from GET /api/cmpConnect/insights/overview
   const fetchOverview = useCallback(async () => {
     if (!isLiveData) return;
-    setIsLoadingOverview(true);
     try {
       const rangeNum = dateRangeChip.includes('7') ? '7' : dateRangeChip.includes('14') ? '14' : '30';
       const res = await cmpConnectApi.getInsightsOverview({ range: rangeNum }, authToken);
@@ -176,8 +181,6 @@ export default function PerformancePage() {
       }
     } catch (err) {
       console.warn('[PerformancePage] Failed to fetch insights overview:', err);
-    } finally {
-      setIsLoadingOverview(false);
     }
   }, [isLiveData, authToken, dateRangeChip]);
 

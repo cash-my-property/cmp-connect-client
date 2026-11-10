@@ -85,7 +85,8 @@ export function getAuthToken() {
   }
 }
 
-export function setAuthToken(token, rememberMe = null) {
+// rememberMe abhi istemal nahi hota (dono storages mein save) — signature callers ke liye same
+export function setAuthToken(token, _rememberMe = null) {
   try {
     if (token) {
       localStorage.setItem(AUTH_TOKEN_KEY, token);
@@ -202,16 +203,16 @@ async function apiRequest(endpoint, options = {}) {
       const isRtoPath = endpoint.includes('/cmpConnect/rto');
 
       if (response.status === 401 && !isAuthPath && !options._retry) {
-        // RTO endpoints must NEVER wipe session or logout the user if remote server returns 401
-        if (isRtoPath || options._ignoreAuthRedirect) {
+        if (options._ignoreAuthRedirect) {
           throw err;
         }
 
+        // Access token expire (15 min) → refresh, phir original request ek dafa dobara. RTO pe bhi.
         try {
           await executeTokenRefresh();
-          // Retry the original request once
-          return await apiRequest(endpoint, { ...options, _retry: true });
-        } catch (refreshErr) {
+        } catch {
+          // RTO endpoints session wipe / logout nahi karte (sirf error)
+          if (isRtoPath) throw err;
           clearAuthToken();
           if (typeof window !== 'undefined') {
             window.dispatchEvent(
@@ -222,6 +223,8 @@ async function apiRequest(endpoint, options = {}) {
           }
           throw err;
         }
+        // Refresh ho gaya → retry. Retry ka apna error (500, 404…) seedha upar — logout nahi.
+        return apiRequest(endpoint, { ...options, _retry: true });
       }
 
       throw err;
@@ -783,29 +786,8 @@ export const cmpConnectApi = {
   },
 
   // ─────────────────────────────────────────────────────────────
-  // TEAM: INVITE ACCEPT / SET PASSWORD (Public)
+  // TEAM: INVITE ACCEPT / SET PASSWORD (Public) — getInviteDetails / acceptInvite upar AUTH section mein
   // ─────────────────────────────────────────────────────────────
-
-  /**
-   * 20. Get Invite Details by Token
-   * GET /api/cmpConnect/auth/invite/:token
-   */
-  async getInviteDetails(inviteToken) {
-    return apiRequest(`/api/cmpConnect/auth/invite/${inviteToken}`, {
-      method: 'GET'
-    });
-  },
-
-  /**
-   * 21. Accept Invite and Set Password
-   * POST /api/cmpConnect/auth/accept-invite
-   */
-  async acceptInvite({ token, password }) {
-    return apiRequest('/api/cmpConnect/auth/accept-invite', {
-      method: 'POST',
-      body: JSON.stringify({ token, password })
-    });
-  },
 
   // ─────────────────────────────────────────────────────────────
   // PROPERTIES (SIMPLE LISTINGS)
@@ -1161,23 +1143,7 @@ export const cmpConnectApi = {
     if (params.sort) query.set('sort', params.sort);
 
     const qs = query.toString() ? `?${query.toString()}` : '';
-    const url = resolveApiUrl(`/api/cmpConnect/listings/export${qs}`);
-    const actualToken = token || getAuthToken();
-
-    const response = await fetch(url, {
-      method: 'GET',
-      credentials: 'include',
-      headers: {
-        ...(actualToken ? { Authorization: `Bearer ${actualToken}` } : {})
-      }
-    });
-
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      throw new Error(err.message || 'Failed to export listings CSV.');
-    }
-
-    return response.blob();
+    return downloadCsv(`/api/cmpConnect/listings/export${qs}`, token, 'Failed to export listings CSV.');
   },
 
   /**
@@ -1631,8 +1597,185 @@ export const cmpConnectApi = {
       public_id: data.public_id,
       fileName: file.name
     };
+  },
+
+  // ─────────────────────────────────────────────────────────────
+  // CRM: LEADS (Clients → Pipeline / Enquiries / Contacts)
+  // ─────────────────────────────────────────────────────────────
+
+  /**
+   * GET /api/cmpConnect/leads
+   * Query: tab (PIPELINE|ENQUIRIES), stage, kind (CTA|MANUAL), channel (CALL|WHATSAPP|EMAIL),
+   *        agentId, listingId, search, from, to, page, limit (max 100)
+   * Returns { data: [lead], counts: { stages: {NEW,CONTACTED,QUALIFIED,UNQUALIFIED}, tabs: {pipeline, enquiries} }, pagination }
+   */
+  async listLeads(params = {}, token) {
+    return apiRequest(`/api/cmpConnect/leads${toQuery(params)}`, { method: 'GET', token });
+  },
+
+  /** GET /api/cmpConnect/leads/:id — lead + notes [{ text, by: {id,name}, at }] */
+  async getLead(id, token) {
+    return apiRequest(`/api/cmpConnect/leads/${id}`, { method: 'GET', token });
+  },
+
+  /**
+   * POST /api/cmpConnect/leads — manual contact
+   * Body: { name, phone, email?, message?, manualSource: WALK_IN|REFERRAL|OFFICE_CALL|OTHER, listingId?, agentId? }
+   */
+  async createLead(payload, token) {
+    return apiRequest('/api/cmpConnect/leads', { method: 'POST', token, body: JSON.stringify(payload) });
+  },
+
+  /** PATCH /api/cmpConnect/leads/:id — { agentId?, note?, name?, phone?, email?, message?, manualSource? } */
+  async updateLead(id, payload, token) {
+    return apiRequest(`/api/cmpConnect/leads/${id}`, { method: 'PATCH', token, body: JSON.stringify(payload) });
+  },
+
+  /** PATCH /api/cmpConnect/leads/:id/stage — { stage: NEW|CONTACTED|QUALIFIED|UNQUALIFIED } */
+  async setLeadStage(id, stage, token) {
+    return apiRequest(`/api/cmpConnect/leads/${id}/stage`, { method: 'PATCH', token, body: JSON.stringify({ stage }) });
+  },
+
+  /** DELETE /api/cmpConnect/leads/:id */
+  async deleteLead(id, token) {
+    return apiRequest(`/api/cmpConnect/leads/${id}`, { method: 'DELETE', token });
+  },
+
+  /** GET /api/cmpConnect/leads/export — CSV Blob (same filters as listLeads) */
+  async exportLeadsCsv(params = {}, token) {
+    return downloadCsv(`/api/cmpConnect/leads/export${toQuery(params)}`, token, 'Failed to export leads.');
+  },
+
+  // ─────────────────────────────────────────────────────────────
+  // CRM: SETTINGS (bell notifications, preferences, company profile, follow-ups)
+  // ─────────────────────────────────────────────────────────────
+
+  /** GET /api/cmpConnect/notifications — { data: [{ id, type, title, body, data, read, at }], unread, pagination } */
+  async listNotifications(params = {}, token) {
+    return apiRequest(`/api/cmpConnect/notifications${toQuery(params)}`, { method: 'GET', token });
+  },
+
+  /** GET /api/cmpConnect/notifications/unread-count — { unread } */
+  async getUnreadNotificationCount(token) {
+    return apiRequest('/api/cmpConnect/notifications/unread-count', { method: 'GET', token, _silent: true });
+  },
+
+  /** POST /api/cmpConnect/notifications/:id/read */
+  async markNotificationRead(id, token) {
+    return apiRequest(`/api/cmpConnect/notifications/${id}/read`, { method: 'POST', token });
+  },
+
+  /** POST /api/cmpConnect/notifications/read-all — { read: count } */
+  async markAllNotificationsRead(token) {
+    return apiRequest('/api/cmpConnect/notifications/read-all', { method: 'POST', token });
+  },
+
+  /** GET /api/cmpConnect/notifications/preferences — { push: {leads,rto,listings,transactions,team}, email: {...} } */
+  async getNotificationPreferences(token) {
+    return apiRequest('/api/cmpConnect/notifications/preferences', { method: 'GET', token });
+  },
+
+  /** PUT /api/cmpConnect/notifications/preferences — { push?: {...booleans}, email?: {...booleans} } */
+  async setNotificationPreferences(prefs, token) {
+    return apiRequest('/api/cmpConnect/notifications/preferences', { method: 'PUT', token, body: JSON.stringify(prefs) });
+  },
+
+  /** GET /api/cmpConnect/company/profile — { organisation: {...readOnly}, contact: {...editable} } (agency only) */
+  async getCompanyProfile(token) {
+    return apiRequest('/api/cmpConnect/company/profile', { method: 'GET', token });
+  },
+
+  /**
+   * PATCH /api/cmpConnect/company/profile
+   * Body (any of): phone, email, adminContact, adminEmail, contactFirstName, contactLastName, emirate,
+   *   companyType (Real estate brokerage | Property management | Holiday homes operator | Other)
+   */
+  async updateCompanyProfile(payload, token) {
+    return apiRequest('/api/cmpConnect/company/profile', { method: 'PATCH', token, body: JSON.stringify(payload) });
+  },
+
+  /** GET /api/cmpConnect/follow-ups?status=PENDING|DONE — { data: [{ id, title, notes, dueAt, status, doneAt, lead, listingId }], pagination } */
+  async listFollowUps(params = {}, token) {
+    return apiRequest(`/api/cmpConnect/follow-ups${toQuery(params)}`, { method: 'GET', token });
+  },
+
+  /** POST /api/cmpConnect/follow-ups — { title, notes?, dueAt? (ISO), leadId?, listingId? } */
+  async createFollowUp(payload, token) {
+    return apiRequest('/api/cmpConnect/follow-ups', { method: 'POST', token, body: JSON.stringify(payload) });
+  },
+
+  /** PATCH /api/cmpConnect/follow-ups/:id — { title?, notes?, dueAt?, status?: PENDING|DONE } */
+  async updateFollowUp(id, payload, token) {
+    return apiRequest(`/api/cmpConnect/follow-ups/${id}`, { method: 'PATCH', token, body: JSON.stringify(payload) });
+  },
+
+  // ─────────────────────────────────────────────────────────────
+  // CRM: RTO REGISTRATIONS + DEPOSIT CHEQUES (/rto/offers page)
+  // ─────────────────────────────────────────────────────────────
+
+  /**
+   * GET /api/cmpConnect/rto/registrations
+   * Query: status (PENDING|APPROVED|REJECTED), chequeStatus (NOT_RECEIVED|RECEIVED|RETURN_READY|RETURNED|CASHED|BOUNCED),
+   *        propertyId, search (contractId), page, limit
+   * Returns { data: [registration], counts: { statuses, cheques }, pagination }
+   */
+  async listRtoRegistrations(params = {}, token) {
+    return apiRequest(`/api/cmpConnect/rto/registrations${toQuery(params)}`, { method: 'GET', token });
+  },
+
+  /** POST /api/cmpConnect/rto/registrations/:id/approve */
+  async approveRtoRegistration(id, token) {
+    return apiRequest(`/api/cmpConnect/rto/registrations/${id}/approve`, { method: 'POST', token });
+  },
+
+  /** POST /api/cmpConnect/rto/registrations/:id/decline — { reason (min 3) } */
+  async declineRtoRegistration(id, reason, token) {
+    return apiRequest(`/api/cmpConnect/rto/registrations/${id}/decline`, { method: 'POST', token, body: JSON.stringify({ reason }) });
+  },
+
+  /**
+   * POST /api/cmpConnect/rto/registrations/:id/cheque — { action, note? }
+   * action: RECEIVED | RETURN_READY | RETURNED | CASHED | BOUNCED (allowed moves: see CHEQUE_TRANSITIONS)
+   */
+  async rtoChequeAction(id, action, note, token) {
+    return apiRequest(`/api/cmpConnect/rto/registrations/${id}/cheque`, { method: 'POST', token, body: JSON.stringify({ action, ...(note && { note }) }) });
+  },
+
+  /** POST /api/cmpConnect/rto/registrations/cheques/bulk — { ids, action: RETURN_READY } → { updated, skipped, results } */
+  async rtoChequeBulkReturnReady(ids, token) {
+    return apiRequest('/api/cmpConnect/rto/registrations/cheques/bulk', { method: 'POST', token, body: JSON.stringify({ ids, action: 'RETURN_READY' }) });
   }
 };
+
+// Params → "?a=1&b=2" (khali / null / 'all' values chhod do)
+function toQuery(params = {}) {
+  const q = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => {
+    if (v === undefined || v === null || v === '' || v === 'all') return;
+    q.append(k, v);
+  });
+  const s = q.toString();
+  return s ? `?${s}` : '';
+}
+
+// CSV download (Blob). Cookie session pe Bearer nahi bhejte — "cookie_session_active" placeholder token tha, backend 401 deta tha.
+async function downloadCsv(path, token, failMessage) {
+  const actualToken = token || getAuthToken();
+  const hasRealToken = actualToken && actualToken !== 'cookie_session_active';
+  const response = await fetch(resolveApiUrl(path), {
+    method: 'GET',
+    credentials: 'include',
+    headers: {
+      'x-device-id': getDeviceId(),
+      ...(hasRealToken ? { Authorization: `Bearer ${actualToken}` } : {})
+    }
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.message || failMessage);
+  }
+  return response.blob();
+}
 
 export default cmpConnectApi;
 

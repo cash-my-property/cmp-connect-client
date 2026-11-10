@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
+import cmpConnectApi from '../../services/cmpConnectApi';
 import {
   Search,
   Coins,
@@ -31,10 +32,42 @@ export default function HubBar() {
     logout,
     account,
     can,
-    hasAny
+    hasAny,
+    isLiveData,
+    authToken
   } = useApp();
 
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+
+  // Live bell: real unread count — mount pe + har 60s (sirf tab visible ho tab)
+  const [liveUnread, setLiveUnread] = useState(0);
+  useEffect(() => {
+    if (!isLiveData || !authToken) return undefined;
+    let cancelled = false;
+    const fetchCount = () => {
+      if (document.visibilityState === 'hidden') return;
+      cmpConnectApi.getUnreadNotificationCount(authToken)
+        .then((res) => {
+          if (!cancelled) setLiveUnread(Number(res?.data?.unread) || 0);
+        })
+        .catch(() => {});
+    };
+    fetchCount();
+    const timer = setInterval(fetchCount, 60000);
+    // tab wapas aaye ya drawer/page ne kuch read kiya → turant refresh
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') fetchCount();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('cmp:notifications-changed', fetchCount);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('cmp:notifications-changed', fetchCount);
+    };
+  }, [isLiveData, authToken]);
+  const bellCount = isLiveData ? liveUnread : needsYou.length;
   const userMenuRef = useRef(null);
 
   const location = useLocation();
@@ -350,17 +383,26 @@ export default function HubBar() {
           </div>
 
           {/* Wallet Pill */}
-          <NavLink
-            to="/wallet"
-            className="wallet-pill"
-            title={`Credits expire in ${agency.creditsExpiryDays} days`}
-          >
-            <Coins size={16} style={{ color: 'var(--cmp-accent)' }} />
-            <strong>{agency.credits.toLocaleString()}</strong>
-            <span className="faint" style={{ fontSize: '12px' }}>
-              credits · {agency.creditsExpiryDays}d
-            </span>
-          </NavLink>
+          {/* Live mein wallet API abhi nahi → jhoota "0 credits · 0d" nahi, "—" (backend organization.credits bheje to wahi) */}
+          {(() => {
+            const liveCredits = account?.organization?.credits;
+            const hasCredits = dataMode === 'mock' || liveCredits != null;
+            const credits = dataMode === 'mock' ? agency.credits : liveCredits;
+            const days = dataMode === 'mock' ? agency.creditsExpiryDays : account?.organization?.creditsExpiryDays;
+            return (
+              <NavLink
+                to="/wallet"
+                className="wallet-pill"
+                title={hasCredits && days != null ? `Credits expire in ${days} days` : 'Wallet coming soon'}
+              >
+                <Coins size={16} style={{ color: 'var(--cmp-accent)' }} />
+                <strong>{hasCredits ? Number(credits || 0).toLocaleString() : '—'}</strong>
+                <span className="faint" style={{ fontSize: '12px' }}>
+                  credits{hasCredits && days != null ? ` · ${days}d` : ''}
+                </span>
+              </NavLink>
+            );
+          })()}
 
           {/* Notifications Button */}
           <button
@@ -370,9 +412,9 @@ export default function HubBar() {
             onClick={() => setIsNotificationsOpen(true)}
           >
             <Bell size={18} />
-            {needsYou.length > 0 && (
+            {bellCount > 0 && (
               <span className="dot-count">
-                {needsYou.length > 9 ? '9+' : needsYou.length}
+                {bellCount > 9 ? '9+' : bellCount}
               </span>
             )}
           </button>

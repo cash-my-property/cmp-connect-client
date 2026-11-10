@@ -174,17 +174,16 @@
   color: #FFFFFF;
 }
 
-.rail-link[aria-current='page'], .rail-link.active {
+.rail-link.active {
   background: rgba(110, 212, 161, 0.14);
   color: #FFFFFF;
 }
 
-.app-rail[data-side='rto'] .rail-link[aria-current='page'],
 .app-rail[data-side='rto'] .rail-link.active {
   background: rgba(227, 169, 114, 0.16);
 }
 
-.rail-link[aria-current='page']::before, .rail-link.active::before {
+.rail-link.active::before {
   content: '';
   position: absolute;
   left: -8px;
@@ -195,7 +194,6 @@
   background: #E3A972;
 }
 
-.app-rail.expanded .rail-link[aria-current='page']::before,
 .app-rail.expanded .rail-link.active::before {
   left: -12px;
   top: 8px;
@@ -951,7 +949,7 @@ kbd {
     min-width: 58px;
     padding: 6px 4px;
   }
-  .rail-link[aria-current='page']::before, .rail-link.active::before {
+  .rail-link.active::before {
     left: 10px;
     right: 10px;
     top: -6px;

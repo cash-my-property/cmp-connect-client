@@ -17,6 +17,9 @@ function formatVolume(amount) {
   if (!amount || amount === 0) return 'AED 0';
   const num = Number(amount);
   if (isNaN(num)) return `AED ${amount}`;
+  if (num >= 1_000_000_000) {
+    return `AED ${(num / 1_000_000_000).toFixed(1).replace(/\.0$/, '')}B`;
+  }
   if (num >= 1_000_000) {
     const formatted = (num / 1_000_000).toFixed(1).replace(/\.0$/, '');
     return `AED ${formatted}M`;
@@ -190,7 +193,9 @@ export default function AgentSummaryPage() {
             unclaimedDeals: sumData.transactions12m?.notClaimed ?? 0,
             totalDeals: sumData.transactions12m?.total ?? 0,
             closedSalesVolume: sumData.realTimeOffer?.soldValue ?? 0,
-            avgResponseTime: null,
+            // Backend leads aane ke baad bhejega; tab tak null → "—"
+            avgResponseTime: sumData.avgResponseTime ?? null,
+            leadsHandled: sumData.leadsHandled ?? null,
             listingQuality: sumData.liveProperties?.listingQuality != null ? sumData.liveProperties.listingQuality : null,
             realTimeOffer: sumData.realTimeOffer || null,
             canSetAway: sumData.can?.setAway ?? true,
@@ -251,35 +256,19 @@ export default function AgentSummaryPage() {
         serverDeals = txRes.value.data;
       }
 
-      // Local unclaimed deals
-      let localUnclaimed = [];
-      try {
-        localUnclaimed = JSON.parse(localStorage.getItem('cmp_unclaimed_transactions') || '[]');
-      } catch {}
+      // Sirf server ke deals (mark-sold pe backend PENDING_CONTRACT banata hai). Statuses: PENDING_CONTRACT → SUBMITTED → CLAIMED / SENT_BACK
+      const combinedDeals = serverDeals;
 
-      const agentUnclaimed = localUnclaimed.filter((u) => {
-        if (!targetId) return true;
-        const aId = u.agent?.id || u.agent?._id || u.agentId;
-        return aId ? String(aId) === String(targetId) : (account?.id && String(account.id) === String(targetId));
-      });
-
-      const combinedDeals = [
-        ...agentUnclaimed.filter((u) => !serverDeals.some((s) => s.id === u.id || s.listing?.id === u.listingId)),
-        ...serverDeals
-      ];
-
-      const claimedCount = combinedDeals.filter(
-        (d) => d.status === 'APPROVED' || d.status === 'UNDER_REVIEW' || d.claimStatus === 'Approved' || d.claimStatus === 'Under review'
-      ).length;
+      const claimedCount = combinedDeals.filter((d) => d.status === 'CLAIMED').length;
 
       const unclaimedCount = combinedDeals.filter(
-        (d) => d.status === 'UNCLAIMED' || d.claimStatus === 'Not claimed'
+        (d) => d.status === 'PENDING_CONTRACT' || d.status === 'SUBMITTED' || d.status === 'SENT_BACK'
       ).length;
 
       const totalDeals = claimedCount + unclaimedCount;
 
       const closedVolume = combinedDeals
-        .filter((d) => d.status === 'APPROVED' || d.status === 'UNDER_REVIEW' || d.claimStatus === 'Approved' || d.claimStatus === 'Under review')
+        .filter((d) => d.status === 'CLAIMED')
         .reduce((acc, d) => {
           const price = Number(d.finalPrice || d.price || 0);
           return acc + (isNaN(price) ? 0 : price);
@@ -298,16 +287,17 @@ export default function AgentSummaryPage() {
         tier: isVerified ? 'Verified Broker' : 'Rising',
         score: null,
         rating: null,
-        reviewsCount: 0,
-        unattended: 0,
-        responseRate: 100,
+        // Ye data abhi track nahi hota → null ("—"), jhoota 100% / 0 nahi
+        reviewsCount: null,
+        unattended: null,
+        responseRate: null,
         liveListings: liveListingsCount,
         claimedDeals: claimedCount,
         unclaimedDeals: unclaimedCount,
         totalDeals,
         closedSalesVolume: closedVolume,
         avgResponseTime: null,
-        leadsHandled: 0,
+        leadsHandled: null,
         reviews: []
       });
     });
@@ -1069,7 +1059,7 @@ export default function AgentSummaryPage() {
                 <div className="card" style={{ padding: '16px', background: 'var(--cmp-surface-sunken)' }}>
                   <span className="faint" style={{ fontSize: '12px' }}>Total leads handled</span>
                   <p style={{ margin: '4px 0 0', fontSize: '24px', fontWeight: 800 }}>
-                    {isLiveData ? (agent.leadsHandled != null ? agent.leadsHandled : '0') : '142'}
+                    {isLiveData ? (agent.leadsHandled != null ? agent.leadsHandled : '—') : '142'}
                   </p>
                   {isLiveData && (
                     <span className="faint" style={{ fontSize: '11px', display: 'block', marginTop: '4px' }}>

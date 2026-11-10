@@ -1,6 +1,71 @@
-import React, { useState } from 'react';
-import { NavLink } from 'react-router-dom';
-import { Bell, RefreshCw, CheckCheck, Mail, Phone, Shield, Zap } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { NavLink, useNavigate } from 'react-router-dom';
+import { RefreshCw, CheckCheck } from 'lucide-react';
+import { useApp } from '../../context/AppContext';
+import cmpConnectApi from '../../services/cmpConnectApi';
+
+const LIVE_PAGE_LIMIT = 50;
+
+// CRM ke route prefixes — server ka data.url website path bhi ho sakta hai (/real-time-offers/..), wo yahan nahi khulega
+const CRM_PREFIXES = ['/rto', '/properties', '/clients', '/transactions', '/growth', '/wallet', '/team', '/members', '/account', '/help', '/activity'];
+const isCrmPath = (url) =>
+  typeof url === 'string' && CRM_PREFIXES.some((p) => url === p || url.startsWith(`${p}/`) || url.startsWith(`${p}?`));
+
+// type prefix → category label + fallback route
+const TYPE_MAP = [
+  { prefix: 'LEAD', category: 'Leads', link: '/clients/enquiries' },
+  { prefix: 'RTO', category: 'Real Time Offer', link: '/rto/offers' },
+  { prefix: 'LISTING', category: 'Listings', link: '/properties' },
+  { prefix: 'TRANSACTION', category: 'Transactions', link: '/transactions' },
+  { prefix: 'TEAM', category: 'Team', link: '/team/members' },
+  { prefix: 'MEMBER', category: 'Team', link: '/team/members' },
+  { prefix: 'CREDIT', category: 'Credits', link: '/wallet' }
+];
+
+const formatNotifDate = (iso) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return `${d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}, ${d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`;
+};
+
+// Backend row → page ka item shape
+const mapLiveNotification = (n) => {
+  const type = String(n?.type || '').toUpperCase();
+  const hit = TYPE_MAP.find((t) => type.startsWith(t.prefix));
+  const url = n?.data?.url;
+  return {
+    id: n.id,
+    category: hit?.category || 'General',
+    dateTime: formatNotifDate(n.at),
+    title: n.title || 'Notification',
+    description: n.body || '',
+    link: isCrmPath(url) ? url : hit?.link || null,
+    unread: !n.read
+  };
+};
+
+// Live prefs: 5 categories × 2 channels
+const PREF_CATEGORIES = [
+  { key: 'leads', label: 'Leads & enquiries', hint: 'New enquiries and lead updates.' },
+  { key: 'rto', label: 'Real Time Offer', hint: 'Auction starts, bids and results.' },
+  { key: 'listings', label: 'Listings', hint: 'Verification, permits and listing status.' },
+  { key: 'transactions', label: 'Transactions', hint: 'Deals and payments on your listings.' },
+  { key: 'team', label: 'Team', hint: 'Invites, verification and member changes.' }
+];
+const PREF_CHANNELS = ['push', 'email'];
+
+// missing key = true (backend {} bhi bhej sakta hai)
+const normalisePrefs = (raw) => {
+  const out = {};
+  PREF_CHANNELS.forEach((ch) => {
+    out[ch] = {};
+    PREF_CATEGORIES.forEach(({ key }) => {
+      out[ch][key] = raw?.[ch]?.[key] !== false;
+    });
+  });
+  return out;
+};
 
 const initialNotifications = [
   {
@@ -114,9 +179,70 @@ const initialNotifications = [
 ];
 
 export default function NotificationsPage() {
-  const [notifications, setNotifications] = useState(initialNotifications);
+  const { isLiveData, authToken } = useApp();
+  const navigate = useNavigate();
+  const [mockNotifications, setMockNotifications] = useState(initialNotifications);
   const [activeTab, setActiveTab] = useState('inbox'); // 'inbox' | 'preferences'
   const [notice, setNotice] = useState(null);
+
+  // Live inbox state
+  const [liveItems, setLiveItems] = useState([]);
+  const [liveUnread, setLiveUnread] = useState(0);
+  const [livePage, setLivePage] = useState(1);
+  const [livePages, setLivePages] = useState(1);
+  const [liveLoading, setLiveLoading] = useState(false);
+  const [liveError, setLiveError] = useState(null);
+
+  // Live prefs state
+  const [livePrefs, setLivePrefs] = useState(() => normalisePrefs({}));
+  const [prefsLoading, setPrefsLoading] = useState(false);
+  const [prefsSaving, setPrefsSaving] = useState(false);
+  const [prefsError, setPrefsError] = useState(null);
+
+  const notifications = isLiveData ? liveItems : mockNotifications;
+  const setNotifications = isLiveData ? setLiveItems : setMockNotifications;
+
+  // page=1 → replace, warna append (Load more)
+  const loadLive = useCallback(async (page = 1) => {
+    if (!authToken) return;
+    setLiveLoading(true);
+    setLiveError(null);
+    try {
+      const res = await cmpConnectApi.listNotifications({ page, limit: LIVE_PAGE_LIMIT }, authToken);
+      const rows = (Array.isArray(res?.data) ? res.data : []).map(mapLiveNotification);
+      setLiveItems((prev) => (page === 1 ? rows : [...prev, ...rows]));
+      setLiveUnread(Number(res?.unread) || 0);
+      setLivePage(Number(res?.pagination?.page) || page);
+      setLivePages(Number(res?.pagination?.pages) || 1);
+    } catch (err) {
+      setLiveError(err?.message || 'Could not load notifications.');
+    } finally {
+      setLiveLoading(false);
+    }
+  }, [authToken]);
+
+  useEffect(() => {
+    if (isLiveData) loadLive(1);
+  }, [isLiveData, loadLive]);
+
+  // Prefs tab khule tab load karo (live only)
+  useEffect(() => {
+    if (!isLiveData || !authToken || activeTab !== 'preferences') return undefined;
+    let cancelled = false;
+    setPrefsLoading(true);
+    setPrefsError(null);
+    cmpConnectApi.getNotificationPreferences(authToken)
+      .then((res) => {
+        if (!cancelled) setLivePrefs(normalisePrefs(res?.data));
+      })
+      .catch((err) => {
+        if (!cancelled) setPrefsError(err?.message || 'Could not load preferences.');
+      })
+      .finally(() => {
+        if (!cancelled) setPrefsLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [isLiveData, authToken, activeTab]);
 
   const [prefs, setPrefs] = useState({
     emailLeads: true,
@@ -132,16 +258,103 @@ export default function NotificationsPage() {
     setTimeout(() => setNotice(null), 3000);
   };
 
-  const handleMarkAllRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, unread: false })));
-    showNotice('All notifications marked as read.');
+  const handleMarkAllRead = async () => {
+    if (!isLiveData) {
+      setNotifications((prev) => prev.map((n) => ({ ...n, unread: false })));
+      showNotice('All notifications marked as read.');
+      return;
+    }
+    const snapshot = liveItems;
+    const prevUnread = liveUnread;
+    setLiveItems((prev) => prev.map((n) => ({ ...n, unread: false })));
+    setLiveUnread(0);
+    try {
+      await cmpConnectApi.markAllNotificationsRead(authToken);
+      window.dispatchEvent(new Event('cmp:notifications-changed'));
+      showNotice('All notifications marked as read.');
+    } catch (err) {
+      setLiveItems(snapshot);
+      setLiveUnread(prevUnread);
+      showNotice(err?.message || 'Could not mark notifications as read.');
+    }
   };
 
-  const handleRefresh = () => {
-    showNotice('Notifications updated.');
+  const handleRefresh = async () => {
+    if (!isLiveData) {
+      showNotice('Notifications updated.');
+      return;
+    }
+    await loadLive(1);
   };
 
-  const unreadCount = notifications.filter((n) => n.unread).length;
+  // Live click: optimistic read, phir link ho to navigate
+  const handleLiveClick = (item) => {
+    if (item.unread) {
+      setLiveItems((prev) => prev.map((n) => (n.id === item.id ? { ...n, unread: false } : n)));
+      setLiveUnread((c) => Math.max(0, c - 1));
+      cmpConnectApi.markNotificationRead(item.id, authToken)
+        .then(() => window.dispatchEvent(new Event('cmp:notifications-changed')))
+        .catch(() => {
+          setLiveItems((prev) => prev.map((n) => (n.id === item.id ? { ...n, unread: true } : n)));
+          setLiveUnread((c) => c + 1);
+        });
+    }
+    if (item.link) navigate(item.link);
+  };
+
+  const toggleLivePref = (channel, key, value) => {
+    setLivePrefs((prev) => ({ ...prev, [channel]: { ...prev[channel], [key]: value } }));
+  };
+
+  const handleSaveLivePrefs = async () => {
+    setPrefsSaving(true);
+    setPrefsError(null);
+    try {
+      const res = await cmpConnectApi.setNotificationPreferences(
+        { push: livePrefs.push, email: livePrefs.email },
+        authToken
+      );
+      if (res?.data) setLivePrefs(normalisePrefs(res.data));
+      showNotice(res?.message || 'Preferences saved.');
+    } catch (err) {
+      setPrefsError(err?.message || 'Could not save preferences.');
+    } finally {
+      setPrefsSaving(false);
+    }
+  };
+
+  const unreadCount = isLiveData ? liveUnread : notifications.filter((n) => n.unread).length;
+
+  // Ek row ka andar wala content (mock NavLink aur live button dono mein same)
+  const renderItemBody = (item) => (
+    <>
+      <p className="muted" style={{ margin: 0, fontSize: '12px' }}>
+        {item.dateTime} · {item.category}
+        {item.unread && (
+          <span
+            aria-label="Unread"
+            style={{
+              display: 'inline-block',
+              width: '7px',
+              height: '7px',
+              borderRadius: '50%',
+              background: 'var(--cmp-accent)',
+              marginInlineStart: '6px',
+              verticalAlign: 'middle'
+            }}
+          />
+        )}
+      </p>
+      <p style={{ margin: '4px 0 0', fontWeight: 700, fontSize: '14.5px' }}>
+        {item.title}
+      </p>
+      {item.description && (
+        <p style={{ margin: '2px 0 0', fontSize: '13.5px', color: 'var(--cmp-text-muted)' }}>
+          {item.description}
+        </p>
+      )}
+    </>
+  );
 
   return (
     <div>
@@ -207,15 +420,51 @@ export default function NotificationsPage() {
               className="btn btn-outline btn-sm"
               aria-label="Refresh"
               onClick={handleRefresh}
+              disabled={isLiveData && liveLoading}
               style={{ width: '36px', padding: 0 }}
             >
               <RefreshCw size={15} />
             </button>
           </div>
 
+          {isLiveData && liveError && (
+            <p style={{ margin: '0 0 12px', fontSize: '13px', color: 'var(--cmp-danger)' }}>{liveError}</p>
+          )}
+
+          {isLiveData && !liveLoading && !liveError && liveItems.length === 0 && (
+            <div className="muted" style={{ textAlign: 'center', padding: '36px 12px', fontSize: '14px' }}>
+              No notifications yet. You're all caught up.
+            </div>
+          )}
+
+          {isLiveData && liveLoading && liveItems.length === 0 && (
+            <div className="muted" style={{ textAlign: 'center', padding: '36px 12px', fontSize: '14px' }}>
+              Loading notifications…
+            </div>
+          )}
+
           <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
             {notifications.map((item) => (
               <li key={item.id} style={{ borderBottom: '1px solid var(--cmp-border)' }}>
+                {isLiveData ? (
+                  <button
+                    type="button"
+                    onClick={() => handleLiveClick(item)}
+                    style={{
+                      display: 'block',
+                      width: '100%',
+                      padding: '14px 4px',
+                      textAlign: 'start',
+                      background: 'transparent',
+                      border: 'none',
+                      color: 'inherit',
+                      font: 'inherit',
+                      cursor: item.link || item.unread ? 'pointer' : 'default'
+                    }}
+                  >
+                    {renderItemBody(item)}
+                  </button>
+                ) : (
                 <NavLink
                   to={item.link}
                   style={{
@@ -230,33 +479,81 @@ export default function NotificationsPage() {
                     );
                   }}
                 >
-                  <p className="muted" style={{ margin: 0, fontSize: '12px' }}>
-                    {item.dateTime} · {item.category}
-                    {item.unread && (
-                      <span
-                        aria-label="Unread"
-                        style={{
-                          display: 'inline-block',
-                          width: '7px',
-                          height: '7px',
-                          borderRadius: '50%',
-                          background: 'var(--cmp-accent)',
-                          marginInlineStart: '6px',
-                          verticalAlign: 'middle'
-                        }}
-                      />
-                    )}
-                  </p>
-                  <p style={{ margin: '4px 0 0', fontWeight: 700, fontSize: '14.5px' }}>
-                    {item.title}
-                  </p>
-                  <p style={{ margin: '2px 0 0', fontSize: '13.5px', color: 'var(--cmp-text-muted)' }}>
-                    {item.description}
-                  </p>
+                  {renderItemBody(item)}
                 </NavLink>
+                )}
               </li>
             ))}
           </ul>
+
+          {isLiveData && livePages > livePage && (
+            <div style={{ marginTop: '14px', textAlign: 'center' }}>
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={() => loadLive(livePage + 1)}
+                disabled={liveLoading}
+              >
+                {liveLoading ? 'Loading…' : 'Load more'}
+              </button>
+            </div>
+          )}
+        </section>
+      ) : isLiveData ? (
+        <section className="card" style={{ padding: '22px', maxWidth: '640px' }}>
+          <h2 style={{ fontSize: '18px', margin: '0 0 6px' }}>Delivery Preferences</h2>
+          <p className="faint" style={{ margin: '0 0 16px', fontSize: '12.5px' }}>
+            Choose which alerts reach you as push notifications and by email.
+          </p>
+
+          {prefsLoading ? (
+            <div className="muted" style={{ fontSize: '14px', padding: '12px 0' }}>Loading preferences…</div>
+          ) : (
+            <div style={{ display: 'grid', gap: '16px' }}>
+              <div className="row" style={{ justifyContent: 'flex-end', gap: '18px', margin: 0 }}>
+                <span className="faint" style={{ fontSize: '12px', fontWeight: 700, width: '44px', textAlign: 'center' }}>Push</span>
+                <span className="faint" style={{ fontSize: '12px', fontWeight: 700, width: '44px', textAlign: 'center' }}>Email</span>
+              </div>
+              {PREF_CATEGORIES.map((cat) => (
+                <div key={cat.key} className="row" style={{ justifyContent: 'space-between', margin: 0 }}>
+                  <div>
+                    <span style={{ fontWeight: 600, fontSize: '14px' }}>{cat.label}</span>
+                    <span className="faint" style={{ display: 'block', fontSize: '12px' }}>
+                      {cat.hint}
+                    </span>
+                  </div>
+                  <div className="row" style={{ gap: '18px' }}>
+                    {PREF_CHANNELS.map((ch) => (
+                      <span key={ch} style={{ width: '44px', textAlign: 'center' }}>
+                        <input
+                          type="checkbox"
+                          aria-label={`${cat.label} ${ch}`}
+                          checked={livePrefs[ch][cat.key]}
+                          onChange={(e) => toggleLivePref(ch, cat.key, e.target.checked)}
+                          style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                        />
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {prefsError && (
+            <p style={{ margin: '14px 0 0', fontSize: '13px', color: 'var(--cmp-danger)' }}>{prefsError}</p>
+          )}
+
+          <div style={{ marginTop: '22px' }}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={handleSaveLivePrefs}
+              disabled={prefsSaving || prefsLoading}
+            >
+              {prefsSaving ? 'Saving…' : 'Save preferences'}
+            </button>
+          </div>
         </section>
       ) : (
         <section className="card" style={{ padding: '22px', maxWidth: '640px' }}>

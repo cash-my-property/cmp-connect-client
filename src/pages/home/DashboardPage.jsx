@@ -6,20 +6,60 @@ import {
   Building,
   Users,
   Coins,
-  TrendingDown,
   Check,
   Plus,
   AlertTriangle,
-  Clock,
-  CheckCircle2,
   Phone,
-  ArrowRight,
-  ExternalLink,
   ShieldAlert,
-  Loader2,
-  ShieldCheck,
-  Sparkles
+  Loader2
 } from 'lucide-react';
+
+// ── Pure helpers (component ke bahar — har render pe dobara nahi bante) ──
+
+const formatPriceCompact = (amount) => {
+  if (!amount && amount !== 0) return 'AED —';
+  const num = Number(amount);
+  if (isNaN(num)) return `AED ${amount}`;
+  if (num >= 1_000_000_000) return `AED ${(num / 1_000_000_000).toFixed(1).replace(/\.0$/, '')}B`;
+  if (num >= 1_000_000) return `AED ${(num / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
+  if (num >= 1_000) return `AED ${(num / 1_000).toFixed(0)}K`;
+  return `AED ${num.toLocaleString('en-AE')}`;
+};
+
+// "Needs you" item → page link
+const resolveNeedsYouUrl = (item) => {
+  if (!item.link) return '/properties';
+  if (item.link.kind === 'listing') return `/properties/${item.link.id}/edit`;
+  if (item.link.kind === 'member') return `/team/members`;
+  if (item.link.kind === 'profile') return `/account`;
+  if (item.href) return item.href;
+  return '/properties';
+};
+
+const NEEDS_YOU_ACTION_LABELS = {
+  APPROVE_LISTING: 'Review',
+  FIX_REJECTED_LISTING: 'Fix',
+  LISTING_ON_HOLD: 'Review',
+  PUBLISH_AGAIN: 'Publish',
+  EXPIRING_SOON: 'Review',
+  FINISH_DRAFT: 'Edit',
+  VERIFY_MY_BRN: 'Update',
+  RESEND_INVITE: 'Resend',
+  FIX_MEMBER_BRN: 'Update'
+};
+const resolveNeedsYouActionLabel = (item) => item.action || NEEDS_YOU_ACTION_LABELS[item.type] || 'Open';
+
+const SEVERITY_INFO = {
+  now: { label: 'Now', color: 'var(--cmp-danger)', bg: 'color-mix(in srgb, var(--cmp-danger) 12%, transparent)' },
+  soon: { label: 'Soon', color: 'var(--cmp-warning)', bg: 'color-mix(in srgb, var(--cmp-warning) 12%, transparent)' },
+  today: { label: 'Today', color: 'var(--cmp-brand)', bg: 'color-mix(in srgb, var(--cmp-brand) 12%, transparent)' }
+};
+const resolveSeverityInfo = (severity) => {
+  const s = String(severity || 'info').toLowerCase();
+  if (s === 'urgent' || s === 'now') return SEVERITY_INFO.now;
+  if (s === 'soon') return SEVERITY_INFO.soon;
+  return SEVERITY_INFO.today;
+};
 
 export default function DashboardPage() {
   const {
@@ -90,77 +130,92 @@ export default function DashboardPage() {
     ? homeData.topListings
     : mockListings.slice(0, 4);
 
-  const [newDue, setNewDue] = useState(new Date().toISOString().slice(0, 10));
+  // Lazy initializer: aaj ki date sirf pehli render pe
+  const [newDue, setNewDue] = useState(() => new Date().toISOString().slice(0, 10));
 
-  const formatPriceCompact = (amount) => {
-    if (!amount && amount !== 0) return 'AED —';
-    const num = Number(amount);
-    if (isNaN(num)) return `AED ${amount}`;
-    if (num >= 1_000_000) {
-      const formatted = (num / 1_000_000).toFixed(1).replace(/\.0$/, '');
-      return `AED ${formatted}M`;
-    }
-    if (num >= 1_000) {
-      const formatted = (num / 1_000).toFixed(0);
-      return `AED ${formatted}K`;
-    }
-    return `AED ${num.toLocaleString('en-AE')}`;
-  };
+  // Live follow-ups: backend /follow-ups se (mock mein context wale hi)
+  const [liveFollowUps, setLiveFollowUps] = useState([]);
+  const [followUpError, setFollowUpError] = useState(null);
 
-  const handleFollowUpSubmit = (e) => {
+  useEffect(() => {
+    if (!isLiveData || !authToken) return undefined;
+    let cancelled = false;
+    cmpConnectApi.listFollowUps({ limit: 50 }, authToken)
+      .then((res) => {
+        if (!cancelled) setLiveFollowUps(Array.isArray(res?.data) ? res.data : []);
+      })
+      .catch((err) => {
+        console.warn('[DashboardPage] Failed to fetch follow-ups:', err);
+        if (!cancelled) setFollowUpError(err?.message || 'Could not load follow-ups.');
+      });
+    return () => { cancelled = true; };
+  }, [isLiveData, authToken]);
+
+  const handleFollowUpSubmit = async (e) => {
     e.preventDefault();
-    if (newFollowUpText.trim()) {
-      addFollowUp(newFollowUpText.trim(), newDue);
+    const text = newFollowUpText.trim();
+    if (!text) return;
+    if (!isLiveData) {
+      addFollowUp(text, newDue);
       setNewFollowUpText('');
+      return;
+    }
+    if (text.length < 2) {
+      setFollowUpError('Follow-up needs at least 2 characters.');
+      return;
+    }
+    try {
+      setFollowUpError(null);
+      const payload = { title: text };
+      if (newDue) payload.dueAt = new Date(newDue).toISOString();
+      const res = await cmpConnectApi.createFollowUp(payload, authToken);
+      if (res?.data) setLiveFollowUps((prev) => [res.data, ...prev]);
+      setNewFollowUpText('');
+    } catch (err) {
+      setFollowUpError(err?.message || 'Could not add follow-up.');
     }
   };
 
-  // Resolve link for Needs You items
-  const resolveNeedsYouUrl = (item) => {
-    if (!item.link) return '/properties';
-    if (item.link.kind === 'listing') return `/properties/${item.link.id}/edit`;
-    if (item.link.kind === 'member') return `/team/members`;
-    if (item.link.kind === 'profile') return `/account`;
-    if (item.href) return item.href;
-    return '/properties';
-  };
-
-  const resolveNeedsYouActionLabel = (item) => {
-    if (item.action) return item.action;
-    if (item.type === 'APPROVE_LISTING') return 'Review';
-    if (item.type === 'FIX_REJECTED_LISTING') return 'Fix';
-    if (item.type === 'LISTING_ON_HOLD') return 'Review';
-    if (item.type === 'PUBLISH_AGAIN') return 'Publish';
-    if (item.type === 'EXPIRING_SOON') return 'Review';
-    if (item.type === 'FINISH_DRAFT') return 'Edit';
-    if (item.type === 'VERIFY_MY_BRN') return 'Update';
-    if (item.type === 'RESEND_INVITE') return 'Resend';
-    if (item.type === 'FIX_MEMBER_BRN') return 'Update';
-    return 'Open';
-  };
-
-  const resolveSeverityInfo = (severity) => {
-    const s = String(severity || 'info').toLowerCase();
-    if (s === 'urgent' || s === 'now') {
-      return { label: 'Now', color: 'var(--cmp-danger)', bg: 'color-mix(in srgb, var(--cmp-danger) 12%, transparent)' };
+  // Checkbox: optimistic toggle, error pe wapas
+  const handleToggleFollowUp = async (id) => {
+    if (!isLiveData) {
+      toggleFollowUp(id);
+      return;
     }
-    if (s === 'soon') {
-      return { label: 'Soon', color: 'var(--cmp-warning)', bg: 'color-mix(in srgb, var(--cmp-warning) 12%, transparent)' };
+    const current = liveFollowUps.find((f) => f.id === id);
+    if (!current) return;
+    const prevStatus = current.status;
+    const nextStatus = prevStatus === 'DONE' ? 'PENDING' : 'DONE';
+    setLiveFollowUps((prev) => prev.map((f) => (f.id === id ? { ...f, status: nextStatus } : f)));
+    try {
+      setFollowUpError(null);
+      const res = await cmpConnectApi.updateFollowUp(id, { status: nextStatus }, authToken);
+      if (res?.data) setLiveFollowUps((prev) => prev.map((f) => (f.id === id ? res.data : f)));
+    } catch (err) {
+      setLiveFollowUps((prev) => prev.map((f) => (f.id === id ? { ...f, status: prevStatus } : f)));
+      setFollowUpError(err?.message || 'Could not update follow-up.');
     }
-    return { label: 'Today', color: 'var(--cmp-brand)', bg: 'color-mix(in srgb, var(--cmp-brand) 12%, transparent)' };
   };
 
   // User display name
   const userFullName = account?.fullName || agency?.currentUser?.name || 'Layla';
   const userFirstName = userFullName.split(' ')[0];
 
+  // Demo numbers sirf mock mode mein. Live mein backend na de to null → "—" (jhoote number nahi)
+  const demo = (value) => (isLiveData ? null : value);
+
   // Enquiries 30d
-  const enquiries30d = homeData?.leads30d ?? 34;
-  const enquiriesPrev30d = homeData?.leadsPrev30d ?? 28;
+  const enquiries30d = homeData?.leads30d ?? demo(34);
+  const enquiriesPrev30d = homeData?.leadsPrev30d ?? demo(28);
+  const enquiriesChangePct =
+    enquiries30d != null && enquiriesPrev30d
+      ? Math.round(Math.abs((enquiries30d - enquiriesPrev30d) / enquiriesPrev30d) * 100)
+      : null;
+  const newEnquiries = homeData?.newEnquiries ?? (isLiveData ? null : mockClients.filter((c) => c.stage === 'New').length);
 
   // Credits info
-  const creditsBalance = homeData?.credits?.balance ?? (agency?.credits ?? 850);
-  const creditsDaysLeft = homeData?.credits?.daysLeft ?? 42;
+  const creditsBalance = homeData?.credits?.balance ?? demo(agency?.credits ?? 850);
+  const creditsDaysLeft = homeData?.credits?.daysLeft ?? demo(42);
 
   // Setup items
   const setupItems = setupProgress?.steps || [
@@ -171,7 +226,34 @@ export default function DashboardPage() {
     { done: (stats?.live ?? 4) >= 1, label: 'Boost your best property', href: '/properties' }
   ];
 
-  const activeFollowUps = mockFollowUps.filter((f) => !f.done);
+  // Live rows ko mock row shape mein map karo (text/status/agent/done)
+  const formatDue = (iso) => {
+    if (!iso) return 'No due date';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return 'No due date';
+    const label = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dueDay = new Date(d);
+    dueDay.setHours(0, 0, 0, 0);
+    if (dueDay < today) return `Overdue · ${label}`;
+    if (dueDay.getTime() === today.getTime()) return `Today · ${label}`;
+    return `Due ${label}`;
+  };
+  const followUpRows = isLiveData
+    ? liveFollowUps.map((f) => {
+        const done = f.status === 'DONE';
+        return {
+          id: f.id,
+          text: f.title,
+          status: done ? 'Done' : formatDue(f.dueAt),
+          agent: f.lead?.name || userFullName,
+          done
+        };
+      })
+    : mockFollowUps;
+
+  const activeFollowUps = followUpRows.filter((f) => !f.done);
 
   return (
     <>
@@ -321,11 +403,15 @@ export default function DashboardPage() {
           <span style={{ display: 'grid', gap: 2 }}>
             <span className="muted" style={{ fontSize: 13, fontWeight: 600 }}>Enquiries, 30 days</span>
             <span style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--cmp-text)' }}>
-              {enquiries30d}
+              {enquiries30d ?? '—'}
             </span>
-            <span style={{ fontSize: 12, fontWeight: 700, color: enquiries30d >= enquiriesPrev30d ? 'var(--cmp-success)' : 'var(--cmp-danger)' }}>
-              {enquiries30d >= enquiriesPrev30d ? '▲' : '▼'} {enquiriesPrev30d ? Math.round(Math.abs((enquiries30d - enquiriesPrev30d) / enquiriesPrev30d) * 100) : 12}% vs last 30 days
-            </span>
+            {enquiriesChangePct != null ? (
+              <span style={{ fontSize: 12, fontWeight: 700, color: enquiries30d >= enquiriesPrev30d ? 'var(--cmp-success)' : 'var(--cmp-danger)' }}>
+                {enquiries30d >= enquiriesPrev30d ? '▲' : '▼'} {enquiriesChangePct}% vs last 30 days
+              </span>
+            ) : (
+              <span className="faint" style={{ fontSize: 12 }}>Last 30 days</span>
+            )}
           </span>
         </NavLink>
 
@@ -336,25 +422,25 @@ export default function DashboardPage() {
           <span style={{ display: 'grid', gap: 2 }}>
             <span className="muted" style={{ fontSize: 13, fontWeight: 600 }}>Qualified clients</span>
             <span style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--cmp-text)' }}>
-              {qualifiedClientsCount}
+              {homeData?.qualifiedClients ?? (isLiveData ? '—' : qualifiedClientsCount)}
             </span>
             <span className="faint" style={{ fontSize: 12 }}>
-              {mockClients.filter((c) => c.stage === 'New').length || 2} new enquiries waiting
+              {newEnquiries != null ? `${newEnquiries} new enquiries waiting` : 'Enquiries'}
             </span>
           </span>
         </NavLink>
 
-        <NavLink to="/wallet/credits" className="card kpi-tile">
+        <NavLink to="/wallet" className="card kpi-tile">
           <span className="kpi-icon">
             <Coins size={18} />
           </span>
           <span style={{ display: 'grid', gap: 2 }}>
             <span className="muted" style={{ fontSize: 13, fontWeight: 600 }}>Credits</span>
             <span style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--cmp-text)' }}>
-              {Number(creditsBalance).toLocaleString('en-AE')}
+              {creditsBalance != null ? Number(creditsBalance).toLocaleString('en-AE') : '—'}
             </span>
             <span className="faint" style={{ fontSize: 12 }}>
-              Expire in {creditsDaysLeft} days
+              {creditsDaysLeft != null ? `Expire in ${creditsDaysLeft} days` : 'Wallet coming soon'}
             </span>
           </span>
         </NavLink>
@@ -458,14 +544,20 @@ export default function DashboardPage() {
               </button>
             </form>
 
+            {isLiveData && followUpError && (
+              <p style={{ margin: '0 16px 8px', fontSize: 12.5, color: 'var(--cmp-danger)' }}>
+                {followUpError}
+              </p>
+            )}
+
             <ul style={{ listStyle: 'none', margin: 0, padding: '0 8px 10px' }}>
-              {mockFollowUps.map((t) => (
+              {followUpRows.map((t) => (
                 <li key={t.id} className="task-row">
                   <input
                     type="checkbox"
                     checked={t.done}
                     aria-label={`Mark done: ${t.text}`}
-                    onChange={() => toggleFollowUp(t.id)}
+                    onChange={() => handleToggleFollowUp(t.id)}
                   />
                   <span style={{ flex: 1, minWidth: 0 }}>
                     <span
@@ -490,7 +582,7 @@ export default function DashboardPage() {
                   </span>
                 </li>
               ))}
-              {mockFollowUps.length === 0 && (
+              {followUpRows.length === 0 && (
                 <li className="muted" style={{ padding: 10, fontSize: 14 }}>
                   No follow-ups. Nice.
                 </li>
@@ -513,8 +605,8 @@ export default function DashboardPage() {
           {topProperties.slice(0, 4).map((l, i) => {
             const photoUrl = l.coverImageWatermarked || l.coverImage || l.image || l.photo;
             const price = l.price;
-            const leads = l.leads30d ?? l.leads ?? 14;
-            const views = l.views30d ?? l.views ?? 1240;
+            const leads = l.leads30d ?? l.leads ?? demo(14);
+            const views = l.views30d ?? l.views ?? demo(1240);
 
             return (
               <NavLink
@@ -543,7 +635,7 @@ export default function DashboardPage() {
                     {l.location || l.community || 'Dubai'} · {formatPriceCompact(price)}
                   </span>
                   <span style={{ fontSize: 13 }}>
-                    <strong>{leads}</strong> enquiries · <strong>{Number(views).toLocaleString('en-AE')}</strong> views
+                    <strong>{leads ?? '—'}</strong> enquiries · <strong>{views != null ? Number(views).toLocaleString('en-AE') : '—'}</strong> views
                   </span>
                 </span>
               </NavLink>
@@ -553,9 +645,11 @@ export default function DashboardPage() {
       </section>
 
       {/* Footer Team info */}
-      <p className="faint" style={{ fontSize: 12, marginTop: 20 }}>
-        Agents on your team: {homeData?.teamAgents ? homeData.teamAgents.join(', ') : 'Layla, Karim Saleh, Arjun Mehta, Emma Clarke'}.
-      </p>
+      {(homeData?.teamAgents?.length > 0 || !isLiveData) && (
+        <p className="faint" style={{ fontSize: 12, marginTop: 20 }}>
+          Agents on your team: {homeData?.teamAgents?.length > 0 ? homeData.teamAgents.join(', ') : 'Layla, Karim Saleh, Arjun Mehta, Emma Clarke'}.
+        </p>
+      )}
     </>
   );
 }

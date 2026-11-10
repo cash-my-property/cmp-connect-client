@@ -14,6 +14,9 @@ export function formatAED(amount, compact = false) {
   if (isNaN(num)) return 'AED 0';
 
   if (compact) {
+    if (num >= 1_000_000_000) {
+      return `AED ${(num / 1_000_000_000).toFixed(2).replace(/\.?0+$/, '')}B`;
+    }
     if (num >= 1_000_000) {
       return `AED ${(num / 1_000_000).toFixed(2).replace(/\.00$/, '')}M`;
     }

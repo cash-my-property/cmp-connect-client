@@ -2,10 +2,11 @@ import React, { useState, useMemo } from 'react';
 import { Navigate } from 'react-router-dom';
 import { initialWalletPlan } from '../../data/mockData';
 import { useApp } from '../../context/AppContext';
-import { Check, Mail, Send, X, AlertTriangle } from 'lucide-react';
+import { Check, Send, X } from 'lucide-react';
 
+// Permission redirect alag wrapper mein — andar wale component ke hooks hamesha ek hi order mein chalen
 export default function WalletPage() {
-  const { agency, isLiveData, isMockData, account, can, hasAny } = useApp();
+  const { isMockData, account, can, hasAny } = useApp();
 
   if (!isMockData && account && !hasAny('contracts.view', 'credits.calculator')) {
     if (can('credits.history_view')) {
@@ -16,6 +17,12 @@ export default function WalletPage() {
     }
     return <Navigate to="/" replace />;
   }
+
+  return <WalletContent />;
+}
+
+function WalletContent() {
+  const { agency, isLiveData } = useApp();
 
   const liveWalletPlan = useMemo(() => ({
     planName: "Standard Account",
@@ -63,7 +70,6 @@ export default function WalletPage() {
   const planData = isLiveData ? liveWalletPlan : initialWalletPlan;
   const [requestModal, setRequestModal] = useState(null); // package object when opened
   const [requestSuccess, setRequestSuccess] = useState(false);
-  const [customCredits, setCustomCredits] = useState('');
 
   // Handle requesting extra credits
   const handleRequestCredits = (pkg) => {

@@ -831,7 +831,7 @@ export default function OnboardingSignupPage() {
 
           <p className="eyebrow" style={{ textAlign: 'center' }}>Registration received</p>
           <h2 style={{ textAlign: 'center', fontSize: '26px', marginBottom: 12 }}>
-            Your registration is in.
+            Thank you for registering with CMP Connect.
           </h2>
 
           <p className="sub" style={{ textAlign: 'center', fontSize: '15px', maxWidth: '580px', margin: '0 auto 24px' }}>

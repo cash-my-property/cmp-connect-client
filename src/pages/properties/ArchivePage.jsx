@@ -243,9 +243,12 @@ export default function ArchivePage() {
     if (typeof price === 'string' && price.startsWith('AED')) return price;
     const num = Number(price);
     if (isNaN(num)) return String(price);
-    const formatted = num >= 1000000
-      ? `AED ${(num / 1000000).toFixed(2)}M`
-      : `AED ${num.toLocaleString()}`;
+    const trim = (n) => n.toFixed(2).replace(/\.?0+$/, '');
+    const formatted = num >= 1_000_000_000
+      ? `AED ${trim(num / 1_000_000_000)}B`
+      : num >= 1_000_000
+        ? `AED ${trim(num / 1_000_000)}M`
+        : `AED ${num.toLocaleString()}`;
 
     if (rentalPeriod) {
       const periodMap = {

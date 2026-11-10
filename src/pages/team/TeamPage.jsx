@@ -119,8 +119,9 @@ const mockLeaderboardAgents = [
   }
 ];
 
+// Permission redirect alag wrapper mein — andar wale component ke hooks hamesha ek hi order mein chalen
 export default function TeamPage() {
-  const { authToken, isMockData, account, can } = useApp();
+  const { isMockData, account, can } = useApp();
   const location = useLocation();
   const isRto = location.pathname.startsWith('/rto');
 
@@ -133,6 +134,14 @@ export default function TeamPage() {
     }
     return <Navigate to={isRto ? '/rto' : '/'} replace />;
   }
+
+  return <TeamContent />;
+}
+
+function TeamContent() {
+  const { authToken, isMockData } = useApp();
+  const location = useLocation();
+  const isRto = location.pathname.startsWith('/rto');
 
   const [agents, setAgents] = useState([]);
   const [dataAsOf, setDataAsOf] = useState(null);

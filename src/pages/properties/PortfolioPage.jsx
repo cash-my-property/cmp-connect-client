@@ -1,9 +1,8 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import {
   CountBadge,
-  Chip,
   SearchInput,
   QualityScoreCircle,
   Drawer
@@ -19,14 +18,12 @@ import {
   Sliders,
   SlidersHorizontal,
   Bell,
-  ArrowUpDown,
   ChevronDown,
   Download,
   Copy,
   Check,
   AlertTriangle,
   AlertOctagon,
-  Home,
   Tag,
   Maximize2,
   Bed,
@@ -58,13 +55,13 @@ const STATUS_TABS = [
   { label: 'Expired', key: 'EXPIRED' },
   { label: 'Rejected', key: 'REJECTED' },
   { label: 'On hold', key: 'ON_HOLD' },
-  { label: 'Sold', key: 'SOLD' },
+  // Backend status CLOSED (mark sold / rented) — "SOLD" Joi reject karta tha (400) aur ginti 0 aati thi
+  { label: 'Sold', key: 'CLOSED' },
   { label: 'Archive', key: 'ARCHIVED' }
 ];
 
 export default function PortfolioPage() {
   const { listings: mockListings, isLiveData, authToken, can, account } = useApp();
-  const navigate = useNavigate();
 
   const [activeFilter, setActiveFilter] = useState('All');
   const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'table'
@@ -83,7 +80,7 @@ export default function PortfolioPage() {
     EXPIRED: 0,
     REJECTED: 0,
     ON_HOLD: 0,
-    SOLD: 0,
+    CLOSED: 0,
     ARCHIVED: 0
   });
   const [isLoading, setIsLoading] = useState(false);
@@ -188,7 +185,8 @@ export default function PortfolioPage() {
   // Load team members for assign dropdown if user has listings.assign permission
   useEffect(() => {
     if (isLiveData && authToken && can('listings.assign')) {
-      cmpConnectApi.listMembers({ status: 'ACTIVE' }, authToken)
+      // limit 100: default 20 pe naye agents list se reh jate the
+      cmpConnectApi.listMembers({ status: 'ACTIVE', limit: 100 }, authToken)
         .then((res) => {
           if (Array.isArray(res?.data)) {
             setActiveTeamMembers(res.data);
@@ -506,10 +504,12 @@ export default function PortfolioPage() {
       listing.id,
       async () => {
         if (isLiveData) {
+          // Backend khud PENDING_CONTRACT transaction banata hai — local cache nahi chahiye
           await cmpConnectApi.markListingSold(listing.id, closedDate, authToken);
+          return;
         }
 
-        // Cache as UNCLAIMED in local storage so Transactions page shows it
+        // Mock mode: UNCLAIMED local storage mein taake Transactions page dikhaye
         try {
           const txItem = {
             id: listing.listingRef || listing.id,
@@ -637,9 +637,13 @@ export default function PortfolioPage() {
   const formatPrice = (price, rentalPeriod) => {
     if (!price && price !== 0) return 'Price on Request';
     const num = Number(price);
-    const formatted = num >= 1000000
-      ? `AED ${(num / 1000000).toFixed(2)}M`
-      : `AED ${num.toLocaleString()}`;
+    // 89,000,000,000 → "AED 89B" (pehle "AED 89000.00M" aata tha); 2,800,000 → "AED 2.8M"
+    const trim = (n) => n.toFixed(2).replace(/\.?0+$/, '');
+    const formatted = num >= 1_000_000_000
+      ? `AED ${trim(num / 1_000_000_000)}B`
+      : num >= 1_000_000
+        ? `AED ${trim(num / 1_000_000)}M`
+        : `AED ${num.toLocaleString()}`;
 
     if (rentalPeriod) {
       const periodMap = {

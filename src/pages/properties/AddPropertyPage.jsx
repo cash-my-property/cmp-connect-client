@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, NavLink } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import cmpConnectApi from '../../services/cmpConnectApi';
+import { buildListingDocuments } from '../../utils/listingDocuments';
 import GooglePlacesLocationInput from '../../components/common/GooglePlacesLocationInput';
 import {
   Check,
@@ -52,6 +53,9 @@ export default function AddPropertyPage() {
   // Options from API
   const [options, setOptions] = useState(null);
   const [activeMembers, setActiveMembers] = useState([]);
+  // Members list load hui? fail hui to wajah (403 = team.view nahi) — dropdown khali kyun hai batane ke liye
+  const [membersLoaded, setMembersLoaded] = useState(false);
+  const [membersError, setMembersError] = useState(null);
 
   // For AGENCY accounts, only members with a BRN can have listings under them
   const brnEligibleMembers = useMemo(() => {
@@ -139,13 +143,22 @@ export default function AddPropertyPage() {
 
       // Fetch team members if user has assign permission
       if (can('listings.assign')) {
-        cmpConnectApi.listMembers({ status: 'ACTIVE' }, authToken)
+        // limit 100: default 20 pe naye agents list se reh jate the
+        cmpConnectApi.listMembers({ status: 'ACTIVE', limit: 100 }, authToken)
           .then((res) => {
             if (Array.isArray(res?.data)) {
               setActiveMembers(res.data);
             }
+            setMembersError(null);
           })
-          .catch(() => {});
+          .catch((err) => {
+            setMembersError(
+              err?.status === 403
+                ? 'You do not have permission to view team members, so agents cannot be listed here. Ask your owner to add "View all users" to your role.'
+                : err?.message || 'Could not load agents. Please refresh and try again.'
+            );
+          })
+          .finally(() => setMembersLoaded(true));
       }
     }
   }, [isLiveData, authToken, can, account]);
@@ -284,6 +297,12 @@ export default function AddPropertyPage() {
     const { listingPurpose, propertyCategory, propertyPlan, propertyType } = formData;
     return options.rules[listingPurpose]?.[propertyCategory]?.[propertyPlan]?.[propertyType] || null;
   }, [options, formData.listingPurpose, formData.propertyCategory, formData.propertyPlan, formData.propertyType]);
+
+  // Documents: backend rules se (off-plan pe Oqood, ready pe Title deed)
+  const documentList = useMemo(
+    () => buildListingDocuments(currentRules, options?.docLabels),
+    [currentRules, options?.docLabels]
+  );
 
   // Helper to determine field rules (required, forbidden, optional) per selected property type
   const getFieldRule = useCallback((fieldName) => {
@@ -909,6 +928,15 @@ export default function AddPropertyPage() {
                       ? 'As an agency administrator without a broker licence (BRN), you must assign this listing to an agent.'
                       : 'Agent must have an in-date, CMP-verified BRN to publish live.'}
                   </p>
+                  {isLiveData && membersError && (
+                    <p style={{ fontSize: '12px', margin: '6px 0 0', color: 'var(--cmp-danger)' }}>{membersError}</p>
+                  )}
+                  {isLiveData && membersLoaded && !membersError && brnEligibleMembers.length === 0 && (
+                    <p style={{ fontSize: '12px', margin: '6px 0 0', color: 'var(--cmp-warning)' }}>
+                      No active agent with a BRN in your team yet. Agents appear here once they have accepted their invite and have a BRN on their profile.{' '}
+                      <NavLink to="/team/members">Go to Members</NavLink>
+                    </p>
+                  )}
                 </div>
               ) : (
                 <div
@@ -1531,14 +1559,7 @@ export default function AddPropertyPage() {
               <div>
                 <label>Compliance Documents (Form A, Title Deed, Passports)</label>
                 <div style={{ display: 'grid', gap: '10px', marginTop: '6px' }}>
-                  {[
-                    { key: 'contractA', label: 'Form A (Listing Agreement)', required: true },
-                    { key: 'propertyTitleDeed', label: 'Property Title Deed', required: true },
-                    { key: 'propertyTrakheesi', label: 'Trakheesi Permit Certificate', required: false },
-                    { key: 'passportDocument', label: 'Owner Passport / Emirates ID', required: true },
-                    { key: 'propertyEid_Visa', label: 'Emirates ID / Visa Copy', required: false },
-                    { key: 'propertyFloorPlan', label: 'Floor Plan', required: false }
-                  ].map((doc) => {
+                  {documentList.map((doc) => {
                     const uploadedDoc = formData.documents[doc.key];
                     const isDocUploading = uploadingDocKey === doc.key;
 

@@ -1,8 +1,9 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { cmpConnectApi } from '../../services/cmpConnectApi';
 import { RefreshCw } from 'lucide-react';
+import { formatAED } from '../../utils/formatters';
 
 const initialMergedOffers = [
   {
@@ -348,107 +349,218 @@ const initialMergedOffers = [
   }
 ];
 
+// Live API ke enums → page ke local status keys
+const REG_STATUS_MAP = { PENDING: 'pending', APPROVED: 'approved', REJECTED: 'declined' };
+const CHEQUE_STATUS_MAP = {
+  NOT_RECEIVED: 'awaiting',
+  RECEIVED: 'received',
+  RETURN_READY: 'ready',
+  RETURNED: 'returned',
+  CASHED: 'cashed',
+  BOUNCED: 'bounced'
+};
+
+// Backend ke allowed transitions — sirf yehi buttons dikhane hain
+const LIVE_CHEQUE_ACTIONS = {
+  NOT_RECEIVED: [{ action: 'RECEIVED', label: 'Mark cheque received', primary: true }],
+  RECEIVED: [
+    { action: 'RETURN_READY', label: 'Ready to return' },
+    { action: 'RETURNED', label: 'Return cheque' },
+    { action: 'CASHED', label: 'Cash cheque', confirm: 'Cash this security cheque?' },
+    { action: 'BOUNCED', label: 'Mark bounced', confirm: 'Mark this cheque as bounced?' }
+  ],
+  RETURN_READY: [
+    { action: 'RETURNED', label: 'Return cheque', primary: true },
+    { action: 'RECEIVED', label: 'Keep holding' }
+  ],
+  RETURNED: [],
+  CASHED: [{ action: 'BOUNCED', label: 'Mark bounced', confirm: 'Mark this cashed cheque as bounced?' }],
+  BOUNCED: [{ action: 'RECEIVED', label: 'Mark received again' }]
+};
+
+const CHEQUE_ACTION_DONE = {
+  RECEIVED: 'marked as received',
+  RETURN_READY: 'marked ready to return',
+  RETURNED: 'marked as returned',
+  CASHED: 'marked as cashed',
+  BOUNCED: 'marked as bounced'
+};
+
+// Filter chip → API query params (live mode me server-side filter)
+const LIVE_FILTER_PARAMS = {
+  pending: { status: 'PENDING' },
+  approved: { status: 'APPROVED' },
+  declined: { status: 'REJECTED' },
+  cheque_received: { chequeStatus: 'RECEIVED' },
+  cheque_awaiting: { chequeStatus: 'NOT_RECEIVED' },
+  cheque_returned: { chequeStatus: 'RETURNED' }
+};
+
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+const fmtDate = (d) => {
+  if (!d) return null;
+  const dt = new Date(d);
+  return Number.isNaN(dt.getTime()) ? null : dt.toISOString().slice(0, 10);
+};
+
+// Registration API row ko table ke row shape me map karo — koi fake value nahi
+const mapRegistration = (reg) => {
+  const rawCheque = reg.cheque?.status || 'NOT_RECEIVED';
+  const chequeStatus = CHEQUE_STATUS_MAP[rawCheque] || 'awaiting';
+  const chequeDate = fmtDate(reg.cheque?.updatedAt);
+  const buyer = reg.buyer || {};
+  return {
+    id: reg.id,
+    isLive: true,
+    name: buyer.name || buyer.email || 'Buyer',
+    buyerTag: reg.contractId || 'Registration',
+    email: buyer.email || '',
+    phone: '',
+    propertyId: reg.property?.id || null,
+    propertyTitle: reg.property?.title || '—',
+    propertyRef: reg.property?.ref || '',
+    propertyOpening: '',
+    propertyStatus: '',
+    latestOffer: '—',
+    offersCount: 0,
+    identityStatus: null,
+    rawChequeStatus: rawCheque,
+    chequeStatus,
+    chequeSubText: chequeDate && ['returned', 'cashed', 'bounced', 'ready'].includes(chequeStatus) ? `on ${chequeDate}` : null,
+    chequeNote: reg.cheque?.note || null,
+    chequeUpdated: chequeDate,
+    chequeAmount: '—',
+    chequeAmountNum: 0,
+    chequeNo: null,
+    bank: null,
+    documents: reg.documents || {},
+    requestedTime: fmtDate(reg.signedAt || reg.createdAt),
+    status: REG_STATUS_MAP[reg.status] || 'pending',
+    rejectionReason: reg.rejectionReason || null,
+    isReadyToReturn: rawCheque === 'RETURN_READY',
+    isWinningBidder: false
+  };
+};
+
+const LIVE_DOC_LINKS = [
+  ['signedContract', 'Contract'],
+  ['passport', 'Passport'],
+  ['cheque', 'Cheque'],
+  ['undertakingLetter', 'Undertaking']
+];
+
 export default function BiddersPage() {
-  const { isLiveData, authToken } = useApp();
+  const { isLiveData, authToken, can } = useApp();
   const token = authToken || (typeof localStorage !== 'undefined' ? localStorage.getItem('cmp_connect_auth_token') : null);
   const [rows, setRows] = useState(() => (isLiveData ? [] : initialMergedOffers));
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState('all');
   const [notice, setNotice] = useState(null);
+  const [liveCounts, setLiveCounts] = useState(null);
+  const [loadError, setLoadError] = useState(null);
+  const [busyId, setBusyId] = useState(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [declineFor, setDeclineFor] = useState(null);
+  const [declineReason, setDeclineReason] = useState('');
+  const reqSeq = useRef(0);
+
+  const canReview = typeof can === 'function' ? can('listings.approve') : true;
+  const canManageCheques = typeof can === 'function' ? can('contracts.manage') : true;
 
   const fetchLiveOffers = useCallback(async () => {
     if (!isLiveData) return;
+    const seq = ++reqSeq.current;
     setLoading(true);
+    setLoadError(null);
     try {
-      const res = await cmpConnectApi.listRtoProperties({ limit: 50 }, token);
-      const allProps = res?.data?.items || res?.items || (Array.isArray(res?.data) ? res.data : []);
-      const auctionProps = allProps.filter((p) => p.auction || ['APPROVED', 'SCHEDULED', 'PAUSED', 'SOLD', 'SOLD_FAIL'].includes(p.status));
-
-      const bidResponses = await Promise.allSettled(
-        auctionProps.map((prop) => {
-          const propId = prop.id || prop._id;
-          return cmpConnectApi.getRtoPropertyBids(propId, token).then((bRes) => ({
-            prop,
-            bidsData: bRes?.data || bRes || {}
-          }));
-        })
-      );
-
-      const mergedLiveRows = [];
-      bidResponses.forEach((result) => {
-        if (result.status !== 'fulfilled') return;
-        const { prop, bidsData } = result.value;
-        const propId = prop.id || prop._id;
-        const startPrice = prop.startingPrice ?? prop.auction?.startPrice ?? 0;
-        const tenPercent = Math.round(startPrice * 0.1);
-        const propStatusLabel =
-          prop.status === 'APPROVED'
-            ? 'Offers open'
-            : prop.status === 'SOLD'
-              ? 'Sold'
-              : prop.status === 'PAUSED'
-                ? 'Paused by CMP'
-                : prop.status === 'SCHEDULED'
-                  ? 'Opens soon'
-                  : 'Closed';
-        const propStatusColor =
-          prop.status === 'APPROVED'
-            ? 'var(--cmp-success)'
-            : prop.status === 'SOLD'
-              ? 'var(--cmp-brand)'
-              : 'var(--cmp-text-faint)';
-
-        const biddersList = Array.isArray(bidsData.bidders) ? bidsData.bidders : [];
-        biddersList.forEach((b, idx) => {
-          const isLeading = b.status === 'LEADING' || b.status === 'WINNER';
-          mergedLiveRows.push({
-            id: `${propId}-b-${idx}`,
-            name: b.buyer || `Buyer ${idx + 1}`,
-            buyerTag: isLeading ? `${b.buyer || `Buyer ${idx + 1}`} · leading` : (b.status || 'Registered buyer'),
-            email: 'Verified via CMP mobile app',
-            phone: '',
-            propertyId: propId,
-            propertyTitle: prop.title || 'Untitled Property',
-            propertyRef: prop.rtoRef || propId,
-            propertyOpening: startPrice ? `10% of AED ${Number(startPrice).toLocaleString()} starting price` : '10% security cheque',
-            propertyStatus: propStatusLabel,
-            propertyStatusColor: propStatusColor,
-            latestOffer: b.latestOffer ? `AED ${Number(b.latestOffer).toLocaleString()}` : '—',
-            offersCount: b.offers ?? 0,
-            identityStatus: 'verified',
-            chequeStatus: 'received',
-            chequeAmountNum: tenPercent,
-            chequeAmount: tenPercent > 0 ? `AED ${tenPercent.toLocaleString()}` : '—',
-            chequeNo: 'Verified by CMP',
-            bank: 'Held by CMP',
-            receivedDate: prop.submittedAt ? new Date(prop.submittedAt).toISOString().slice(0, 10) : '—',
-            requestedTime: 'Active',
-            status: 'approved',
-            isReadyToReturn: prop.status === 'SOLD_FAIL' || (prop.status === 'SOLD' && !isLeading),
-            isWinningBidder: prop.status === 'SOLD' && isLeading
-          });
-        });
-      });
-
-      setRows(mergedLiveRows);
-    } catch {
+      const res = await cmpConnectApi.listRtoRegistrations({ limit: 100, page: 1, ...(LIVE_FILTER_PARAMS[filter] || {}) }, token);
+      if (seq !== reqSeq.current) return; // purana response, ignore
+      const list = Array.isArray(res?.data) ? res.data : [];
+      setRows(list.map(mapRegistration));
+      setLiveCounts(res?.counts || null);
+    } catch (err) {
+      if (seq !== reqSeq.current) return;
       setRows([]);
+      setLiveCounts(null);
+      setLoadError(err?.message || 'Could not load registrations.');
     } finally {
-      setLoading(false);
+      if (seq === reqSeq.current) setLoading(false);
     }
-  }, [isLiveData, token]);
+  }, [isLiveData, token, filter]);
+
+  // Mode switch pe rows reset — mock me mock data, live me khali (fetch bharega)
+  useEffect(() => {
+    setRows(isLiveData ? [] : initialMergedOffers);
+  }, [isLiveData]);
 
   useEffect(() => {
-    if (isLiveData) {
-      fetchLiveOffers();
-    } else {
-      setRows(initialMergedOffers);
-    }
+    if (isLiveData) fetchLiveOffers();
   }, [isLiveData, fetchLiveOffers]);
 
-  const showNotice = (msg) => {
-    setNotice(msg);
-    setTimeout(() => setNotice(null), 3000);
+  const showNotice = (msg, tone = 'info') => {
+    setNotice({ msg, tone });
+    setTimeout(() => setNotice(null), tone === 'error' ? 5000 : 3000);
+  };
+
+  // Live action ka common wrapper — busy state, feedback, refresh
+  const runLiveAction = async (rowId, fn, successMsg) => {
+    setBusyId(rowId);
+    try {
+      await fn();
+      showNotice(successMsg);
+      await fetchLiveOffers();
+    } catch (err) {
+      showNotice(err?.message || 'Action failed. Please try again.', 'error');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleLiveApprove = (row) =>
+    runLiveAction(row.id, () => cmpConnectApi.approveRtoRegistration(row.id, token), `Registration for ${row.name} approved.`);
+
+  const handleLiveDeclineSubmit = (row) => {
+    const reason = declineReason.trim();
+    if (reason.length < 3) {
+      showNotice('Please enter a decline reason (at least 3 characters).', 'error');
+      return;
+    }
+    setDeclineFor(null);
+    setDeclineReason('');
+    runLiveAction(row.id, () => cmpConnectApi.declineRtoRegistration(row.id, reason, token), `Registration for ${row.name} declined.`);
+  };
+
+  const handleLiveCheque = (row, opt) => {
+    if (opt.confirm && !window.confirm(`${opt.confirm} (${row.name})`)) return;
+    runLiveAction(
+      row.id,
+      () => cmpConnectApi.rtoChequeAction(row.id, opt.action, undefined, token),
+      `Cheque for ${row.name} ${CHEQUE_ACTION_DONE[opt.action] || 'updated'}.`
+    );
+  };
+
+  // Winner info API me nahi hai — saare RECEIVED cheques ko ready-to-return karo (confirm ke baad)
+  const handleLiveBulkReady = async () => {
+    setBulkBusy(true);
+    try {
+      const res = await cmpConnectApi.listRtoRegistrations({ chequeStatus: 'RECEIVED', limit: 100, page: 1 }, token);
+      const ids = (Array.isArray(res?.data) ? res.data : []).map((r) => r.id).filter(Boolean);
+      if (ids.length === 0) {
+        showNotice('No held cheques to mark ready for return.');
+        return;
+      }
+      if (!window.confirm(`Mark ${ids.length} held cheque${ids.length === 1 ? '' : 's'} as ready to return?`)) return;
+      const out = await cmpConnectApi.rtoChequeBulkReturnReady(ids, token);
+      const updated = out?.data?.updated ?? 0;
+      const skipped = out?.data?.skipped ?? 0;
+      showNotice(`${updated} updated, ${skipped} skipped.`);
+      await fetchLiveOffers();
+    } catch (err) {
+      showNotice(err?.message || 'Bulk update failed.', 'error');
+    } finally {
+      setBulkBusy(false);
+    }
   };
 
   const handleApprove = (id, name) => {
@@ -535,6 +647,7 @@ export default function BiddersPage() {
   };
 
   const filteredRows = useMemo(() => {
+    if (isLiveData) return rows; // live me server-side filter already laga hai
     if (filter === 'all') return rows;
     if (filter === 'pending' || filter === 'approved' || filter === 'declined') {
       return rows.filter((r) => r.status === filter);
@@ -544,9 +657,22 @@ export default function BiddersPage() {
     if (filter === 'cheque_returned') return rows.filter((r) => r.chequeStatus === 'returned');
     if (filter === 'cheque_bounced') return rows.filter((r) => r.chequeStatus === 'bounced' || r.chequeStatus === 'cashed');
     return rows;
-  }, [rows, filter]);
+  }, [rows, filter, isLiveData]);
 
-  const counts = {
+  // Live counts API se (filter se independent), mock me rows se
+  const ls = liveCounts?.statuses || {};
+  const lc = liveCounts?.cheques || {};
+  const counts = isLiveData ? {
+    all: (ls.PENDING || 0) + (ls.APPROVED || 0) + (ls.REJECTED || 0),
+    pending: ls.PENDING || 0,
+    approved: ls.APPROVED || 0,
+    declined: ls.REJECTED || 0,
+    chequeAwaiting: lc.NOT_RECEIVED || 0,
+    chequeReceived: lc.RECEIVED || 0,
+    chequeReady: lc.RETURN_READY || 0,
+    chequeReturned: lc.RETURNED || 0,
+    chequeBounced: (lc.BOUNCED || 0) + (lc.CASHED || 0)
+  } : {
     all: rows.length,
     pending: rows.filter((r) => r.status === 'pending').length,
     approved: rows.filter((r) => r.status === 'approved').length,
@@ -574,6 +700,7 @@ export default function BiddersPage() {
     .reduce((acc, curr) => acc + (curr.chequeAmountNum || 0), 0);
 
   const renderIdentity = (status) => {
+    if (!status) return <span className="faint">—</span>; // live API identity nahi deta
     if (status === 'verified') {
       return (
         <span style={{ whiteSpace: 'nowrap', fontSize: '13px', fontWeight: 600, color: 'var(--cmp-success)' }}>
@@ -602,6 +729,18 @@ export default function BiddersPage() {
     }
     if (st === 'awaiting') {
       return <span className="badge badge-accent">Awaiting cheque</span>;
+    }
+    if (st === 'ready') {
+      return (
+        <div>
+          <span className="badge badge-accent">Ready to return</span>
+          {row.chequeSubText && (
+            <span className="faint" style={{ display: 'block', fontSize: '11.5px', marginTop: '3px' }}>
+              {row.chequeSubText}
+            </span>
+          )}
+        </div>
+      );
     }
     if (st === 'returned') {
       return (
@@ -639,6 +778,89 @@ export default function BiddersPage() {
     );
   };
 
+  // Live row ke actions — permission + backend transitions ke hisaab se
+  const renderLiveActions = (row) => {
+    const busy = busyId === row.id;
+    const chequeOpts = canManageCheques ? (LIVE_CHEQUE_ACTIONS[row.rawChequeStatus] || []) : [];
+    const showReview = canReview && row.status === 'pending';
+
+    if (declineFor === row.id) {
+      return (
+        <div className="row" style={{ gap: '6px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+          <input
+            type="text"
+            placeholder="Reason for declining"
+            value={declineReason}
+            onChange={(e) => setDeclineReason(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleLiveDeclineSubmit(row); }}
+            style={{ fontSize: '12.5px', padding: '5px 8px', minWidth: '170px' }}
+            autoFocus
+          />
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            disabled={busy || declineReason.trim().length < 3}
+            onClick={() => handleLiveDeclineSubmit(row)}
+          >
+            Confirm decline
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => { setDeclineFor(null); setDeclineReason(''); }}
+          >
+            Cancel
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="row" style={{ gap: '6px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+        {busy && <span className="faint" style={{ fontSize: '12px' }}>Saving…</span>}
+
+        {showReview && (
+          <>
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              disabled={busy}
+              onClick={() => handleLiveApprove(row)}
+            >
+              Approve
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              disabled={busy}
+              onClick={() => { setDeclineFor(row.id); setDeclineReason(''); }}
+            >
+              Decline
+            </button>
+          </>
+        )}
+
+        {chequeOpts.map((opt) => (
+          <button
+            key={opt.action}
+            type="button"
+            className={`btn ${opt.primary ? 'btn-outline' : 'btn-ghost'} btn-sm`}
+            disabled={busy}
+            onClick={() => handleLiveCheque(row, opt)}
+          >
+            {opt.label}
+          </button>
+        ))}
+
+        {!busy && !showReview && chequeOpts.length === 0 && (
+          <span className="faint" style={{ fontSize: '12px' }}>
+            {row.status === 'declined' ? 'Access blocked' : '—'}
+          </span>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div>
       {/* Title */}
@@ -669,14 +891,20 @@ export default function BiddersPage() {
           style={{
             padding: '12px 16px',
             marginBottom: '16px',
-            background: 'var(--cmp-brand-subtle)',
-            borderColor: 'var(--cmp-brand-border)',
-            color: 'var(--cmp-brand)',
+            background: notice.tone === 'error' ? 'var(--cmp-danger-subtle, var(--cmp-brand-subtle))' : 'var(--cmp-brand-subtle)',
+            borderColor: notice.tone === 'error' ? 'var(--cmp-danger)' : 'var(--cmp-brand-border)',
+            color: notice.tone === 'error' ? 'var(--cmp-danger)' : 'var(--cmp-brand)',
             fontSize: '13.5px',
             fontWeight: 600
           }}
         >
-          {notice}
+          {notice.msg}
+        </div>
+      )}
+
+      {isLiveData && loadError && (
+        <div className="card" style={{ padding: '12px 16px', marginBottom: '16px', borderColor: 'var(--cmp-danger)', color: 'var(--cmp-danger)', fontSize: '13.5px', fontWeight: 600 }}>
+          Could not load registrations: {loadError}
         </div>
       )}
 
@@ -687,10 +915,13 @@ export default function BiddersPage() {
             Registered buyers
           </p>
           <p style={{ margin: '8px 0 0', fontSize: '26px', fontWeight: 700, color: 'var(--cmp-brand)' }}>
-            {counts.approved}
+            {/* Live: bada number = kul registrations (pehle approved dikhta tha, "0 … 1 total" confusing tha) */}
+            {isLiveData ? counts.all : counts.approved}
           </p>
           <p className="faint" style={{ margin: '4px 0 0', fontSize: '12px' }}>
-            {counts.pending} pending review · {counts.all} total
+            {isLiveData
+              ? `${counts.approved} approved · ${counts.pending} pending review`
+              : `${counts.pending} pending review · ${counts.all} total`}
           </p>
         </div>
 
@@ -699,10 +930,10 @@ export default function BiddersPage() {
             Cheques held now
           </p>
           <p style={{ margin: '8px 0 0', fontSize: '26px', fontWeight: 700, color: 'var(--cmp-brand)' }}>
-            AED {(heldTotal / 1000000).toFixed(2)}M
+            {isLiveData ? plural(counts.chequeReceived, 'cheque') : formatAED(heldTotal, true)}
           </p>
           <p className="faint" style={{ margin: '4px 0 0', fontSize: '12px' }}>
-            {counts.chequeReceived} security cheques in vault
+            {isLiveData ? 'security cheques in vault' : `${counts.chequeReceived} security cheques in vault`}
           </p>
         </div>
 
@@ -711,10 +942,10 @@ export default function BiddersPage() {
             Ready to return
           </p>
           <p style={{ margin: '8px 0 0', fontSize: '26px', fontWeight: 700, color: 'var(--cmp-brand)' }}>
-            AED {Math.round(readyToReturnTotal / 1000)}K
+            {isLiveData ? plural(counts.chequeReady, 'cheque') : formatAED(readyToReturnTotal, true)}
           </p>
           <p className="faint" style={{ margin: '4px 0 0', fontSize: '12px' }}>
-            {readyToReturnCount} non-winning bidders
+            {isLiveData ? 'marked ready to return' : `${readyToReturnCount} non-winning bidders`}
           </p>
         </div>
 
@@ -723,10 +954,10 @@ export default function BiddersPage() {
             Awaiting cheque
           </p>
           <p style={{ margin: '8px 0 0', fontSize: '26px', fontWeight: 700, color: 'var(--cmp-brand)' }}>
-            AED {Math.round(awaitingTotal / 1000)}K
+            {isLiveData ? plural(counts.chequeAwaiting, 'cheque') : formatAED(awaitingTotal, true)}
           </p>
           <p className="faint" style={{ margin: '4px 0 0', fontSize: '12px' }}>
-            {counts.chequeAwaiting} bidder yet to lodge
+            {isLiveData ? 'buyers yet to lodge' : `${counts.chequeAwaiting} bidder yet to lodge`}
           </p>
         </div>
       </div>
@@ -790,7 +1021,19 @@ export default function BiddersPage() {
           Declined ({counts.declined})
         </button>
 
-        {readyToReturnCount > 0 && (
+        {isLiveData && canManageCheques && counts.chequeReceived > 0 && (
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            style={{ marginInlineStart: 'auto' }}
+            onClick={handleLiveBulkReady}
+            disabled={bulkBusy || loading}
+          >
+            {bulkBusy ? 'Updating…' : `Mark all held ready to return (${counts.chequeReceived})`}
+          </button>
+        )}
+
+        {!isLiveData && readyToReturnCount > 0 && (
           <button
             type="button"
             className="btn btn-primary btn-sm"
@@ -842,22 +1085,44 @@ export default function BiddersPage() {
                       </span>
                       {row.requestedTime && (
                         <span className="faint" style={{ display: 'block', fontSize: '11px', marginTop: '2px' }}>
-                          Requested {row.requestedTime}
+                          {row.isLive ? 'Submitted' : 'Requested'} {row.requestedTime}
+                        </span>
+                      )}
+                      {row.isLive && LIVE_DOC_LINKS.some(([k]) => row.documents?.[k]) && (
+                        <span className="row" style={{ gap: '8px', flexWrap: 'wrap', fontSize: '11.5px', marginTop: '3px' }}>
+                          {LIVE_DOC_LINKS.filter(([k]) => row.documents?.[k]).map(([k, label]) => (
+                            <a
+                              key={k}
+                              href={row.documents[k]}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ color: 'var(--cmp-brand)', fontWeight: 600 }}
+                            >
+                              View {label}
+                            </a>
+                          ))}
                         </span>
                       )}
                     </td>
 
                     {/* Property */}
                     <td style={{ minWidth: '200px' }}>
-                      <NavLink
-                        to={`/rto/${row.propertyId || row.propertyRef}`}
-                        style={{ fontSize: '13px', fontWeight: 600, color: 'var(--cmp-brand)', textDecoration: 'none' }}
-                      >
-                        {row.propertyTitle}
-                      </NavLink>
-                      <span className="faint" style={{ display: 'block', fontSize: '12px' }}>
-                        {row.propertyRef} · {row.propertyOpening}
-                      </span>
+                      {row.propertyId || row.propertyRef ? (
+                        <NavLink
+                          to={`/rto/${row.propertyId || row.propertyRef}`}
+                          style={{ fontSize: '13px', fontWeight: 600, color: 'var(--cmp-brand)', textDecoration: 'none' }}
+                        >
+                          {row.propertyTitle}
+                        </NavLink>
+                      ) : (
+                        <span className="faint">{row.propertyTitle}</span>
+                      )}
+                      {(row.propertyRef || row.propertyOpening) && (
+                        <span className="faint" style={{ display: 'block', fontSize: '12px' }}>
+                          {[row.propertyRef, row.propertyOpening].filter(Boolean).join(' · ')}
+                        </span>
+                      )}
+                      {row.propertyStatus && (
                       <span className="row" style={{ gap: '6px', fontSize: '12.5px', whiteSpace: 'nowrap', marginTop: '2px' }}>
                         <span
                           aria-hidden="true"
@@ -871,6 +1136,7 @@ export default function BiddersPage() {
                         />
                         {row.propertyStatus}
                       </span>
+                      )}
                     </td>
 
                     {/* Latest Offer */}
@@ -900,7 +1166,22 @@ export default function BiddersPage() {
 
                     {/* Cheque No / Bank / Received Date */}
                     <td style={{ whiteSpace: 'nowrap', fontSize: '12.5px' }}>
-                      {row.chequeNo ? (
+                      {row.isLive ? (
+                        // Live API me cheque no/bank nahi hai — sirf note + last update
+                        <>
+                          <span className="faint">—</span>
+                          {row.chequeNote && (
+                            <span className="faint" style={{ display: 'block', fontSize: '12px', whiteSpace: 'normal', maxWidth: '200px' }}>
+                              {row.chequeNote}
+                            </span>
+                          )}
+                          {row.chequeUpdated && (
+                            <span className="faint" style={{ display: 'block', fontSize: '11px' }}>
+                              Updated: {row.chequeUpdated}
+                            </span>
+                          )}
+                        </>
+                      ) : row.chequeNo ? (
                         <>
                           <span style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{row.chequeNo}</span>
                           <span className="faint" style={{ display: 'block', fontSize: '12px' }}>
@@ -920,10 +1201,16 @@ export default function BiddersPage() {
                       {row.status === 'pending' && <span className="badge badge-accent">Pending</span>}
                       {row.status === 'approved' && <span className="badge badge-brand">Approved</span>}
                       {row.status === 'declined' && <span className="badge badge-neutral">Declined</span>}
+                      {row.isLive && row.status === 'declined' && row.rejectionReason && (
+                        <span className="faint" style={{ display: 'block', fontSize: '11.5px', marginTop: '3px', whiteSpace: 'normal', maxWidth: '180px' }}>
+                          {row.rejectionReason}
+                        </span>
+                      )}
                     </td>
 
                     {/* Combined Actions */}
                     <td style={{ minWidth: '230px' }}>
+                      {row.isLive ? renderLiveActions(row) : (
                       <div className="row" style={{ gap: '6px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                         {row.chequeStatus === 'awaiting' && (
                           <button
@@ -1005,6 +1292,7 @@ export default function BiddersPage() {
                           </span>
                         )}
                       </div>
+                      )}
                     </td>
                   </tr>
                 );

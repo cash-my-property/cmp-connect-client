@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useParams, NavLink } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import cmpConnectApi from '../../services/cmpConnectApi';
+import { buildListingDocuments } from '../../utils/listingDocuments';
 import GooglePlacesLocationInput from '../../components/common/GooglePlacesLocationInput';
 import {
   Check,
@@ -210,7 +211,8 @@ export default function EditPropertyPage() {
 
       // Load active members if assignable
       if (can('listings.assign')) {
-        const memRes = await cmpConnectApi.listMembers({ status: 'ACTIVE' }, authToken);
+        // limit 100: default 20 pe naye agents list se reh jate the
+        const memRes = await cmpConnectApi.listMembers({ status: 'ACTIVE', limit: 100 }, authToken);
         if (Array.isArray(memRes?.data)) {
           setActiveMembers(memRes.data);
         }
@@ -310,6 +312,12 @@ export default function EditPropertyPage() {
     const { listingPurpose, propertyCategory, propertyPlan, propertyType } = formData;
     return options.rules[listingPurpose]?.[propertyCategory]?.[propertyPlan]?.[propertyType] || null;
   }, [options, formData.listingPurpose, formData.propertyCategory, formData.propertyPlan, formData.propertyType]);
+
+  // Documents: backend rules se (off-plan pe Oqood, ready pe Title deed)
+  const documentList = useMemo(
+    () => buildListingDocuments(currentRules, options?.docLabels),
+    [currentRules, options?.docLabels]
+  );
 
   // Helper to determine field rules (required, forbidden, optional) per selected property type
   const getFieldRule = useCallback((fieldName) => {
@@ -1799,14 +1807,7 @@ export default function EditPropertyPage() {
               <div>
                 <label>Compliance Documents</label>
                 <div style={{ display: 'grid', gap: '8px', marginTop: '6px' }}>
-                  {[
-                    { key: 'contractA', label: 'Form A (Listing Agreement)' },
-                    { key: 'propertyTitleDeed', label: 'Property Title Deed' },
-                    { key: 'propertyTrakheesi', label: 'Trakheesi Permit Certificate' },
-                    { key: 'passportDocument', label: 'Owner Passport / Emirates ID' },
-                    { key: 'propertyEid_Visa', label: 'Emirates ID / Visa Copy' },
-                    { key: 'propertyFloorPlan', label: 'Floor Plan' }
-                  ].map((doc) => {
+                  {documentList.map((doc) => {
                     const uploaded = formData.documents[doc.key];
                     const isUploading = uploadingDocKey === doc.key;
 
@@ -1825,7 +1826,9 @@ export default function EditPropertyPage() {
                         <div className="row" style={{ gap: '10px' }}>
                           <FileText size={18} style={{ color: uploaded ? 'var(--cmp-brand)' : 'var(--cmp-text-faint)' }} />
                           <div>
-                            <div style={{ fontSize: '13px', fontWeight: 600 }}>{doc.label}</div>
+                            <div style={{ fontSize: '13px', fontWeight: 600 }}>
+                              {doc.label} {doc.required && <span style={{ color: 'var(--cmp-danger)' }}>*</span>}
+                            </div>
                             {uploaded ? (
                               <a
                                 href={uploaded.url}

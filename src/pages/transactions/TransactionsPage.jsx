@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
+import React, { useState, useEffect, useCallback, memo } from 'react';
 import { useApp } from '../../context/AppContext';
 import {
   Avatar,
@@ -11,7 +11,6 @@ import { useDebounce } from '../../hooks';
 import cmpConnectApi from '../../services/cmpConnectApi';
 import { RecordDealModal, ViewClaimModal, SendBackModal } from '../../components/transactions';
 import {
-  Clock,
   Copy,
   Check,
   Bed,
@@ -21,10 +20,7 @@ import {
   Loader2,
   AlertTriangle,
   CheckCircle2,
-  HelpCircle,
-  X,
-  RotateCcw,
-  CheckSquare
+  X
 } from 'lucide-react';
 
 const STATUS_KEYS = [
@@ -55,6 +51,16 @@ const PROPERTY_TYPE_OPTIONS = [
 /**
  * Normalise raw deal status into standard Section 10 statuses
  */
+// Tabs ki ginti ek hi pass mein: { all, CLAIMED, SUBMITTED, SENT_BACK, PENDING_CONTRACT }
+function countByStatus(deals) {
+  const counts = { all: deals.length, CLAIMED: 0, SUBMITTED: 0, SENT_BACK: 0, PENDING_CONTRACT: 0 };
+  deals.forEach((d) => {
+    const s = normalizeStatus(d.status || d.claimStatus);
+    if (s in counts) counts[s] += 1;
+  });
+  return counts;
+}
+
 function normalizeStatus(rawStatus) {
   if (rawStatus === 'APPROVED' || rawStatus === 'CLAIMED') return 'CLAIMED';
   if (rawStatus === 'UNDER_REVIEW' || rawStatus === 'SUBMITTED') return 'SUBMITTED';
@@ -388,21 +394,12 @@ export default function TransactionsPage() {
 
     if (!isLiveData) {
       const allDeals = [...localUnclaimed, ...mockTransactions];
-      const filtered = allDeals.filter((tx) => {
-        if (statusFilter !== 'all') {
-          const s = normalizeStatus(tx.status || tx.claimStatus);
-          if (s !== statusFilter) return false;
-        }
-        return true;
-      });
-      setTransactions(filtered);
-      setCounts({
-        all: allDeals.length,
-        CLAIMED: allDeals.filter((t) => normalizeStatus(t.status || t.claimStatus) === 'CLAIMED').length,
-        SUBMITTED: allDeals.filter((t) => normalizeStatus(t.status || t.claimStatus) === 'SUBMITTED').length,
-        SENT_BACK: allDeals.filter((t) => normalizeStatus(t.status || t.claimStatus) === 'SENT_BACK').length,
-        PENDING_CONTRACT: allDeals.filter((t) => normalizeStatus(t.status || t.claimStatus) === 'PENDING_CONTRACT').length
-      });
+      setTransactions(
+        statusFilter === 'all'
+          ? allDeals
+          : allDeals.filter((tx) => normalizeStatus(tx.status || tx.claimStatus) === statusFilter)
+      );
+      setCounts(countByStatus(allDeals));
       return;
     }
 
@@ -419,11 +416,9 @@ export default function TransactionsPage() {
         limit: 50
       });
 
-      const serverDeals = res?.data || [];
-      const combined = [
-        ...localUnclaimed.filter((u) => !serverDeals.some((s) => s.id === u.id || s.listing?.id === u.listingId)),
-        ...serverDeals
-      ];
+      // Live: sirf server (mark-sold pe backend khud PENDING_CONTRACT banata hai). Purana local cache saaf.
+      try { localStorage.removeItem('cmp_unclaimed_transactions'); } catch {}
+      const combined = res?.data || [];
 
       const visible = statusFilter === 'all'
         ? combined
@@ -440,13 +435,7 @@ export default function TransactionsPage() {
           PENDING_CONTRACT: (res.counts.PENDING_CONTRACT || 0) + (res.counts.UNCLAIMED || 0)
         });
       } else {
-        setCounts({
-          all: combined.length,
-          CLAIMED: combined.filter((t) => normalizeStatus(t.status) === 'CLAIMED').length,
-          SUBMITTED: combined.filter((t) => normalizeStatus(t.status) === 'SUBMITTED').length,
-          SENT_BACK: combined.filter((t) => normalizeStatus(t.status) === 'SENT_BACK').length,
-          PENDING_CONTRACT: combined.filter((t) => normalizeStatus(t.status) === 'PENDING_CONTRACT').length
-        });
+        setCounts(countByStatus(combined));
       }
     } catch (err) {
       setError(err.message || 'Failed to load closed deals.');

@@ -12,7 +12,6 @@ import {
   CheckCircle2,
   Calendar,
   Sparkles,
-  ArrowUpRight,
   RefreshCw,
   LayoutGrid,
   List as ListIcon,
@@ -21,8 +20,7 @@ import {
   Trash2,
   Check,
   X,
-  MapPin,
-  Users
+  MapPin
 } from 'lucide-react';
 
 function formatAed(val) {
@@ -100,6 +98,13 @@ export default function EntriesPage() {
       else setIsRefreshing(true);
       setError(null);
 
+      // Mock mode: demo entries (filter ke hisaab se)
+      const showMockEntries = () => {
+        const mockData = getMockEntries();
+        setEntries(activeFilter === 'all' ? mockData : mockData.filter((m) => m.status === activeFilter));
+        setCounts(getMockCounts());
+      };
+
       try {
         const params = {};
         if (activeFilter !== 'all') params.status = activeFilter;
@@ -112,30 +117,20 @@ export default function EntriesPage() {
             setCounts((prev) => ({ ...prev, ...res.counts }));
           }
         } else if (!isLiveData) {
-          // Fallback to rich mock data if endpoint is pending or in mock mode
-          const mockData = getMockEntries();
-          setEntries(
-            activeFilter === 'all'
-              ? mockData
-              : mockData.filter((m) => m.status === activeFilter)
-          );
-          setCounts(getMockCounts());
+          showMockEntries();
         }
       } catch (err) {
         console.error('Failed to load RTO entries:', err);
-        if (!isLiveData || err.status === 401) {
-          const mockData = getMockEntries();
-          setEntries(
-            activeFilter === 'all'
-              ? mockData
-              : mockData.filter((m) => m.status === activeFilter)
-          );
-          setCounts(getMockCounts());
-          if (err.status === 401) {
-            setError('Backend RTO API returned: ' + (err.message || 'Authentication token missing') + '. Displaying demo entries while server-side authentication is verified.');
-          }
+        if (!isLiveData) {
+          showMockEntries();
         } else {
-          setError(err.message || 'Failed to load entries from server.');
+          // Live mode mein kabhi demo data nahi — error dikhao (401 pe apiRequest refresh / login khud sambhalta hai)
+          setEntries([]);
+          setError(
+            err.status === 401
+              ? 'Your session has expired. Please log in again.'
+              : err.message || 'Failed to load entries from server.'
+          );
         }
       } finally {
         setIsLoading(false);
@@ -324,7 +319,7 @@ export default function EntriesPage() {
             Real Time Offer Entries
           </h1>
           <p className="muted" style={{ margin: '4px 0 0', fontSize: '14px' }}>
-            Properties submitted by your agency for 7-day Real Time Offer auctions managed by CMP.
+            Properties submitted by your agency for Real Time Offer auctions (3, 7, 10 or 14 days) managed by CMP.
           </p>
         </div>
 
@@ -500,7 +495,6 @@ export default function EntriesPage() {
         >
           {filteredEntries.map((item) => {
             const id = item.id || item._id;
-            const ref = item.rtoRef || item.reference || id;
             const title = item.title || item.propertyTitle || 'Untitled Property';
             const location = item.location || item.propertyLocation || '';
             const category = item.category || item.propertyCategory || '';
@@ -544,6 +538,8 @@ export default function EntriesPage() {
                       src={primaryImg}
                       alt={title}
                       style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      // Image load fail (404) → toota icon / alt text nahi, khali dark box
+                      onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }}
                     />
                   ) : (
                     <div style={{ height: '100%', display: 'grid', placeItems: 'center', color: '#666' }}>

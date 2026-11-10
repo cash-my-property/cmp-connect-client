@@ -1,6 +1,32 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
+import { useDebounce } from '../../hooks';
+import cmpConnectApi from '../../services/cmpConnectApi';
 import { Plus, Search, User, Phone, Mail, Building, X, Check } from 'lucide-react';
+
+// Form source <-> backend manualSource
+const SOURCE_TO_MANUAL = {
+  'Walk-in': 'WALK_IN',
+  Referral: 'REFERRAL',
+  'Office call': 'OFFICE_CALL',
+  'Website inquiry': 'OTHER'
+};
+const MANUAL_TO_LABEL = { WALK_IN: 'Walk-in', REFERRAL: 'Referral', OFFICE_CALL: 'Office call', OTHER: 'Other' };
+
+// Live lead row ko contact wale shape mein map karo
+const mapLeadToContact = (lead) => ({
+  id: lead.id,
+  name: lead.contact?.name || 'Unknown caller',
+  phone: lead.contact?.phone || '—',
+  rawPhone: lead.contact?.phone || '',
+  email: lead.contact?.email || '—',
+  source: MANUAL_TO_LABEL[lead.manualSource] || 'Other',
+  notes: lead.message || 'No notes added.',
+  agent: lead.agent?.name || 'Unassigned',
+  addedDate: lead.createdAt
+    ? new Date(lead.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+    : ''
+});
 
 const initialContacts = [
   {
@@ -36,16 +62,80 @@ const initialContacts = [
 ];
 
 export default function ContactsPage() {
-  const { isLiveData } = useApp();
-  const [contacts, setContacts] = useState(isLiveData ? [] : initialContacts);
+  const { isLiveData, authToken, account, can } = useApp();
+  const canManage = can('leads.manage');
+  const [mockContacts, setMockContacts] = useState(initialContacts);
+  const [liveContacts, setLiveContacts] = useState([]);
+  // Live mode mein kabhi mock rows nahi
+  const contacts = isLiveData ? liveContacts : mockContacts;
+  const setContacts = setMockContacts;
 
   useEffect(() => {
-    setContacts(isLiveData ? [] : initialContacts);
+    if (!isLiveData) setMockContacts(initialContacts);
   }, [isLiveData]);
   const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearch = useDebounce(searchQuery, 300);
   const [selectedAgent, setSelectedAgent] = useState('All');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [notice, setNotice] = useState(null);
+
+  // Live mode state
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const [members, setMembers] = useState([]);
+  const [membersFailed, setMembersFailed] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [modalError, setModalError] = useState('');
+  const requestIdRef = useRef(0);
+
+  // Live mode: backend se manual leads (walk-in / referral / office call)
+  const loadContacts = useCallback(async () => {
+    if (!isLiveData) return;
+    const reqId = ++requestIdRef.current;
+    setLoading(true);
+    setLoadError('');
+    try {
+      const res = await cmpConnectApi.listLeads(
+        {
+          kind: 'MANUAL',
+          search: debouncedSearch.trim(),
+          agentId: selectedAgent === 'All' ? '' : selectedAgent,
+          limit: 100
+        },
+        authToken
+      );
+      if (reqId !== requestIdRef.current) return; // purana response ignore
+      setLiveContacts((res?.data || []).map(mapLeadToContact));
+    } catch (err) {
+      if (reqId !== requestIdRef.current) return;
+      setLoadError(err?.message || 'Failed to load contacts.');
+    } finally {
+      if (reqId === requestIdRef.current) setLoading(false);
+    }
+  }, [isLiveData, authToken, debouncedSearch, selectedAgent]);
+
+  useEffect(() => {
+    loadContacts();
+  }, [loadContacts]);
+
+  // Live mode: agent dropdowns ke liye members (team.view nahi to filter hide)
+  useEffect(() => {
+    if (!isLiveData) return;
+    let cancelled = false;
+    cmpConnectApi
+      .listMembers({ status: 'ACTIVE', limit: 100 }, authToken)
+      .then((res) => {
+        if (cancelled) return;
+        setMembers(res?.data || []);
+        setMembersFailed(false);
+      })
+      .catch(() => {
+        if (!cancelled) setMembersFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isLiveData, authToken]);
 
   const [newLeadForm, setNewLeadForm] = useState({
     name: '',
@@ -53,17 +143,72 @@ export default function ContactsPage() {
     email: '',
     source: 'Walk-in',
     agent: 'Layla Haddad',
+    agentId: '',
     notes: ''
   });
+
+  const openModal = () => {
+    // Live: agentId empty = current user (backend default), "Me (default)" option
+    setModalError('');
+    setIsModalOpen(true);
+  };
 
   const showNotice = (msg) => {
     setNotice(msg);
     setTimeout(() => setNotice(null), 3000);
   };
 
-  const handleCreateLead = (e) => {
+  const resetForm = () =>
+    setNewLeadForm({
+      name: '',
+      phone: '',
+      email: '',
+      source: 'Walk-in',
+      agent: 'Layla Haddad',
+      agentId: '',
+      notes: ''
+    });
+
+  const handleCreateLead = async (e) => {
     e.preventDefault();
     if (!newLeadForm.name.trim()) return;
+
+    // Live mode: backend createLead
+    if (isLiveData) {
+      if (newLeadForm.name.trim().length < 2) {
+        setModalError('Lead name must be at least 2 characters.');
+        return;
+      }
+      if (!newLeadForm.phone.trim()) {
+        setModalError('Phone number is required.');
+        return;
+      }
+      setSaving(true);
+      setModalError('');
+      try {
+        const res = await cmpConnectApi.createLead(
+          {
+            name: newLeadForm.name.trim(),
+            phone: newLeadForm.phone.trim(),
+            email: newLeadForm.email.trim() || undefined,
+            message: newLeadForm.notes.trim() || undefined,
+            manualSource: SOURCE_TO_MANUAL[newLeadForm.source] || 'OTHER',
+            agentId: newLeadForm.agentId || undefined
+          },
+          authToken
+        );
+        const created = mapLeadToContact(res?.data || {});
+        setLiveContacts((cs) => [created, ...cs]);
+        setIsModalOpen(false);
+        resetForm();
+        showNotice(`Contact ${created.name} added successfully.`);
+      } catch (err) {
+        setModalError(err?.message || 'Could not save the lead.');
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
 
     const newContact = {
       id: `ct-${Date.now()}`,
@@ -78,18 +223,13 @@ export default function ContactsPage() {
 
     setContacts([newContact, ...contacts]);
     setIsModalOpen(false);
-    setNewLeadForm({
-      name: '',
-      phone: '',
-      email: '',
-      source: 'Walk-in',
-      agent: 'Layla Haddad',
-      notes: ''
-    });
+    resetForm();
     showNotice(`Contact ${newContact.name} added successfully.`);
   };
 
   const filteredContacts = useMemo(() => {
+    // Live mode: search/agent filter backend pe
+    if (isLiveData) return contacts;
     return contacts.filter((c) => {
       const matchesAgent = selectedAgent === 'All' || c.agent === selectedAgent;
       const q = searchQuery.toLowerCase().trim();
@@ -101,7 +241,7 @@ export default function ContactsPage() {
         c.notes.toLowerCase().includes(q);
       return matchesAgent && matchesSearch;
     });
-  }, [contacts, selectedAgent, searchQuery]);
+  }, [isLiveData, contacts, selectedAgent, searchQuery]);
 
   return (
     <div>
@@ -122,14 +262,16 @@ export default function ContactsPage() {
             Walk-ins, referrals and calls to the office that didn’t come through a listing.
           </p>
         </div>
-        <button
-          type="button"
-          className="btn btn-accent btn-sm"
-          onClick={() => setIsModalOpen(true)}
-        >
-          <Plus size={16} />
-          <span>New lead</span>
-        </button>
+        {canManage && (
+          <button
+            type="button"
+            className="btn btn-accent btn-sm"
+            onClick={openModal}
+          >
+            <Plus size={16} />
+            <span>New lead</span>
+          </button>
+        )}
       </div>
 
       {notice && (
@@ -173,23 +315,45 @@ export default function ContactsPage() {
           />
         </div>
 
-        <div style={{ width: '200px' }}>
-          <select
-            value={selectedAgent}
-            onChange={(e) => setSelectedAgent(e.target.value)}
-            style={{ height: '40px', width: '100%', fontSize: '13px' }}
-          >
-            <option value="All">Any agent</option>
-            <option value="Layla Haddad">Layla Haddad</option>
-            <option value="Karim Saleh">Karim Saleh</option>
-            <option value="Emma Clarke">Emma Clarke</option>
-            <option value="Arjun Mehta">Arjun Mehta</option>
-          </select>
-        </div>
+        {/* Agent filter: live mein member ids, permission nahi to hide */}
+        {!(isLiveData && membersFailed) && (
+          <div style={{ width: '200px' }}>
+            <select
+              value={selectedAgent}
+              onChange={(e) => setSelectedAgent(e.target.value)}
+              style={{ height: '40px', width: '100%', fontSize: '13px' }}
+            >
+              <option value="All">Any agent</option>
+              {isLiveData ? (
+                members.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.fullName}
+                  </option>
+                ))
+              ) : (
+                <>
+                  <option value="Layla Haddad">Layla Haddad</option>
+                  <option value="Karim Saleh">Karim Saleh</option>
+                  <option value="Emma Clarke">Emma Clarke</option>
+                  <option value="Arjun Mehta">Arjun Mehta</option>
+                </>
+              )}
+            </select>
+          </div>
+        )}
       </div>
 
       {/* Content */}
-      {filteredContacts.length === 0 ? (
+      {isLiveData && loadError ? (
+        <div className="card" style={{ padding: '24px', textAlign: 'center' }}>
+          <p className="muted" style={{ margin: '0 0 12px', fontSize: '14px' }}>{loadError}</p>
+          <button type="button" className="btn btn-outline btn-sm" onClick={loadContacts}>
+            Retry
+          </button>
+        </div>
+      ) : isLiveData && loading && liveContacts.length === 0 ? (
+        <p className="muted" style={{ fontSize: '14px' }}>Loading…</p>
+      ) : filteredContacts.length === 0 ? (
         <div className="card" style={{ display: 'grid', placeItems: 'center', textAlign: 'center', padding: '56px 16px', gap: '14px' }}>
           <svg width="150" height="150" viewBox="0 0 170 170" aria-hidden="true">
             <circle cx="85" cy="85" r="82" fill="var(--cmp-surface-sunken)" />
@@ -206,13 +370,15 @@ export default function ContactsPage() {
           <p className="muted" style={{ margin: 0, maxWidth: '520px', fontSize: '14px' }}>
             Add walk-ins, referrals and office calls so every enquiry is tracked in one place.
           </p>
-          <button
-            type="button"
-            className="btn btn-primary btn-sm"
-            onClick={() => setIsModalOpen(true)}
-          >
-            Add your first lead
-          </button>
+          {canManage && (
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={openModal}
+            >
+              Add your first lead
+            </button>
+          )}
         </div>
       ) : (
         <div className="card table-scroll">
@@ -247,6 +413,8 @@ export default function ContactsPage() {
                     {contact.addedDate}
                   </td>
                   <td>
+                    {/* Live: phone ho tabhi call/whatsapp */}
+                    {(!isLiveData || contact.rawPhone) && (
                     <div className="row" style={{ gap: '6px', justifyContent: 'flex-end' }}>
                       <a href={`tel:${contact.phone}`} className="btn btn-outline btn-sm">
                         Call
@@ -260,6 +428,7 @@ export default function ContactsPage() {
                         WhatsApp
                       </a>
                     </div>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -318,7 +487,7 @@ export default function ContactsPage() {
 
               <div className="field-row">
                 <div>
-                  <label>Phone number</label>
+                  <label>Phone number{isLiveData ? ' *' : ''}</label>
                   <input
                     placeholder="+971 50 000 0000"
                     value={newLeadForm.phone}
@@ -354,6 +523,23 @@ export default function ContactsPage() {
                 </div>
                 <div>
                   <label>Assigned agent</label>
+                  {isLiveData ? (
+                    // Live: member ids; empty = backend current user assign karega
+                    <select
+                      value={newLeadForm.agentId}
+                      onChange={(e) => setNewLeadForm({ ...newLeadForm, agentId: e.target.value })}
+                      style={{ width: '100%', height: '38px', fontSize: '13.5px' }}
+                    >
+                      <option value="">Me (default)</option>
+                      {members
+                        .filter((m) => m.id !== account?.id)
+                        .map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.fullName}
+                          </option>
+                        ))}
+                    </select>
+                  ) : (
                   <select
                     value={newLeadForm.agent}
                     onChange={(e) => setNewLeadForm({ ...newLeadForm, agent: e.target.value })}
@@ -364,6 +550,7 @@ export default function ContactsPage() {
                     <option value="Emma Clarke">Emma Clarke</option>
                     <option value="Arjun Mehta">Arjun Mehta</option>
                   </select>
+                  )}
                 </div>
               </div>
 
@@ -378,6 +565,12 @@ export default function ContactsPage() {
                 />
               </div>
 
+              {modalError && (
+                <p role="alert" style={{ color: 'var(--cmp-danger, #c0392b)', fontSize: '13px', margin: 0 }}>
+                  {modalError}
+                </p>
+              )}
+
               <div className="row" style={{ gap: '8px', justifyContent: 'flex-end', marginTop: '10px' }}>
                 <button
                   type="button"
@@ -386,8 +579,8 @@ export default function ContactsPage() {
                 >
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-primary">
-                  Save contact
+                <button type="submit" className="btn btn-primary" disabled={saving}>
+                  {saving ? 'Saving…' : 'Save contact'}
                 </button>
               </div>
             </form>

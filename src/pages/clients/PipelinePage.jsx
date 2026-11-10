@@ -1,7 +1,8 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { useDebounce } from '../../hooks';
+import cmpConnectApi from '../../services/cmpConnectApi';
 import {
   Search,
   Phone,
@@ -19,14 +20,96 @@ const STAGES = [
   { key: 'Unqualified', label: 'Unqualified', color: 'var(--cmp-text-faint)' }
 ];
 
+// Backend stages uppercase hain, UI mein title case
+const STAGE_TO_UI = { NEW: 'New', CONTACTED: 'Contacted', QUALIFIED: 'Qualified', UNQUALIFIED: 'Unqualified' };
+const UI_TO_STAGE = { New: 'NEW', Contacted: 'CONTACTED', Qualified: 'QUALIFIED', Unqualified: 'UNQUALIFIED' };
+const MOCK_AGENTS = ['All agents', 'Layla Haddad', 'Karim Saleh', 'Emma Clarke', 'Arjun Mehta'];
+
+const getInitials = (name) =>
+  (name || '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0].toUpperCase())
+    .join('') || '?';
+
+// Live lead row ko card wale shape mein map karo
+const mapLeadToCard = (lead) => ({
+  id: lead.id,
+  name: lead.contact?.name || 'Unknown caller',
+  phone: lead.contact?.phone || '',
+  propertyRef: lead.listing?.ref || '',
+  propertyTitle: lead.listing?.title || lead.message || '',
+  channel: lead.channel ? lead.channel.toLowerCase() : 'manual',
+  agent: lead.agent?.name || 'Unassigned',
+  agentInitials: lead.agent?.name ? getInitials(lead.agent.name) : '—',
+  stage: STAGE_TO_UI[lead.stage] || 'New'
+});
+
 export default function PipelinePage() {
-  const { clients, moveClientStage } = useApp();
+  const { clients, moveClientStage, isLiveData, authToken, can } = useApp();
+  const canManage = can('leads.manage');
 
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedSearch = useDebounce(searchQuery, 200);
 
   const [selectedAgent, setSelectedAgent] = useState('All agents');
+  const [selectedAgentId, setSelectedAgentId] = useState('');
   const [isAgentMenuOpen, setIsAgentMenuOpen] = useState(false);
+
+  // Live mode: backend se leads + stage counts
+  const [liveLeads, setLiveLeads] = useState([]);
+  const [stageCounts, setStageCounts] = useState({ NEW: 0, CONTACTED: 0, QUALIFIED: 0, UNQUALIFIED: 0 });
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const [actionError, setActionError] = useState('');
+  const [members, setMembers] = useState([]);
+  const [membersFailed, setMembersFailed] = useState(false);
+  const requestIdRef = useRef(0);
+
+  const loadLeads = useCallback(async () => {
+    if (!isLiveData) return;
+    const reqId = ++requestIdRef.current;
+    setLoading(true);
+    setLoadError('');
+    try {
+      const res = await cmpConnectApi.listLeads(
+        { tab: 'PIPELINE', limit: 100, search: debouncedSearch.trim(), agentId: selectedAgentId },
+        authToken
+      );
+      if (reqId !== requestIdRef.current) return; // purana response ignore
+      setLiveLeads((res?.data || []).map(mapLeadToCard));
+      setStageCounts({ NEW: 0, CONTACTED: 0, QUALIFIED: 0, UNQUALIFIED: 0, ...(res?.counts?.stages || {}) });
+    } catch (err) {
+      if (reqId !== requestIdRef.current) return;
+      setLoadError(err?.message || 'Failed to load pipeline.');
+    } finally {
+      if (reqId === requestIdRef.current) setLoading(false);
+    }
+  }, [isLiveData, authToken, debouncedSearch, selectedAgentId]);
+
+  useEffect(() => {
+    loadLeads();
+  }, [loadLeads]);
+
+  // Live mode: agent dropdown ke liye members (team.view nahi hai to filter hide)
+  useEffect(() => {
+    if (!isLiveData) return;
+    let cancelled = false;
+    cmpConnectApi
+      .listMembers({ status: 'ACTIVE', limit: 100 }, authToken)
+      .then((res) => {
+        if (cancelled) return;
+        setMembers(res?.data || []);
+        setMembersFailed(false);
+      })
+      .catch(() => {
+        if (!cancelled) setMembersFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isLiveData, authToken]);
 
   // Drag and Drop state
   const [draggedClientId, setDraggedClientId] = useState(null);
@@ -35,8 +118,43 @@ export default function PipelinePage() {
   // Active popover move menu
   const [activeMenuId, setActiveMenuId] = useState(null);
 
+  // Stage change: mock mein context, live mein optimistic + revert
+  const moveStage = useCallback(
+    async (clientId, stageKey) => {
+      if (!isLiveData) {
+        moveClientStage(clientId, stageKey);
+        return;
+      }
+      if (!canManage) return;
+      const lead = liveLeads.find((l) => l.id === clientId);
+      if (!lead || lead.stage === stageKey) return;
+      const prevStage = lead.stage;
+      const shiftCounts = (from, to) =>
+        setStageCounts((c) => ({
+          ...c,
+          [UI_TO_STAGE[from]]: Math.max(0, (c[UI_TO_STAGE[from]] || 0) - 1),
+          [UI_TO_STAGE[to]]: (c[UI_TO_STAGE[to]] || 0) + 1
+        }));
+      setActionError('');
+      setLiveLeads((ls) => ls.map((l) => (l.id === clientId ? { ...l, stage: stageKey } : l)));
+      shiftCounts(prevStage, stageKey);
+      try {
+        await cmpConnectApi.setLeadStage(clientId, UI_TO_STAGE[stageKey], authToken);
+      } catch (err) {
+        // Fail hua to wapas purani stage
+        setLiveLeads((ls) => ls.map((l) => (l.id === clientId ? { ...l, stage: prevStage } : l)));
+        shiftCounts(stageKey, prevStage);
+        setActionError(err?.message || 'Could not move the lead. Please try again.');
+      }
+    },
+    [isLiveData, moveClientStage, canManage, liveLeads, authToken]
+  );
+
   // Filtered clients
   const filteredClients = useMemo(() => {
+    // Live mode: search/agent filter backend pe already lag chuka
+    if (isLiveData) return liveLeads;
+
     let result = clients;
 
     if (debouncedSearch.trim()) {
@@ -55,13 +173,16 @@ export default function PipelinePage() {
     }
 
     return result;
-  }, [clients, debouncedSearch, selectedAgent]);
+  }, [isLiveData, liveLeads, clients, debouncedSearch, selectedAgent]);
 
-  // Conversion Metric Calculation
-  const totalClientsCount = clients.length;
+  // Conversion Metric Calculation (live: counts.stages company-wide hain)
+  const liveTotal =
+    (stageCounts.NEW || 0) + (stageCounts.CONTACTED || 0) + (stageCounts.QUALIFIED || 0) + (stageCounts.UNQUALIFIED || 0);
+  const totalClientsCount = isLiveData ? liveTotal : clients.length;
   const qualifiedCount = useMemo(() => {
+    if (isLiveData) return stageCounts.QUALIFIED || 0;
     return clients.filter((c) => c.stage === 'Qualified').length;
-  }, [clients]);
+  }, [isLiveData, stageCounts, clients]);
 
   const conversionPercentage = useMemo(() => {
     if (totalClientsCount === 0) return 0;
@@ -94,10 +215,10 @@ export default function PipelinePage() {
     setDragOverColumn(null);
     const clientId = e.dataTransfer.getData('text/plain') || draggedClientId;
     if (clientId) {
-      moveClientStage(clientId, stageKey);
+      moveStage(clientId, stageKey);
     }
     setDraggedClientId(null);
-  }, [draggedClientId, moveClientStage]);
+  }, [draggedClientId, moveStage]);
 
   const handleDragEnd = useCallback(() => {
     setDraggedClientId(null);
@@ -198,7 +319,8 @@ export default function PipelinePage() {
           />
         </div>
 
-        {/* Agent Filter Dropdown */}
+        {/* Agent Filter Dropdown (live mein members se; permission nahi to hide) */}
+        {!(isLiveData && membersFailed) && (
         <div style={{ position: 'relative', width: '220px' }}>
           <button
             type="button"
@@ -236,27 +358,35 @@ export default function PipelinePage() {
                 boxShadow: 'var(--cmp-shadow-md)'
               }}
             >
-              {['All agents', 'Layla Haddad', 'Karim Saleh', 'Emma Clarke', 'Arjun Mehta'].map((agentName) => (
-                <button
-                  key={agentName}
-                  type="button"
-                  className="menu-item"
-                  style={{
-                    fontSize: '13px',
-                    fontWeight: selectedAgent === agentName ? 700 : 500,
-                    color: selectedAgent === agentName ? 'var(--cmp-brand)' : 'inherit'
-                  }}
-                  onClick={() => {
-                    setSelectedAgent(agentName);
-                    setIsAgentMenuOpen(false);
-                  }}
-                >
-                  {agentName}
-                </button>
-              ))}
+              {(isLiveData
+                ? [{ id: '', name: 'All agents' }, ...members.map((m) => ({ id: m.id, name: m.fullName }))]
+                : MOCK_AGENTS.map((n) => ({ id: n, name: n }))
+              ).map((opt) => {
+                const isSelected = isLiveData ? selectedAgentId === opt.id : selectedAgent === opt.name;
+                return (
+                  <button
+                    key={opt.id || 'all'}
+                    type="button"
+                    className="menu-item"
+                    style={{
+                      fontSize: '13px',
+                      fontWeight: isSelected ? 700 : 500,
+                      color: isSelected ? 'var(--cmp-brand)' : 'inherit'
+                    }}
+                    onClick={() => {
+                      setSelectedAgent(opt.name);
+                      if (isLiveData) setSelectedAgentId(opt.id);
+                      setIsAgentMenuOpen(false);
+                    }}
+                  >
+                    {opt.name}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
+        )}
 
         {/* Conversion Rate Tag */}
         <span className="muted" style={{ fontSize: '14px', marginInlineStart: 'auto' }}>
@@ -264,17 +394,37 @@ export default function PipelinePage() {
         </span>
       </div>
 
-      {/* 4-Column Kanban Board */}
+      {/* Live mode: loading / error / action error */}
+      {isLiveData && actionError && (
+        <p role="alert" style={{ color: 'var(--cmp-danger, #c0392b)', fontSize: '13px', margin: '0 0 12px' }}>
+          {actionError}
+        </p>
+      )}
+      {isLiveData && loading && liveLeads.length === 0 && !loadError && (
+        <p className="muted" style={{ fontSize: '14px', margin: '0 0 12px' }}>Loading…</p>
+      )}
+      {isLiveData && loadError ? (
+        <div className="card" style={{ padding: '24px', textAlign: 'center' }}>
+          <p className="muted" style={{ margin: '0 0 12px', fontSize: '14px' }}>{loadError}</p>
+          <button type="button" className="btn btn-outline btn-sm" onClick={loadLeads}>
+            Retry
+          </button>
+        </div>
+      ) : (
+      /* 4-Column Kanban Board */
       <div className="kanban">
         {STAGES.map((stage) => {
           const colClients = filteredClients.filter((c) => c.stage === stage.key);
           const isOver = dragOverColumn === stage.key;
+          // Live: column count backend counts.stages se
+          const colCount = isLiveData ? stageCounts[UI_TO_STAGE[stage.key]] || 0 : colClients.length;
+          const canDrag = !isLiveData || canManage;
 
           return (
             <section
               key={stage.key}
               className={`kanban-col ${isOver ? 'drag-over' : ''}`}
-              aria-label={`${stage.label}, ${colClients.length} clients`}
+              aria-label={`${stage.label}, ${colCount} clients`}
               data-over={isOver ? 'true' : undefined}
               onDragOver={(e) => handleDragOver(e, stage.key)}
               onDragLeave={() => handleDragLeave(stage.key)}
@@ -282,7 +432,7 @@ export default function PipelinePage() {
             >
               <header style={{ borderTopColor: stage.color }}>
                 <span>{stage.label}</span>
-                <span className="count-badge">{colClients.length}</span>
+                <span className="count-badge">{colCount}</span>
               </header>
 
               <div className="kanban-cards">
@@ -297,15 +447,16 @@ export default function PipelinePage() {
                       <article
                         key={client.id}
                         className={`kanban-card ${isDragging ? 'is-dragging' : ''}`}
-                        draggable="true"
+                        draggable={canDrag ? 'true' : 'false'}
                         data-dragging={isDragging ? 'true' : undefined}
-                        onDragStart={(e) => handleDragStart(e, client.id)}
+                        onDragStart={(e) => canDrag && handleDragStart(e, client.id)}
                         onDragEnd={handleDragEnd}
                       >
                         {/* Top: Name & Move Button */}
                         <div className="row" style={{ justifyContent: 'space-between', gap: '6px' }}>
                           <strong style={{ fontSize: '14px' }}>{client.name}</strong>
 
+                          {canDrag && (
                           <div style={{ position: 'relative' }}>
                             <button
                               type="button"
@@ -358,7 +509,7 @@ export default function PipelinePage() {
                                       color: client.stage === s.key ? 'var(--cmp-brand)' : 'inherit'
                                     }}
                                     onClick={() => {
-                                      moveClientStage(client.id, s.key);
+                                      moveStage(client.id, s.key);
                                       setActiveMenuId(null);
                                     }}
                                   >
@@ -368,6 +519,7 @@ export default function PipelinePage() {
                               </div>
                             )}
                           </div>
+                          )}
                         </div>
 
                         {/* Property Reference */}
@@ -521,6 +673,7 @@ export default function PipelinePage() {
           );
         })}
       </div>
+      )}
     </div>
   );
 }
