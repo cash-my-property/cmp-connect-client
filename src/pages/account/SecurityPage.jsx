@@ -25,8 +25,32 @@ import { cmpConnectApi, getDeviceId } from '../../services/cmpConnectApi';
 const PASSWORD_REGEX = /^(?=.*[A-Z])(?=.*[!@#$%^&*]).{6,}$/;
 
 export default function SecurityPage() {
-  const { agency, authToken, updateToken, isLiveData } = useApp();
+  const { agency, authToken, updateToken, isLiveData, account, can } = useApp();
   const [is2FaEnabled, setIs2FaEnabled] = useState(true);
+  // Live: org-wide 2FA switch (GET/PATCH /company/security, permission security.manage)
+  const canManageSecurity = !isLiveData || can('security.manage');
+  const [is2FaLoaded, setIs2FaLoaded] = useState(!isLiveData);
+  const [isSaving2Fa, setIsSaving2Fa] = useState(false);
+  const [twoFaLoadError, setTwoFaLoadError] = useState(null);
+
+  useEffect(() => {
+    if (!isLiveData || !canManageSecurity) return;
+    let cancelled = false;
+    cmpConnectApi
+      .getCompanySecurity(authToken)
+      .then((res) => {
+        if (cancelled) return;
+        setIs2FaEnabled(Boolean(res?.data?.twoFactorEnabled));
+        setTwoFaLoadError(null);
+      })
+      .catch((err) => {
+        if (!cancelled) setTwoFaLoadError(err.message || 'Could not load the 2-factor setting.');
+      })
+      .finally(() => {
+        if (!cancelled) setIs2FaLoaded(true);
+      });
+    return () => { cancelled = true; };
+  }, [isLiveData, canManageSecurity, authToken]);
   const [isPasswordlessEnforced, setIsPasswordlessEnforced] = useState(false);
   const [notice, setNotice] = useState(null);
 
@@ -173,9 +197,31 @@ export default function SecurityPage() {
     }
   };
 
-  const handleToggle2Fa = () => {
-    setIs2FaEnabled(!is2FaEnabled);
-    showNotice(is2FaEnabled ? '2-Factor Authentication disabled.' : '2-Factor Authentication enabled.');
+  const handleToggle2Fa = async () => {
+    // Mock mode: sirf local toggle (pehle jaisa)
+    if (!isLiveData) {
+      setIs2FaEnabled(!is2FaEnabled);
+      showNotice(is2FaEnabled ? '2-Factor Authentication disabled.' : '2-Factor Authentication enabled.');
+      return;
+    }
+    const next = !is2FaEnabled;
+    const ok = window.confirm(
+      next
+        ? 'Turn on 2-factor authentication for your whole company? Anyone signing in from a new device will need a 6-digit code sent to their email.'
+        : 'Turn off 2-factor authentication for your whole company? New devices will sign in with just a password.'
+    );
+    if (!ok) return;
+    setIsSaving2Fa(true);
+    try {
+      const res = await cmpConnectApi.setCompanySecurity(next, authToken);
+      const enabled = Boolean(res?.data?.twoFactorEnabled);
+      setIs2FaEnabled(enabled);
+      showNotice(enabled ? '2-factor authentication is on for your company.' : '2-factor authentication is off for your company.');
+    } catch (err) {
+      showNotice(err.message || 'Could not update 2-factor authentication.');
+    } finally {
+      setIsSaving2Fa(false);
+    }
   };
 
   const handleTogglePasswordless = () => {
@@ -454,14 +500,52 @@ export default function SecurityPage() {
                 padding: '4px 10px'
               }}
             >
-              {is2FaEnabled ? 'Enabled' : 'Disabled'}
+              {isLiveData && !canManageSecurity ? 'Company setting' : is2FaEnabled ? 'Enabled' : 'Disabled'}
             </span>
           </h2>
         </div>
         <p style={{ margin: '12px 0', fontSize: '14px' }} className="muted">
-          2-factor authentication adds an extra layer of security to your agency portal account.
+          {isLiveData
+            ? 'When 2-factor authentication is on, anyone in your company who signs in from a new device must enter a 6-digit code sent to their email. Devices that have signed in before are not asked again.'
+            : '2-factor authentication adds an extra layer of security to your agency portal account.'}
         </p>
 
+        {isLiveData && twoFaLoadError && (
+          <p style={{ margin: '0 0 12px', fontSize: '13px', color: 'var(--cmp-danger)' }}>{twoFaLoadError}</p>
+        )}
+
+        {/* Live: sirf email code chalta hai (backend) — authenticator / SMS abhi nahi */}
+        {isLiveData ? (
+          <div className="card" style={{ padding: '14px 20px' }}>
+            <div className="row" style={{ gap: '12px', alignItems: 'flex-start' }}>
+              <span
+                style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '8px',
+                  display: 'grid',
+                  placeItems: 'center',
+                  background: 'var(--cmp-brand-subtle)',
+                  color: 'var(--cmp-brand)',
+                  flexShrink: 0
+                }}
+              >
+                <Mail size={16} />
+              </span>
+              <div style={{ flex: 1 }}>
+                <p style={{ margin: 0, fontWeight: 700, fontSize: '14px' }}>Email code on new devices</p>
+                <p className="muted" style={{ margin: '2px 0 0', fontSize: '13px' }}>
+                  Codes go to each person&apos;s own sign-in email{account?.email ? ` (yours: ${account.email})` : ''}. Valid for 10 minutes.
+                </p>
+                {!canManageSecurity && (
+                  <p className="faint" style={{ margin: '6px 0 0', fontSize: '12px' }}>
+                    Only your company owner or director can turn this on or off.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : (
         <div className="card" style={{ padding: '6px 20px' }}>
           <p style={{ margin: '12px 0 0', fontWeight: 700, fontSize: '14px' }}>
             2-factor authentication methods
@@ -547,20 +631,24 @@ export default function SecurityPage() {
             </button>
           </div>
         </div>
+        )}
 
-        <div className="row" style={{ justifyContent: 'flex-end', marginTop: '14px' }}>
-          <button
-            type="button"
-            className="btn btn-sm"
-            onClick={handleToggle2Fa}
-            style={{
-              background: is2FaEnabled ? 'var(--cmp-danger)' : 'var(--cmp-brand)',
-              color: '#FFFFFF'
-            }}
-          >
-            {is2FaEnabled ? 'Disable 2FA' : 'Enable 2FA'}
-          </button>
-        </div>
+        {canManageSecurity && (
+          <div className="row" style={{ justifyContent: 'flex-end', marginTop: '14px' }}>
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={handleToggle2Fa}
+              disabled={isSaving2Fa || !is2FaLoaded || Boolean(twoFaLoadError)}
+              style={{
+                background: is2FaEnabled ? 'var(--cmp-danger)' : 'var(--cmp-brand)',
+                color: '#FFFFFF'
+              }}
+            >
+              {isSaving2Fa ? 'Saving…' : !is2FaLoaded ? 'Loading…' : is2FaEnabled ? 'Disable 2FA' : 'Enable 2FA'}
+            </button>
+          </div>
+        )}
       </section>
 
       {/* Section 3: PassKey (My Profile) */}

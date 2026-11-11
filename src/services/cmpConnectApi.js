@@ -198,7 +198,8 @@ async function apiRequest(endpoint, options = {}) {
         endpoint.includes('/auth/forgot-password') ||
         endpoint.includes('/auth/reset-password') ||
         endpoint.includes('/auth/logout') ||
-        endpoint.includes('/auth/invite');
+        endpoint.includes('/auth/invite') ||
+        endpoint.includes('/auth/2fa');
 
       const isRtoPath = endpoint.includes('/cmpConnect/rto');
 
@@ -336,6 +337,26 @@ export const cmpConnectApi = {
         email: email ? email.trim().toLowerCase() : '',
         password
       })
+    });
+  },
+
+  /**
+   * 2FA (org Security switch on + naya device): login { twoFactorRequired, email, codeValidMinutes } deta hai,
+   * phir email wala 6-digit code yahan. Wahi device (x-device-id) zaroori. Sahi code → session cookies (asli login).
+   * POST /api/cmpConnect/auth/2fa/verify — { email, code }
+   */
+  async verifyTwoFactor({ email, code }) {
+    return apiRequest('/api/cmpConnect/auth/2fa/verify', {
+      method: 'POST',
+      body: JSON.stringify({ email: String(email || '').trim().toLowerCase(), code: String(code || '').trim() })
+    });
+  },
+
+  /** POST /api/cmpConnect/auth/2fa/resend — { email } (60 sec gap, 429 agar jaldi) */
+  async resendTwoFactor({ email }) {
+    return apiRequest('/api/cmpConnect/auth/2fa/resend', {
+      method: 'POST',
+      body: JSON.stringify({ email: String(email || '').trim().toLowerCase() })
     });
   },
 
@@ -1692,6 +1713,16 @@ export const cmpConnectApi = {
    */
   async updateCompanyProfile(payload, token) {
     return apiRequest('/api/cmpConnect/company/profile', { method: 'PATCH', token, body: JSON.stringify(payload) });
+  },
+
+  /** GET /api/cmpConnect/company/security — { twoFactorEnabled } (security.manage) */
+  async getCompanySecurity(token) {
+    return apiRequest('/api/cmpConnect/company/security', { method: 'GET', token });
+  },
+
+  /** PATCH /api/cmpConnect/company/security — { twoFactorEnabled: boolean } → naye device pe email code */
+  async setCompanySecurity(twoFactorEnabled, token) {
+    return apiRequest('/api/cmpConnect/company/security', { method: 'PATCH', token, body: JSON.stringify({ twoFactorEnabled: !!twoFactorEnabled }) });
   },
 
   /** GET /api/cmpConnect/follow-ups?status=PENDING|DONE — { data: [{ id, title, notes, dueAt, status, doneAt, lead, listingId }], pagination } */

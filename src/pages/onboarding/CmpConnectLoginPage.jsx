@@ -18,6 +18,12 @@ export default function CmpConnectLoginPage() {
   const [loading, setLoading] = useState(false);
   const [rateLimited, setRateLimited] = useState(false);
 
+  // 2FA (naya device → email code): { email, minutes } jab code screen chahiye
+  const [twoFa, setTwoFa] = useState(null);
+  const [twoFaCode, setTwoFaCode] = useState('');
+  const [twoFaInfo, setTwoFaInfo] = useState('');
+  const [resending, setResending] = useState(false);
+
   // Forgot Password State
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
@@ -87,48 +93,15 @@ export default function CmpConnectLoginPage() {
         password
       });
 
-      let account = response?.data?.account;
-      const token =
-        response?.data?.token ||
-        response?.data?.accessToken ||
-        response?.token ||
-        response?.accessToken ||
-        response?.data?.tokenPair?.token ||
-        null;
-      let mustChangePassword = Boolean(response?.data?.mustChangePassword);
-
-      // In pure cookie mode, if account wasn't in response, hydrate via getMe
-      if (!account) {
-        try {
-          const meRes = await cmpConnectApi.getMe(token);
-          account = meRes?.data;
-          if (account?.mustChangePassword !== undefined) {
-            mustChangePassword = Boolean(account.mustChangePassword);
-          }
-        } catch {
-          // Fallback if getMe is not immediately ready
-        }
+      // 2FA: naya device → tokens nahi aaye, email pe code gaya. Code screen dikhao.
+      if (response?.data?.twoFactorRequired) {
+        setTwoFa({ email: response.data.email || email.trim(), minutes: response.data.codeValidMinutes || 10 });
+        setTwoFaCode('');
+        setTwoFaInfo(response?.message || 'We sent a sign-in code to your email.');
+        return;
       }
 
-      const isSuccessfulLogin = Boolean(account || token || response?.data?.sessionId || response?.status === 'success');
-      if (!isSuccessfulLogin) {
-        throw new Error(response?.message || 'Invalid login response from server.');
-      }
-
-      // Store auth state in context & storage
-      loginUser({
-        token,
-        account,
-        mustChangePassword,
-        rememberMe
-      });
-
-      // If mustChangePassword is true, go straight to change-password screen
-      if (mustChangePassword) {
-        navigate('/cmp-connect/change-password', { replace: true });
-      } else {
-        navigate(from, { replace: true });
-      }
+      await completeLogin(response);
     } catch (err) {
       const status = err.status;
       const msg = err.message || 'Invalid email or password.';
@@ -145,6 +118,95 @@ export default function CmpConnectLoginPage() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  // 2FA: email wala 6-digit code → asli login (wahi device)
+  const handleTwoFaVerify = async (e) => {
+    e.preventDefault();
+    const code = twoFaCode.trim();
+    if (!/^\d{6}$/.test(code)) {
+      setError('Enter the 6-digit code from your email.');
+      return;
+    }
+    setError('');
+    setLoading(true);
+    try {
+      const response = await cmpConnectApi.verifyTwoFactor({ email: twoFa.email, code });
+      await completeLogin(response);
+    } catch (err) {
+      setError(err.message || 'This code is not correct or has expired. Ask for a new one.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleTwoFaResend = async () => {
+    setError('');
+    setTwoFaInfo('');
+    setResending(true);
+    try {
+      const res = await cmpConnectApi.resendTwoFactor({ email: twoFa.email });
+      setTwoFaInfo(res?.message || 'We sent a new code to your email.');
+    } catch (err) {
+      setError(err.status === 429 ? 'Please wait a minute before asking for a new code.' : err.message || 'Could not send a new code.');
+    } finally {
+      setResending(false);
+    }
+  };
+
+  const cancelTwoFa = () => {
+    setTwoFa(null);
+    setTwoFaCode('');
+    setTwoFaInfo('');
+    setError('');
+    setPassword('');
+  };
+
+  // Login / 2FA verify ka kamyab jawab → context + redirect
+  const completeLogin = async (response) => {
+    let account = response?.data?.account;
+    const token =
+      response?.data?.token ||
+      response?.data?.accessToken ||
+      response?.token ||
+      response?.accessToken ||
+      response?.data?.tokenPair?.token ||
+      null;
+    let mustChangePassword = Boolean(response?.data?.mustChangePassword);
+
+    // In pure cookie mode, if account wasn't in response, hydrate via getMe
+    if (!account) {
+      try {
+        const meRes = await cmpConnectApi.getMe(token);
+        account = meRes?.data;
+        if (account?.mustChangePassword !== undefined) {
+          mustChangePassword = Boolean(account.mustChangePassword);
+        }
+      } catch {
+        // Fallback if getMe is not immediately ready
+      }
+    }
+
+    // Account / token / session hona chahiye — sirf status 'success' kaafi nahi (2FA jawab bhi success hota hai)
+    const isSuccessfulLogin = Boolean(account || token || response?.data?.sessionId);
+    if (!isSuccessfulLogin) {
+      throw new Error(response?.message || 'Invalid login response from server.');
+    }
+
+    // Store auth state in context & storage
+    loginUser({
+      token,
+      account,
+      mustChangePassword,
+      rememberMe
+    });
+
+    // If mustChangePassword is true, go straight to change-password screen
+    if (mustChangePassword) {
+      navigate('/cmp-connect/change-password', { replace: true });
+    } else {
+      navigate(from, { replace: true });
     }
   };
 
@@ -208,6 +270,68 @@ export default function CmpConnectLoginPage() {
           </div>
         )}
 
+        {/* 2FA: naya device → email code screen (login form ki jagah) */}
+        {twoFa ? (
+          <form onSubmit={handleTwoFaVerify} noValidate>
+            <div
+              className="note"
+              style={{
+                background: 'var(--cmp-brand-subtle)',
+                border: '1px solid var(--cmp-brand)',
+                color: 'var(--cmp-brand)',
+                marginBottom: 16
+              }}
+            >
+              {twoFaInfo || 'We sent a sign-in code to your email.'} New device check: enter the 6-digit code sent to{' '}
+              <strong>{twoFa.email}</strong>. It is valid for {twoFa.minutes} minutes.
+            </div>
+
+            <div className="field">
+              <label htmlFor="login-2fa-code">Sign-in code *</label>
+              <input
+                id="login-2fa-code"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                placeholder="6-digit code"
+                maxLength={6}
+                value={twoFaCode}
+                onChange={(e) => setTwoFaCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                disabled={loading}
+                autoFocus
+                required
+                style={{ letterSpacing: '0.3em', fontSize: '18px' }}
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="btn btn-primary btn-block"
+              disabled={loading || twoFaCode.length !== 6}
+              style={{ marginTop: 4, padding: '12px 18px' }}
+            >
+              {loading ? 'Verifying...' : 'Verify and sign in'}
+            </button>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 14, gap: 8, flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={handleTwoFaResend}
+                disabled={resending || loading}
+                style={{ background: 'none', border: 'none', color: 'var(--cmp-brand)', fontSize: '13px', fontWeight: 600, cursor: 'pointer', padding: 0 }}
+              >
+                {resending ? 'Sending...' : 'Send a new code'}
+              </button>
+              <button
+                type="button"
+                onClick={cancelTwoFa}
+                disabled={loading}
+                style={{ background: 'none', border: 'none', color: 'var(--cmp-text-muted)', fontSize: '13px', cursor: 'pointer', padding: 0 }}
+              >
+                Use a different account
+              </button>
+            </div>
+          </form>
+        ) : (
         <form onSubmit={handleSubmit} noValidate>
           <div className="field">
             <label htmlFor="login-email">Registered Email *</label>
@@ -306,6 +430,7 @@ export default function CmpConnectLoginPage() {
             {loading ? 'Signing in...' : 'Sign in to CMP Connect'}
           </button>
         </form>
+        )}
 
         <div style={{ marginTop: 24, textAlign: 'center', borderTop: '1px solid var(--cmp-border)', paddingTop: 16 }}>
           <p className="meta" style={{ fontSize: '13px' }}>
