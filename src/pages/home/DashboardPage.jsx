@@ -299,12 +299,6 @@ export default function DashboardPage() {
           </p>
         </div>
         <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-          {(!account || can('leads.view') || can('leads.create')) && (
-            <NavLink to="/clients/regular" className="btn btn-outline btn-sm">
-              <Users size={16} />
-              <span>Add contact</span>
-            </NavLink>
-          )}
           {(!account || can('listings.create')) && (
             <NavLink to="/properties/new" className="btn btn-primary btn-sm">
               <Plus size={16} />
