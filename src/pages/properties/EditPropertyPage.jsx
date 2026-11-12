@@ -79,8 +79,8 @@ export default function EditPropertyPage() {
     listedBy: '',
 
     propertyLocation: '',
-    propertyLatitude: 25.08,
-    propertyLongitude: 55.14,
+    propertyLatitude: '',
+    propertyLongitude: '',
 
     propertyArea: '',
     propertyAreaUnit: 'sqft',
@@ -175,8 +175,8 @@ export default function EditPropertyPage() {
           listedBy: d.listedBy?.id || '',
 
           propertyLocation: d.location || '',
-          propertyLatitude: d.coordinates?.latitude || 25.08,
-          propertyLongitude: d.coordinates?.longitude || 55.14,
+          propertyLatitude: d.coordinates?.latitude ?? '',
+          propertyLongitude: d.coordinates?.longitude ?? '',
 
           propertyArea: d.area ?? '',
           propertyAreaUnit: d.areaUnit || 'sqft',
@@ -411,7 +411,8 @@ export default function EditPropertyPage() {
   const canActions = listingData?.can || {};
   const submitIssues = listingData?.submitIssues || [];
   const qualityTips = listingData?.qualityTips || [];
-  const qualityScore = listingData?.qualityScore ?? 75;
+  // Server score only — no made-up default
+  const qualityScore = listingData?.qualityScore ?? null;
 
   // Toggle amenity
   const handleToggleAmenity = (amenity) => {
@@ -612,8 +613,8 @@ export default function EditPropertyPage() {
       case 2:
         return {
           propertyLocation: formData.propertyLocation,
-          propertyLatitude: Number(formData.propertyLatitude) || 25.08,
-          propertyLongitude: Number(formData.propertyLongitude) || 55.14
+          propertyLatitude: Number(formData.propertyLatitude) || null,
+          propertyLongitude: Number(formData.propertyLongitude) || null
         };
       case 3: {
         const bAreaRule = getFieldRule('propertyBuiltUpArea');
@@ -1214,11 +1215,11 @@ export default function EditPropertyPage() {
               Quality Score
             </p>
             <p style={{ margin: '6px 0 10px', fontSize: '28px', fontWeight: 800, color: 'var(--cmp-brand)' }}>
-              {qualityScore}
+              {qualityScore ?? '—'}
               <span className="faint" style={{ fontSize: '14px', fontWeight: 600 }}>/100</span>
             </p>
             <div style={{ height: '6px', borderRadius: '3px', background: 'var(--cmp-border)', overflow: 'hidden' }}>
-              <div style={{ width: `${qualityScore}%`, height: '100%', background: 'var(--cmp-brand)', transition: 'width 0.3s ease' }} />
+              <div style={{ width: `${qualityScore ?? 0}%`, height: '100%', background: 'var(--cmp-brand)', transition: 'width 0.3s ease' }} />
             </div>
 
             {qualityTips.length > 0 && (

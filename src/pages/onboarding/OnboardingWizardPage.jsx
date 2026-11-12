@@ -86,10 +86,16 @@ export default function OnboardingWizardPage() {
     adminMobile: '+971 50 772 3318'
   };
 
-  const [details, setDetails] = useState(initialType === 'DEVELOPER' ? developerInitial : agencyInitial);
+  // Demo values only when there is no application token. A real applicant (token link) starts with
+  // empty fields and no files, so demo data is never saved to their application or shown as uploaded.
+  const blankOf = (obj) => Object.fromEntries(Object.keys(obj).map((k) => [k, '']));
+  const [details, setDetails] = useState(() => {
+    const sample = initialType === 'DEVELOPER' ? developerInitial : agencyInitial;
+    return tokenParam ? blankOf(sample) : sample;
+  });
 
-  // Pre-seed documents with sample uploaded files
-  const [documents, setDocuments] = useState({
+  // Demo only: pre-seeded sample files (never for a real token link)
+  const [documents, setDocuments] = useState(() => (tokenParam ? {} : {
     tradeLicence: { name: 'trade-licence.pdf', size: '402 KB', date: '7 Oct' },
     reraOrnCertificate: { name: 'orn.pdf', size: '402 KB', date: '7 Oct' },
     dldDeveloperRegistration: { name: 'dev-registration.pdf', size: '402 KB', date: '7 Oct' },
@@ -106,7 +112,7 @@ export default function OnboardingWizardPage() {
     passport: { name: 'passport.pdf', size: '402 KB', date: '7 Oct' },
     powerOfAttorney: { name: 'poa.pdf', size: '402 KB', date: '7 Oct' },
     subscriptionContract: { name: 'contract.pdf', size: '402 KB', date: '7 Oct' }
-  });
+  }));
 
   // API #4: Load Portal State from token on mount if present
   useEffect(() => {
@@ -228,9 +234,11 @@ export default function OnboardingWizardPage() {
           })
         };
         await cmpConnectApi.saveDetails(token, payload);
-        setApiFeedback('Details saved to backend.');
+        setApiFeedback('Details saved.');
       } catch (err) {
-        console.warn('Backend saveDetails error (continuing with local state):', err.message);
+        // Stay on this step so the applicant can fix what the server rejected
+        setApiFeedback(`Details not saved: ${err.message || 'please check the form and try again.'}`);
+        return;
       } finally {
         setIsApiLoading(false);
       }
@@ -240,25 +248,22 @@ export default function OnboardingWizardPage() {
 
   // API #6: Upload document (single file multipart)
   const handleUploadFile = async (docKey, fileData) => {
-    // Immediate UI update
-    setDocuments(prev => ({
-      ...prev,
-      [docKey]: fileData
-    }));
+    // Demo (no token): show the file straight away
+    if (!token || !fileData.fileObject) {
+      setDocuments(prev => ({ ...prev, [docKey]: fileData }));
+      return;
+    }
 
-    if (token && fileData.fileObject) {
-      try {
-        setIsApiLoading(true);
-        const res = await cmpConnectApi.uploadDocument(token, docKey, fileData.fileObject);
-        if (res?.data) {
-          setApiFeedback(`${fileData.name} uploaded to Cloudinary successfully.`);
-        }
-      } catch (err) {
-        console.warn(`Backend upload for ${docKey} failed:`, err.message);
-        setApiFeedback(`Upload saved locally. (Backend: ${err.message})`);
-      } finally {
-        setIsApiLoading(false);
-      }
+    // Real application: the file only counts as uploaded once the server has it
+    try {
+      setIsApiLoading(true);
+      await cmpConnectApi.uploadDocument(token, docKey, fileData.fileObject);
+      setDocuments(prev => ({ ...prev, [docKey]: fileData }));
+      setApiFeedback(`${fileData.name} uploaded.`);
+    } catch (err) {
+      setApiFeedback(`${fileData.name} was not uploaded: ${err.message || 'please try again.'}`);
+    } finally {
+      setIsApiLoading(false);
     }
   };
 
@@ -276,12 +281,12 @@ export default function OnboardingWizardPage() {
     if (token) {
       try {
         setIsApiLoading(true);
-        const res = await cmpConnectApi.submit(token);
-        if (res?.status === 'success') {
-          setApiFeedback('Documents successfully submitted for CMP compliance review.');
-        }
+        await cmpConnectApi.submit(token);
+        setApiFeedback('Documents successfully submitted for CMP compliance review.');
       } catch (err) {
-        console.warn('Backend submit error (continuing to submitted screen):', err.message);
+        // Stay on this step: the application was NOT submitted
+        setApiFeedback(`Not submitted: ${err.message || 'please check your documents and try again.'}`);
+        return;
       } finally {
         setIsApiLoading(false);
       }

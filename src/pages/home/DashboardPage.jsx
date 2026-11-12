@@ -208,7 +208,7 @@ export default function DashboardPage() {
   };
 
   // User display name
-  const userFullName = account?.fullName || agency?.currentUser?.name || 'Layla';
+  const userFullName = account?.fullName || agency?.currentUser?.name || (isLiveData ? '' : 'Layla');
   const userFirstName = userFullName.split(' ')[0];
 
   // Demo numbers sirf mock mode mein. Live mein backend na de to null → "—" (jhoote number nahi)
@@ -302,7 +302,7 @@ export default function DashboardPage() {
       >
         <div>
           <h1 style={{ fontSize: 26, letterSpacing: '-0.02em', margin: 0 }}>
-            {timeGreeting}, {userFirstName}
+            {userFirstName ? `${timeGreeting}, ${userFirstName}` : timeGreeting}
           </h1>
           <p className="muted" style={{ margin: '4px 0 0', fontSize: '13.5px' }}>
             {todayFormatted} · {needsYouList.length ? `${needsYouList.length} ${needsYouList.length === 1 ? 'thing needs' : 'things need'} you` : 'Nothing urgent'}

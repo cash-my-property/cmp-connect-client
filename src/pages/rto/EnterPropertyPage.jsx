@@ -183,8 +183,8 @@ export default function EnterPropertyPage() {
     propertyTitle: '',
     propertyDescription: '',
     propertyLocation: 'Dubai Marina, Dubai',
-    propertyLatitude: 25.08,
-    propertyLongitude: 55.14,
+    propertyLatitude: '',
+    propertyLongitude: '',
     propertyPrice: '',
     propertyArea: '',
     propertyAreaUnit: 'sqft',
@@ -525,8 +525,8 @@ export default function EnterPropertyPage() {
     if (stepNum === 2) {
       return {
         propertyLocation: formData.propertyLocation.trim(),
-        propertyLatitude: Number(formData.propertyLatitude) || 25.08,
-        propertyLongitude: Number(formData.propertyLongitude) || 55.14
+        propertyLatitude: Number(formData.propertyLatitude) || null,
+        propertyLongitude: Number(formData.propertyLongitude) || null
       };
     }
     if (stepNum === 3) {
@@ -840,8 +840,8 @@ export default function EnterPropertyPage() {
             propertyTitle: formData.propertyTitle.trim(),
             propertyDescription: formData.propertyDescription.trim(),
             propertyLocation: formData.propertyLocation.trim(),
-            propertyLatitude: Number(formData.propertyLatitude) || 25.08,
-            propertyLongitude: Number(formData.propertyLongitude) || 55.14,
+            propertyLatitude: Number(formData.propertyLatitude) || null,
+            propertyLongitude: Number(formData.propertyLongitude) || null,
             propertyPrice: Number(formData.propertyPrice),
             propertyArea: Number(formData.propertyArea),
             propertyAreaUnit: formData.propertyAreaUnit || 'sqft',
@@ -873,8 +873,8 @@ export default function EnterPropertyPage() {
           propertyTitle: formData.propertyTitle.trim(),
           propertyDescription: formData.propertyDescription.trim(),
           propertyLocation: formData.propertyLocation.trim(),
-          propertyLatitude: Number(formData.propertyLatitude) || 25.08,
-          propertyLongitude: Number(formData.propertyLongitude) || 55.14,
+          propertyLatitude: Number(formData.propertyLatitude) || null,
+          propertyLongitude: Number(formData.propertyLongitude) || null,
           propertyPrice: Number(formData.propertyPrice),
           propertyArea: Number(formData.propertyArea),
           propertyAreaUnit: formData.propertyAreaUnit || 'sqft',

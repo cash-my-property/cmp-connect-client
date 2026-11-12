@@ -408,7 +408,7 @@ export default function DetailsStage({
               <input
                 id="f-project_units"
                 type="number"
-                value={details.projectUnits || 214}
+                value={details.projectUnits ?? ''}
                 onChange={(e) => handleChange('projectUnits', e.target.value)}
                 required
               />

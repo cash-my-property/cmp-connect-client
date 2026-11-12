@@ -151,12 +151,13 @@ const MOCK_MARKET_DATA = {
 };
 
 export default function MarketStandingPage() {
-  const { isLiveData } = useApp();
+  const { isLiveData, authToken } = useApp();
 
   const [offeringFilter, setOfferingFilter] = useState('all'); // 'all' | 'sale' | 'rent'
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [data, setData] = useState(MOCK_MARKET_DATA);
+  // Live mode starts empty (no demo flash); mock mode starts with the demo set
+  const [data, setData] = useState(() => (isLiveData ? null : MOCK_MARKET_DATA));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -189,26 +190,31 @@ export default function MarketStandingPage() {
     try {
       setLoading(true);
       setError(null);
-      const res = await cmpConnectApi.getInsightsMarket({
-        offering: offeringFilter,
-        search: debouncedSearch
-      });
+      const res = await cmpConnectApi.getInsightsMarket(
+        { offering: offeringFilter, search: debouncedSearch },
+        authToken
+      );
       const payload = res?.data?.stats ? res.data : (res?.data?.data || res?.data || res);
-      if (payload && (payload.stats || payload.communities)) {
-        setData(payload);
-      }
+      setData(payload && (payload.stats || payload.communities) ? payload : null);
     } catch (err) {
       console.error('Error fetching market standing data:', err);
       setError(err.message || 'Failed to load market standing data.');
     } finally {
       setLoading(false);
     }
-  }, [isLiveData, offeringFilter, debouncedSearch]);
+  }, [isLiveData, authToken, offeringFilter, debouncedSearch]);
+
+  // Switching Live / Mock: never keep the other mode's numbers on screen
+  useEffect(() => {
+    setData(isLiveData ? null : MOCK_MARKET_DATA);
+  }, [isLiveData]);
 
   useEffect(() => {
     fetchMarketData();
   }, [fetchMarketData]);
 
+  // Live mode before the first response: show "—" instead of 0 / demo values
+  const isPending = isLiveData && !data;
   const stats = data?.stats || {};
   const communities = data?.communities || [];
   const factors = data?.factors || [];
@@ -299,7 +305,7 @@ export default function MarketStandingPage() {
           </span>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
             <span style={{ fontSize: '26px', fontWeight: 800, color: 'var(--cmp-text)' }}>
-              {stats.communities ?? 0}
+              {isPending ? '—' : (stats.communities ?? 0)}
             </span>
             <span className="faint" style={{ fontSize: '12px' }}>locations</span>
           </div>
@@ -312,7 +318,7 @@ export default function MarketStandingPage() {
           </span>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
             <span style={{ fontSize: '26px', fontWeight: 800, color: 'var(--cmp-brand)' }}>
-              {stats.liveProperties ?? 0}
+              {isPending ? '—' : (stats.liveProperties ?? 0)}
             </span>
             <span className="faint" style={{ fontSize: '12px' }}>properties</span>
           </div>

@@ -92,8 +92,8 @@ export default function AddPropertyPage() {
 
     // Step 2
     propertyLocation: '',
-    propertyLatitude: 25.08,
-    propertyLongitude: 55.14,
+    propertyLatitude: '',
+    propertyLongitude: '',
 
     // Step 3
     propertyArea: '',
@@ -358,8 +358,10 @@ export default function AddPropertyPage() {
     }
   }, [isLiveData, authToken, listingId]);
 
+  // Each step saves the draft before moving on, so re-read the server's score + tips on every step
+  // (the quality panel then always matches the score on the portfolio card)
   useEffect(() => {
-    if (currentStep === 7 && listingId) {
+    if (listingId) {
       loadReviewDetails();
     }
   }, [currentStep, listingId, loadReviewDetails]);
@@ -589,8 +591,8 @@ export default function AddPropertyPage() {
           listingId,
           {
             propertyLocation: formData.propertyLocation,
-            propertyLatitude: Number(formData.propertyLatitude) || 25.08,
-            propertyLongitude: Number(formData.propertyLongitude) || 55.14
+            propertyLatitude: Number(formData.propertyLatitude) || null,
+            propertyLongitude: Number(formData.propertyLongitude) || null
           },
           authToken
         );
@@ -731,11 +733,13 @@ export default function AddPropertyPage() {
     }
   };
 
-  // Local quality calculation fallback
+  // Live: the server's score only (same number as the portfolio card); "—" until the first draft save.
+  // Mock: a local estimate.
   const qualityScore = useMemo(() => {
-    if (reviewDetail?.qualityScore !== undefined) {
+    if (reviewDetail?.qualityScore !== undefined && reviewDetail?.qualityScore !== null) {
       return reviewDetail.qualityScore;
     }
+    if (isLiveData) return null;
     let score = 20;
     if (formData.propertyTitle.length > 15) score += 15;
     if (formData.propertyDescription.length > 50) score += 15;
@@ -743,7 +747,7 @@ export default function AddPropertyPage() {
     if (formData.propertyArea && Number(formData.propertyArea) > 0) score += 15;
     if (formData.propertyImages.length >= 8) score += 15;
     return Math.min(100, score);
-  }, [reviewDetail, formData]);
+  }, [reviewDetail, formData, isLiveData]);
 
   const submitIssues = reviewDetail?.submitIssues || [];
   const qualityTips = reviewDetail?.qualityTips || [];
@@ -855,13 +859,13 @@ export default function AddPropertyPage() {
               Listing Quality
             </p>
             <p style={{ margin: '6px 0 10px', fontSize: '28px', fontWeight: 800, color: 'var(--cmp-brand)' }}>
-              {qualityScore}
+              {qualityScore ?? '—'}
               <span className="faint" style={{ fontSize: '14px', fontWeight: 600 }}>/100</span>
             </p>
             <div style={{ height: '6px', borderRadius: '3px', background: 'var(--cmp-border)', overflow: 'hidden' }}>
               <div
                 style={{
-                  width: `${qualityScore}%`,
+                  width: `${qualityScore ?? 0}%`,
                   height: '100%',
                   background: 'var(--cmp-brand)',
                   transition: 'width 0.3s ease'
