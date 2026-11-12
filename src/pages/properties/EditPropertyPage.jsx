@@ -891,7 +891,8 @@ export default function EditPropertyPage() {
             <button
               type="button"
               className="btn btn-accent btn-sm"
-              disabled={isSaving}
+              disabled={isSaving || submitIssues.length > 0}
+              title={submitIssues.length > 0 ? `Fix ${submitIssues.length} issue${submitIssues.length === 1 ? '' : 's'} in Review before submitting` : undefined}
               onClick={handleSubmit}
             >
               <Send size={14} />

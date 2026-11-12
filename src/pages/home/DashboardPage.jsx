@@ -16,6 +16,12 @@ import {
 
 // ── Pure helpers (component ke bahar — har render pe dobara nahi bante) ──
 
+// Local date as YYYY-MM-DD (toISOString is UTC and gives yesterday before 04:00 in Dubai)
+const todayIso = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
 const formatPriceCompact = (amount) => {
   if (!amount && amount !== 0) return 'AED —';
   const num = Number(amount);
@@ -131,7 +137,7 @@ export default function DashboardPage() {
     : mockListings.slice(0, 4);
 
   // Lazy initializer: aaj ki date sirf pehli render pe
-  const [newDue, setNewDue] = useState(() => new Date().toISOString().slice(0, 10));
+  const [newDue, setNewDue] = useState(todayIso);
 
   // Live follow-ups: backend /follow-ups se (mock mein context wale hi)
   const [liveFollowUps, setLiveFollowUps] = useState([]);
@@ -155,6 +161,10 @@ export default function DashboardPage() {
     e.preventDefault();
     const text = newFollowUpText.trim();
     if (!text) return;
+    if (newDue && newDue < todayIso()) {
+      setFollowUpError('Choose today or a later date.');
+      return;
+    }
     if (!isLiveData) {
       addFollowUp(text, newDue);
       setNewFollowUpText('');
@@ -524,6 +534,7 @@ export default function DashboardPage() {
               <input
                 id="task-due"
                 type="date"
+                min={todayIso()}
                 value={newDue}
                 onChange={(e) => setNewDue(e.target.value)}
                 style={{ height: 38, width: 140 }}

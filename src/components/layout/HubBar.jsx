@@ -127,23 +127,23 @@ export default function HubBar() {
       }
 
       let title = 'Real Time Offer';
-      let blurb = 'Live property auctions managed by CMP. Enter properties and monitor live buyer offers.';
+      let blurb = 'Real-Time Offers managed by CMP. Enter properties and monitor live buyer offers.';
 
       if (isNew) {
         title = 'Enter a property';
-        blurb = 'Submit an agency property for a Real Time Offer auction managed by CMP.';
+        blurb = 'Submit an agency property for a Real-Time Offer managed by CMP.';
       } else if (isDetail) {
-        title = 'Auction Desk';
-        blurb = 'Live auction countdown, buyer offers, agency approval and property details.';
+        title = 'Live Desk';
+        blurb = 'Live Real-Time Offer countdown, buyer offers, agency approval and property details.';
       } else if (isDesk) {
         title = 'Live Desk';
-        blurb = 'Every property of yours taking instant bids against a live countdown clock.';
+        blurb = 'Every property of yours taking instant offers against a live countdown clock.';
       } else if (isEntries) {
         title = 'Real Time Offer Entries';
-        blurb = 'Properties submitted by your agency for Real Time Offer auctions managed by CMP.';
+        blurb = 'Properties submitted by your agency for Real-Time Offers managed by CMP.';
       } else if (isResults) {
-        title = 'Auction Results';
-        blurb = 'Closed auctions, final sale prices and performance history.';
+        title = 'Real-Time Offer Results';
+        blurb = 'Closed Real-Time Offers, final sale prices and performance history.';
       } else if (isOffers) {
         title = 'Offers';
         blurb = 'Registered buyers, live offer activity, identity verification and 10% security deposit cheques.';

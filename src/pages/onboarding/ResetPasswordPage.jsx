@@ -4,8 +4,8 @@ import { KeyRound, Lock, Eye, EyeOff, AlertCircle, CheckCircle2, Loader2, ArrowR
 import { cmpConnectApi } from '../../services/cmpConnectApi';
 import OnboardingLayout from './OnboardingLayout';
 
-// Password rules: at least 6 characters, 1 uppercase letter, 1 special symbol (!@#$%^&*)
-const PASSWORD_REGEX = /^(?=.*[A-Z])(?=.*[!@#$%^&*]).{6,}$/;
+// Password rules: at least 8 characters, 1 uppercase letter, 1 special symbol (!@#$%^&*)
+const PASSWORD_REGEX = /^(?=.*[A-Z])(?=.*[!@#$%^&*]).{8,}$/;
 
 export default function ResetPasswordPage() {
   const { token } = useParams();
@@ -57,7 +57,7 @@ export default function ResetPasswordPage() {
     }
 
     if (!PASSWORD_REGEX.test(password)) {
-      setFormError('Password must be at least 6 characters, with at least 1 uppercase letter and 1 special character (!@#$%^&*).');
+      setFormError('Password must be at least 8 characters, with at least 1 uppercase letter and 1 special character (!@#$%^&*).');
       return;
     }
 
@@ -84,7 +84,7 @@ export default function ResetPasswordPage() {
       subtitle="Set a new password for your verified partner account."
       points={[
         "Single-use secure link with 1-hour expiration",
-        "At least 6 characters, 1 uppercase letter, 1 special character",
+        "At least 8 characters, 1 uppercase letter, 1 special character",
         "All previous sessions on other devices will be ended",
         "Sign in immediately once your new password is confirmed"
       ]}
@@ -197,7 +197,7 @@ export default function ResetPasswordPage() {
                 <input
                   id="reset-new-password"
                   type={showPassword ? 'text' : 'password'}
-                  placeholder="At least 6 characters"
+                  placeholder="At least 8 characters"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   disabled={isSubmitting}
@@ -225,7 +225,7 @@ export default function ResetPasswordPage() {
                 </button>
               </div>
               <p className="faint" style={{ margin: '4px 0 0', fontSize: '11.5px' }}>
-                At least 6 characters, with 1 uppercase letter and 1 special symbol (!@#$%^&*).
+                At least 8 characters, with 1 uppercase letter and 1 special symbol (!@#$%^&*).
               </p>
             </div>
 

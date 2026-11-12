@@ -5,8 +5,8 @@ import { useApp } from '../../context/AppContext';
 import { cmpConnectApi } from '../../services/cmpConnectApi';
 import OnboardingLayout from './OnboardingLayout';
 
-// Password rules: at least 6 chars, 1 capital letter, 1 special char (!@#$%^&*)
-const PASSWORD_REGEX = /^(?=.*[A-Z])(?=.*[!@#$%^&*]).{6,}$/;
+// Password rules: at least 8 chars, 1 capital letter, 1 special char (!@#$%^&*)
+const PASSWORD_REGEX = /^(?=.*[A-Z])(?=.*[!@#$%^&*]).{8,}$/;
 
 export default function ChangePasswordPage() {
   const navigate = useNavigate();
@@ -35,7 +35,7 @@ export default function ChangePasswordPage() {
     }
 
     if (!PASSWORD_REGEX.test(newPassword)) {
-      setError('New password must be at least 6 characters, with at least 1 uppercase letter and 1 special character (!@#$%^&*).');
+      setError('New password must be at least 8 characters, with at least 1 uppercase letter and 1 special character (!@#$%^&*).');
       return;
     }
 
@@ -84,7 +84,7 @@ export default function ChangePasswordPage() {
       subtitle="Update your password to activate your CMP Connect account."
       points={[
         "Mandatory one-time password update for new partner accounts",
-        "At least 6 characters, 1 uppercase letter, 1 special character",
+        "At least 8 characters, 1 uppercase letter, 1 special character",
         "Your old temporary password will immediately expire",
         "Direct access to your CMP Connect workspace upon confirmation"
       ]}
@@ -160,7 +160,7 @@ export default function ChangePasswordPage() {
                 id="cp-new"
                 type={showNewPassword ? 'text' : 'password'}
                 autoComplete="new-password"
-                placeholder="At least 6 chars, 1 uppercase, 1 special char"
+                placeholder="At least 8 chars, 1 uppercase, 1 special char"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 disabled={loading}

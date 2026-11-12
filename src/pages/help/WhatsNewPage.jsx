@@ -65,7 +65,7 @@ export default function WhatsNewPage() {
       title: 'Security cheques on Real Time Offer',
       date: '2 Sep 2026',
       badge: 'Real Time Offer',
-      description: 'Bidders now lodge a 10% security cheque instead of a deposit. Track every physical and digital cheque from received to returned in the Cheque Vault.',
+      description: 'Buyers now lodge a 10% security cheque instead of a deposit. Track every physical and digital cheque from received to returned in the Cheque Vault.',
       link: '/rto/cheques',
       actionText: 'Open cheques',
       helpfulCount: 9,

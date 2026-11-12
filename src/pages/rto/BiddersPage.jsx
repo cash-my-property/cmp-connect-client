@@ -191,7 +191,7 @@ const initialMergedOffers = [
   {
     id: 'of-8',
     name: 'Daniel Brooks',
-    buyerTag: 'Buyer 5 · winning bidder',
+    buyerTag: 'Buyer 5 · winning buyer',
     email: 'daniel@example.co.uk',
     phone: '+971 55 120 4455',
     propertyId: 'CMP-L-004098',
@@ -269,7 +269,7 @@ const initialMergedOffers = [
   {
     id: 'of-11',
     name: 'Chloe Martin',
-    buyerTag: 'Buyer 2 · winning bidder',
+    buyerTag: 'Buyer 2 · winning buyer',
     email: 'chloe@example.uk',
     phone: '+971 52 601 8840',
     propertyId: 'CMP-L-004051',
@@ -567,7 +567,7 @@ export default function BiddersPage() {
     setRows((prev) =>
       prev.map((r) => (r.id === id ? { ...r, status: 'approved' } : r))
     );
-    showNotice(`Bidder ${name} has been approved to place offers.`);
+    showNotice(`Buyer ${name} has been approved to make offers.`);
   };
 
   const handleDecline = (id, name) => {
@@ -1050,7 +1050,7 @@ export default function BiddersPage() {
         <table className="data">
           <thead>
             <tr>
-              <th>Buyer / Bidder</th>
+              <th>Buyer</th>
               <th>Property</th>
               <th>Latest offer</th>
               <th>Identity</th>

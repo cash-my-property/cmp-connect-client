@@ -12,20 +12,23 @@ import {
 } from 'lucide-react';
 
 export default function AskCmpDrawer() {
-  const { isAssistantOpen, setIsAssistantOpen } = useApp();
-  const [messages, setMessages] = useState([
-    {
-      sender: 'cmp',
-      text: 'Salam Layla! I am your CMP Connect Assistant. How can I assist your agency today?'
-    }
-  ]);
+  const { isAssistantOpen, setIsAssistantOpen, account, isLiveData } = useApp();
+  const [messages, setMessages] = useState([]);
   const [inputVal, setInputVal] = useState('');
+
+  // Greeting follows the signed-in user (account loads after mount, so it is derived, not stored)
+  const firstName = (account?.fullName || account?.firstName || '').trim().split(' ')[0] || (isLiveData ? '' : 'Layla');
+  const greeting = {
+    sender: 'cmp',
+    text: `Salam${firstName ? ` ${firstName}` : ''}! I am your CMP Connect Assistant. How can I assist your agency today?`
+  };
+  const thread = [greeting, ...messages];
 
   const quickPrompts = [
     'How do I lift my listing quality score to 90+?',
-    'What happens when a Real Time Offer clock ends?',
+    'What happens when a Real-Time Offer clock ends?',
     'How do I renew an expired DLD permit?',
-    'Explain the 10% bidder security cheque policy.'
+    'Explain the 10% buyer security cheque policy.'
   ];
 
   const handleSend = (userText) => {
@@ -38,21 +41,21 @@ export default function AskCmpDrawer() {
 
     setTimeout(() => {
       let botResponse =
-        "I'm here to help you navigate Cash My Property's agency portal! Check the Compliance tab for permit issues or the Live Desk for auction management.";
+        "I'm here to help you navigate Cash My Property's agency portal! Check the Compliance tab for permit issues or the Live Desk to manage Real-Time Offers.";
 
       const lower = textToSend.toLowerCase();
       if (lower.includes('quality') || lower.includes('score')) {
         botResponse =
           'To achieve a 90+ Quality Score: upload at least 8 high-res photos, write a 300+ word description, add a verified DLD permit number, pin the exact building on the map, and specify the built-up area.';
-      } else if (lower.includes('clock') || lower.includes('real time') || lower.includes('offer')) {
+      } else if (lower.includes('clock') || lower.includes('real time') || lower.includes('real-time') || lower.includes('offer')) {
         botResponse =
-          'When the Real Time Offer clock reaches zero: if the highest bid is above the reserve price, the property is marked as Sold! For Reservation sales, the winning buyer has 28 days of exclusivity to exchange contracts.';
+          'When the Real-Time Offer clock reaches zero: if the highest offer is above the reserve price, the property is marked as Sold! For Reservation sales, the winning buyer has 28 days of exclusivity to exchange contracts.';
       } else if (lower.includes('permit') || lower.includes('dld')) {
         botResponse =
           'Under Dubai Land Department regulations, an active Trakheesi permit is mandatory for all advertising. Head to Properties > Compliance to upload renewal documents or update your RERA Form A.';
       } else if (lower.includes('cheque')) {
         botResponse =
-          'Every registered bidder lodges a 10% security cheque before being permitted to place offers. If they do not win, their cheque must be returned within 48 hours via Real Time Offer > Cheques.';
+          'Every registered buyer lodges a 10% security cheque before being permitted to make offers. If they do not win, their cheque must be returned within 48 hours via Real-Time Offer > Offers.';
       }
 
       setMessages((prev) => [...prev, { sender: 'cmp', text: botResponse }]);
@@ -150,7 +153,7 @@ export default function AskCmpDrawer() {
                 gap: '12px'
               }}
             >
-              {messages.map((m, idx) => (
+              {thread.map((m, idx) => (
                 <div
                   key={idx}
                   style={{
@@ -227,7 +230,7 @@ export default function AskCmpDrawer() {
             >
               <input
                 type="text"
-                placeholder="Ask about properties, permits, bids…"
+                placeholder="Ask about properties, permits, offers…"
                 value={inputVal}
                 onChange={(e) => setInputVal(e.target.value)}
                 style={{ height: '38px' }}

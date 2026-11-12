@@ -213,7 +213,7 @@ export default function ResultsPage() {
         <div>
           <h1 style={{ fontSize: '26px' }}>Results</h1>
           <p className="muted" style={{ margin: '6px 0 0', fontSize: '14px' }}>
-            Closed Real Time Offer auctions, final sale prices and buyer offer activity.
+            Closed Real-Time Offers, final sale prices and buyer offer activity.
           </p>
         </div>
 
@@ -316,7 +316,7 @@ export default function ResultsPage() {
             {filteredResults.length === 0 ? (
               <tr>
                 <td colSpan={8} style={{ textAlign: 'center', padding: '36px' }} className="muted">
-                  No closed auctions found for this filter.
+                  No closed Real-Time Offers found for this filter.
                 </td>
               </tr>
             ) : (

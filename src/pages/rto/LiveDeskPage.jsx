@@ -377,7 +377,7 @@ export default function LiveDeskPage() {
                 <tr>
                   <td colSpan={5} style={{ textAlign: 'center', padding: '48px 16px' }}>
                     <p style={{ margin: 0, fontWeight: 600, fontSize: '14px' }} className="muted">
-                      No active auctions on the desk
+                      No active Real-Time Offers on the desk
                     </p>
                     <p className="faint" style={{ margin: '4px 0 0', fontSize: '12px' }}>
                       {isLiveData

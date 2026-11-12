@@ -427,7 +427,7 @@ export default function AgentSummaryPage() {
               </div>
               <p className="muted" style={{ margin: '0 0 16px', fontSize: '13.5px' }}>
                 {agent.brn ? `BRN: ${agent.brn} · ` : ''}
-                {agent.role || 'Agent'} · Real Time Offer Auction Summary
+                {agent.role || 'Agent'} · Real-Time Offer Summary
               </p>
 
               <div className="row" style={{ gap: '20px', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -457,7 +457,7 @@ export default function AgentSummaryPage() {
                     {agent.realTimeOffer?.sold ?? 0}
                   </span>
                   <span className="faint" style={{ display: 'block', fontSize: '12px' }}>
-                    Auctions sold
+                    Properties sold
                   </span>
                 </div>
                 <div style={{ height: '32px', width: '1px', background: 'var(--cmp-border)' }} />
@@ -528,7 +528,7 @@ export default function AgentSummaryPage() {
               <div>
                 <h2 style={{ fontSize: '16px', margin: 0 }}>Real Time Offer performance</h2>
                 <p className="muted" style={{ margin: '2px 0 0', fontSize: '12.5px' }}>
-                  Auction entries, live lots, sell-through rate and closed auction value.
+                  Real-Time Offer entries, live properties, sell-through rate and closed sale value.
                 </p>
               </div>
               <div className="row" style={{ gap: '8px' }}>
@@ -588,14 +588,14 @@ export default function AgentSummaryPage() {
                 <p style={{ margin: '4px 0 0', fontSize: '24px', fontWeight: 800 }}>
                   {agent.realTimeOffer?.sellThrough != null ? `${agent.realTimeOffer.sellThrough}%` : '—'}
                 </p>
-                <span className="faint" style={{ fontSize: '11px' }}>Of closed auctions</span>
+                <span className="faint" style={{ fontSize: '11px' }}>Of closed Real-Time Offers</span>
               </div>
               <div className="card" style={{ padding: '14px 16px', background: 'var(--cmp-surface-sunken)' }}>
                 <span className="faint" style={{ fontSize: '11px', textTransform: 'uppercase', fontWeight: 700 }}>Sold value</span>
                 <p style={{ margin: '4px 0 0', fontSize: '22px', fontWeight: 800, color: 'var(--cmp-brand)' }}>
                   {agent.realTimeOffer?.soldValue != null ? formatVolume(agent.realTimeOffer.soldValue) : '—'}
                 </p>
-                <span className="faint" style={{ fontSize: '11px' }}>Total auction volume</span>
+                <span className="faint" style={{ fontSize: '11px' }}>Total Real-Time Offer volume</span>
               </div>
             </div>
           </section>

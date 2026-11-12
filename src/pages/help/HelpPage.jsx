@@ -62,7 +62,7 @@ export default function HelpPage() {
       steps: [
         'Check your credits expiry dates (30-day rollover balance)',
         'Activate Smart Boost on units with 80+ quality score',
-        'Bid on Community Spotlight slots during peak weekend traffic'
+        'Make offers on Community Spotlight slots during peak weekend traffic'
       ],
       link: '/growth/smart-boost'
     },

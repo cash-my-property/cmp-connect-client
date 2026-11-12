@@ -48,7 +48,7 @@ const mapLiveNotification = (n) => {
 // Live prefs: 5 categories × 2 channels
 const PREF_CATEGORIES = [
   { key: 'leads', label: 'Leads & enquiries', hint: 'New enquiries and lead updates.' },
-  { key: 'rto', label: 'Real Time Offer', hint: 'Auction starts, bids and results.' },
+  { key: 'rto', label: 'Real Time Offer', hint: 'Real-Time Offer starts, new offers and results.' },
   { key: 'listings', label: 'Listings', hint: 'Verification, permits and listing status.' },
   { key: 'transactions', label: 'Transactions', hint: 'Deals and payments on your listings.' },
   { key: 'team', label: 'Team', hint: 'Invites, verification and member changes.' }
@@ -109,7 +109,7 @@ const initialNotifications = [
     category: 'Community Spotlight, Community Spotlight',
     dateTime: '12 Sep 2026, 11:40 AM',
     title: 'Spotlight window open',
-    description: 'Bidding is open for Dubai Marina, Downtown Dubai and 5 more communities.',
+    description: 'Spotlight offers are open for Dubai Marina, Downtown Dubai and 5 more communities.',
     link: '/growth/spotlight',
     unread: true
   },
@@ -607,9 +607,9 @@ export default function NotificationsPage() {
 
             <label className="row" style={{ justifyContent: 'space-between', cursor: 'pointer', margin: 0 }}>
               <div>
-                <span style={{ fontWeight: 600, fontSize: '14px' }}>Real Time Offer bid notifications</span>
+                <span style={{ fontWeight: 600, fontSize: '14px' }}>Real-Time Offer notifications</span>
                 <span className="faint" style={{ display: 'block', fontSize: '12px' }}>
-                  Alert when a new bid is placed or clock extended.
+                  Alert when a new offer is made or the clock is extended.
                 </span>
               </div>
               <input

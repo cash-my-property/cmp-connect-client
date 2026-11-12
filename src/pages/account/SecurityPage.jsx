@@ -22,7 +22,7 @@ import {
 import { useApp } from '../../context/AppContext';
 import { cmpConnectApi, getDeviceId } from '../../services/cmpConnectApi';
 
-const PASSWORD_REGEX = /^(?=.*[A-Z])(?=.*[!@#$%^&*]).{6,}$/;
+const PASSWORD_REGEX = /^(?=.*[A-Z])(?=.*[!@#$%^&*]).{8,}$/;
 
 export default function SecurityPage() {
   const { agency, authToken, updateToken, isLiveData, account, can } = useApp();
@@ -161,7 +161,7 @@ export default function SecurityPage() {
     }
 
     if (!PASSWORD_REGEX.test(newPassword)) {
-      setPasswordError('Password must be at least 6 characters, with at least 1 uppercase letter and 1 special character (!@#$%^&*).');
+      setPasswordError('Password must be at least 8 characters, with at least 1 uppercase letter and 1 special character (!@#$%^&*).');
       return;
     }
 
@@ -361,7 +361,7 @@ export default function SecurityPage() {
               <div style={{ position: 'relative' }}>
                 <input
                   type={showNew ? 'text' : 'password'}
-                  placeholder="At least 6 characters"
+                  placeholder="At least 8 characters"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   style={{ width: '100%', height: '40px', paddingRight: '40px' }}
@@ -387,7 +387,7 @@ export default function SecurityPage() {
                 </button>
               </div>
               <p className="faint" style={{ margin: '4px 0 0', fontSize: '11.5px' }}>
-                Must be at least 6 characters, with 1 uppercase letter and 1 special symbol (!@#$%^&*).
+                Must be at least 8 characters, with 1 uppercase letter and 1 special symbol (!@#$%^&*).
               </p>
             </div>
 

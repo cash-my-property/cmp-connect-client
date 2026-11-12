@@ -422,7 +422,7 @@ export default function RtoDetailPage() {
             className="btn btn-outline btn-sm"
             onClick={() => loadData(true)}
             disabled={isRefreshing}
-            title="Refresh latest bids & clock"
+            title="Refresh latest offers & clock"
           >
             <RefreshCw size={14} className={isRefreshing ? 'spin' : ''} />
             <span>{isRefreshing ? 'Updating…' : 'Refresh'}</span>
@@ -781,7 +781,7 @@ export default function RtoDetailPage() {
                 <div className="row" style={{ gap: '8px', alignItems: 'center', marginBottom: '6px' }}>
                   <span className="cmp-live-dot" />
                   <span style={{ fontWeight: 800, fontSize: '13px', letterSpacing: '0.05em', color: 'var(--cmp-success)', textTransform: 'uppercase' }}>
-                    Live 7-Day Auction
+                    Live 7-Day Real-Time Offer
                   </span>
                   {auction.extensionCount > 0 && (
                     <span className="badge badge-accent" style={{ fontSize: '11px' }}>
@@ -936,7 +936,7 @@ export default function RtoDetailPage() {
               </span>
             </div>
             <p className="muted" style={{ margin: '4px 0 0', fontSize: '13.5px' }}>
-              Submitted to CMP moderation. Once verified and scheduled, the live auction will commence automatically.
+              Submitted to CMP moderation. Once verified and scheduled, the Real-Time Offer will start automatically.
             </p>
           </div>
         )}
@@ -957,7 +957,7 @@ export default function RtoDetailPage() {
               </span>
             </div>
             <p className="muted" style={{ margin: '4px 0 0', fontSize: '13.5px' }}>
-              Legal documents and permits have passed moderation. CMP operations is finalizing the auction schedule.
+              Legal documents and permits have passed moderation. CMP operations is finalizing the Real-Time Offer schedule.
             </p>
           </div>
         )}
@@ -978,7 +978,7 @@ export default function RtoDetailPage() {
               </span>
             </div>
             <p className="muted" style={{ margin: '4px 0 0', fontSize: '13.5px' }}>
-              Buyers in the CMP mobile app can review the property prospectus and sign auction contracts in advance.
+              Buyers in the CMP mobile app can review the property prospectus and sign offer contracts in advance.
             </p>
           </div>
         )}
@@ -999,7 +999,7 @@ export default function RtoDetailPage() {
               </span>
             </div>
             <p className="muted" style={{ margin: '4px 0 0', fontSize: '13.5px' }}>
-              The auction has been temporarily paused by CMP administration. Remaining duration ({formatCountdown(auction.remainingMs || 0)}) is preserved.
+              This Real-Time Offer has been temporarily paused by CMP administration. Remaining duration ({formatCountdown(auction.remainingMs || 0)}) is preserved.
             </p>
           </div>
         )}
@@ -1041,7 +1041,7 @@ export default function RtoDetailPage() {
               </span>
             </div>
             <p className="muted" style={{ margin: '4px 0 0', fontSize: '13.5px' }}>
-              The 7-day bidding window ended without receiving bids. CMP can relist it with updated starting terms.
+              The 7-day offer window ended without receiving offers. CMP can relist it with updated starting terms.
             </p>
           </div>
         )}
@@ -1268,7 +1268,7 @@ export default function RtoDetailPage() {
                   No offers placed yet
                 </p>
                 <p className="faint" style={{ margin: '4px 0 0', fontSize: '12px' }}>
-                  Offers from pre-qualified buyers will appear live here during the 7-day auction.
+                  Offers from pre-qualified buyers will appear live here during the 7-day Real-Time Offer.
                 </p>
               </div>
             ) : (

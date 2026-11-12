@@ -114,7 +114,7 @@ export default function CommunitySpotlightPage() {
           : l
       )
     );
-    showNotice(`Bid of ${amount} credits placed for ${biddingLot.community} (${biddingLot.offering}).`);
+    showNotice(`Offer of ${amount} credits made for ${biddingLot.community} (${biddingLot.offering}).`);
     setBiddingLot(null);
     setBidAmount('');
   };
@@ -128,7 +128,7 @@ export default function CommunitySpotlightPage() {
       <div style={{ marginBottom: '18px' }}>
         <h1 style={{ fontSize: '26px' }}>Community Spotlight</h1>
         <p className="muted" style={{ margin: '6px 0 0', fontSize: '14px', maxWidth: '820px' }}>
-          Win the top spot in a community’s search results for a month. The highest bid when the window closes wins; everyone else gets their credits back.
+          Win the top spot in a community’s search results for a month. The highest offer when the window closes wins; everyone else gets their credits back.
         </p>
       </div>
 
@@ -162,7 +162,7 @@ export default function CommunitySpotlightPage() {
 
         <div className="card" style={{ padding: '18px' }}>
           <p className="row muted" style={{ margin: 0, gap: '8px', fontSize: '13px', fontWeight: 600 }}>
-            <Star size={16} /> Your active bids
+            <Star size={16} /> Your active offers
           </p>
           <p style={{ margin: '8px 0 0', fontSize: '26px', fontWeight: 800 }}>
             {isLiveData ? 0 : activeBidsCount}
@@ -190,8 +190,8 @@ export default function CommunitySpotlightPage() {
               <th>Community</th>
               <th>Offering</th>
               <th>Searches a month</th>
-              <th>Leading bid</th>
-              <th>Your bid</th>
+              <th>Leading offer</th>
+              <th>Your offer</th>
               <th>Window closes</th>
               <th style={{ textAlign: 'end' }}>Action</th>
             </tr>
@@ -200,7 +200,7 @@ export default function CommunitySpotlightPage() {
             {lots.length === 0 ? (
               <tr>
                 <td colSpan="7" style={{ textAlign: 'center', padding: '36px' }} className="muted">
-                  No active community spotlight auctions available at this time.
+                  No community spotlight placements are open right now.
                 </td>
               </tr>
             ) : (
@@ -223,7 +223,7 @@ export default function CommunitySpotlightPage() {
                       </>
                     ) : (
                       <>
-                        <span className="muted">No bids yet</span>
+                        <span className="muted">No offers yet</span>
                         <span className="faint" style={{ display: 'block', fontSize: '12px' }}>
                           Minimum {lot.minBid}
                         </span>
@@ -249,7 +249,7 @@ export default function CommunitySpotlightPage() {
                       className="btn btn-primary btn-sm"
                       onClick={() => handleOpenBidModal(lot)}
                     >
-                      {lot.yourBid ? 'Increase bid' : 'Place bid'}
+                      {lot.yourBid ? 'Increase offer' : 'Make an offer'}
                     </button>
                   </td>
                 </tr>
@@ -285,7 +285,7 @@ export default function CommunitySpotlightPage() {
           >
             <div className="row" style={{ justifyContent: 'space-between', marginBottom: '14px' }}>
               <h2 style={{ fontSize: '18px', margin: 0 }}>
-                Bid for {biddingLot.community}
+                Offer for {biddingLot.community}
               </h2>
               <button
                 type="button"
@@ -303,7 +303,7 @@ export default function CommunitySpotlightPage() {
 
             <form onSubmit={handleConfirmBid} style={{ display: 'grid', gap: '14px' }}>
               <div>
-                <label>Bid amount (Credits)</label>
+                <label>Offer amount (Credits)</label>
                 <input
                   type="number"
                   required
@@ -313,7 +313,7 @@ export default function CommunitySpotlightPage() {
                   style={{ width: '100%', height: '40px', fontSize: '15px', fontWeight: 700 }}
                 />
                 <p className="faint" style={{ margin: '4px 0 0', fontSize: '12px' }}>
-                  Minimum required bid is {biddingLot.minBid} credits.
+                  Minimum offer is {biddingLot.minBid} credits.
                 </p>
               </div>
 
@@ -326,7 +326,7 @@ export default function CommunitySpotlightPage() {
                   Cancel
                 </button>
                 <button type="submit" className="btn btn-primary">
-                  Confirm bid
+                  Confirm offer
                 </button>
               </div>
             </form>

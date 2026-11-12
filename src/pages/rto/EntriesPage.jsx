@@ -319,7 +319,7 @@ export default function EntriesPage() {
             Real Time Offer Entries
           </h1>
           <p className="muted" style={{ margin: '4px 0 0', fontSize: '14px' }}>
-            Properties submitted by your agency for Real Time Offer auctions (3, 7, 10 or 14 days) managed by CMP.
+            Properties submitted by your agency for Real-Time Offers (3, 7, 10 or 14 days) managed by CMP.
           </p>
         </div>
 
@@ -476,7 +476,7 @@ export default function EntriesPage() {
           <p className="muted" style={{ margin: '6px auto 16px', maxWidth: '400px', fontSize: '13.5px' }}>
             {activeFilter !== 'all'
               ? `There are currently no properties matching the "${activeFilter}" filter.`
-              : 'Your agency has not submitted any properties for Real Time Offer auctions yet.'}
+              : 'Your agency has not submitted any properties for Real-Time Offers yet.'}
           </p>
           {(!account || can('listings.create')) && (
             <NavLink to="/rto/new" className="btn btn-accent btn-sm">

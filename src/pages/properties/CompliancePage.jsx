@@ -21,6 +21,9 @@ import {
   X
 } from 'lucide-react';
 
+// Listings off the market do not need a permit or Form A on file
+const COMPLIANCE_EXEMPT_STATUSES = ['ARCHIVED', 'CLOSED'];
+
 export default function CompliancePage() {
   const { isLiveData, authToken } = useApp();
   const navigate = useNavigate();
@@ -356,8 +359,11 @@ export default function CompliancePage() {
 
       // Extract Form A document if available
       const docs = Array.isArray(l.documents) ? l.documents : [];
-      const formADoc = docs.find((d) => d.key === 'propertyFormA' || d.key === 'formA' || (d.label && d.label.toLowerCase().includes('form a')));
+      const formADoc = docs.find((d) => ['contractA', 'propertyFormA', 'formA'].includes(d.key) || (d.label && d.label.toLowerCase().includes('form a')));
       const trakheesiDoc = docs.find((d) => d.key === 'propertyTrakheesi' || (d.label && d.label.toLowerCase().includes('trakheesi')));
+      // Archived / closed listings are off the market; every other listing needs its permit and Form A,
+      // drafts included, so the score never reads 100% while documents are missing.
+      const needsDocs = !COMPLIANCE_EXEMPT_STATUSES.includes(status);
 
       // Permit status logic
       let permitStatus = 'Not on file';
@@ -368,12 +374,14 @@ export default function CompliancePage() {
       } else if (status === 'LIVE') {
         permitStatus = 'Missing (Live listing!)';
         permitSeverity = 'danger';
+      } else if (needsDocs) {
+        permitSeverity = 'warning';
       }
 
       // Form A status logic
       let formAFileName = formADoc?.fileName || (formADoc?.url ? 'form-a-agreement.pdf' : null);
       let formAStatus = formAFileName ? 'Valid on file' : 'Not on file';
-      let formASeverity = formAFileName ? 'success' : (status === 'LIVE' || status === 'PENDING_APPROVAL' ? 'warning' : 'muted');
+      let formASeverity = formAFileName ? 'success' : (needsDocs ? 'warning' : 'muted');
 
       const hasProblem = permitSeverity === 'danger' || permitSeverity === 'warning' || formASeverity === 'danger' || formASeverity === 'warning' || status === 'REJECTED';
 
@@ -469,7 +477,9 @@ export default function CompliancePage() {
     const expiringIn30Days = processedProperties.filter((p) => p.permitSeverity === 'warning' || p.formASeverity === 'warning').length +
       processedAgents.filter((a) => a.severity === 'warning').length;
 
-    const formAExpiredOrMissing = processedProperties.filter((p) => (p.status === 'LIVE' || p.status === 'PENDING_APPROVAL') && !p.formAFileName).length;
+    const formAExpiredOrMissing = processedProperties.filter(
+      (p) => !COMPLIANCE_EXEMPT_STATUSES.includes(p.status) && (!p.formAFileName || p.formASeverity === 'danger')
+    ).length;
 
     return {
       compliancePercent,

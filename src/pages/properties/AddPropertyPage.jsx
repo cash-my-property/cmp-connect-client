@@ -91,7 +91,7 @@ export default function AddPropertyPage() {
     listedBy: '',
 
     // Step 2
-    propertyLocation: 'Dubai Marina, Dubai',
+    propertyLocation: '',
     propertyLatitude: 25.08,
     propertyLongitude: 55.14,
 
@@ -99,8 +99,8 @@ export default function AddPropertyPage() {
     propertyArea: '',
     propertyAreaUnit: 'sqft',
     propertyBuiltUpArea: '',
-    propertyBedrooms: '2',
-    propertyBathrooms: '2',
+    propertyBedrooms: '',
+    propertyBathrooms: '',
     unitNumber: '',
     parkingSpaces: '1',
     furnishingStatus: 'SEMI',
@@ -1198,6 +1198,7 @@ export default function AddPropertyPage() {
                         value={formData.propertyBedrooms}
                         onChange={(e) => setFormData({ ...formData, propertyBedrooms: e.target.value })}
                       >
+                        <option value="">Select bedrooms</option>
                         {['0', '1', '2', '3', '4', '5', '6', '7+'].map((b) => (
                           <option key={b} value={b}>
                             {b === '0' ? 'Studio' : `${b} Bedroom`}
@@ -1216,6 +1217,7 @@ export default function AddPropertyPage() {
                         value={formData.propertyBathrooms}
                         onChange={(e) => setFormData({ ...formData, propertyBathrooms: e.target.value })}
                       >
+                        <option value="">Select bathrooms</option>
                         {['1', '2', '3', '4', '5', '6+'].map((b) => (
                           <option key={b} value={b}>
                             {b} Bathroom
@@ -1352,7 +1354,9 @@ export default function AddPropertyPage() {
               </div>
 
               <div>
-                <label>Internal Reference Number (Optional)</label>
+                <label>
+                  Internal Reference Number <span style={{ color: 'var(--cmp-danger)' }}>*</span>
+                </label>
                 <input
                   placeholder="e.g. MG-2104"
                   value={formData.referenceNumber}

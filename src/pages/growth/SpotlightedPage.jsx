@@ -132,7 +132,7 @@ export default function SpotlightedPage() {
             </span>
           </h1>
           <p className="muted" style={{ margin: '6px 0 0', fontSize: '14px', maxWidth: '820px' }}>
-            Listings pinned at the top of a community search results. Bid for a community spotlight placement.
+            Listings pinned at the top of a community’s search results. Make an offer for a community spotlight placement.
           </p>
         </div>
 
@@ -153,11 +153,11 @@ export default function SpotlightedPage() {
             type="button"
             className="btn btn-accent btn-sm"
             disabled={!biddingAvailable}
-            title={!biddingAvailable ? 'Spotlight bidding will activate with Wallet Credits' : 'Bid now'}
+            title={!biddingAvailable ? 'Spotlight offers will open with Wallet Credits' : 'Make an offer'}
             style={{ opacity: !biddingAvailable ? 0.6 : 1, cursor: !biddingAvailable ? 'not-allowed' : 'pointer' }}
           >
             <Sparkles size={14} />
-            <span>Bid for a community</span>
+            <span>Make an offer for a community</span>
           </button>
         </div>
       </div>
@@ -219,7 +219,7 @@ export default function SpotlightedPage() {
           </div>
           <h2 style={{ fontSize: '20px', fontWeight: 700, margin: 0 }}>No spotlight listings yet</h2>
           <p className="muted" style={{ margin: 0, maxWidth: '520px', fontSize: '14px', lineHeight: 1.5 }}>
-            When you place a bid on a community, your selected property will appear here with live position, ranking, and search impressions.
+            When you make an offer on a community, your selected property will appear here with live position, ranking, and search impressions.
           </p>
         </div>
       </div>
@@ -380,7 +380,7 @@ export default function SpotlightedPage() {
                             className="btn btn-outline btn-sm"
                             disabled={!biddingAvailable}
                             style={{ height: '32px', padding: '0 12px', opacity: !biddingAvailable ? 0.6 : 1 }}
-                            title="Bidding will activate with Wallet Credits"
+                            title="Offers will open with Wallet Credits"
                           >
                             <span>Spotlight</span>
                           </button>

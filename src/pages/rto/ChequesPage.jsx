@@ -151,7 +151,7 @@ const initialCheques = [
   {
     id: 'ch9',
     bidderName: 'Daniel Brooks',
-    bidderTag: 'Buyer 5 · winning bidder',
+    bidderTag: 'Buyer 5 · winning buyer',
     propertyTitle: 'One bed in The Address Residences',
     propertyRef: 'CMP-L-004098',
     propertyOpening: '10% of AED 1.9M opening offer',
@@ -205,7 +205,7 @@ const initialCheques = [
   {
     id: 'ch12',
     bidderName: 'Chloe Martin',
-    bidderTag: 'Buyer 2 · winning bidder',
+    bidderTag: 'Buyer 2 · winning buyer',
     propertyTitle: 'Canal view three bed with study',
     propertyRef: 'CMP-L-004051',
     propertyOpening: '10% of AED 2.9M opening offer',
@@ -362,7 +362,7 @@ export default function ChequesPage() {
       <div style={{ marginBottom: '20px' }}>
         <h1 style={{ fontSize: '26px' }}>Cheques</h1>
         <p className="muted" style={{ margin: '6px 0 0', fontSize: '14px', maxWidth: '760px' }}>
-          Cash My Property takes no deposit. Each bidder lodges a security cheque for 10% of the property’s opening offer. Cheques go back once offers close, and the winner’s is only cashed if they fail to complete the sale.
+          Cash My Property takes no deposit. Each buyer lodges a security cheque for 10% of the property’s opening offer. Cheques go back once offers close, and the winner’s is only cashed if they fail to complete the sale.
         </p>
       </div>
 
@@ -490,7 +490,7 @@ export default function ChequesPage() {
         <table className="data">
           <thead>
             <tr>
-              <th>Bidder</th>
+              <th>Buyer</th>
               <th>Property</th>
               <th style={{ textAlign: 'end' }}>Amount</th>
               <th>Cheque</th>

@@ -302,7 +302,7 @@ function TeamContent() {
           </h1>
           <p className="muted" style={{ margin: '6px 0 0', fontSize: '14px', maxWidth: '820px' }}>
             {isRto
-              ? 'Agents ranked by Real Time Offer properties sold, total sold value and active auctions on the desk.'
+              ? 'Agents ranked by Real Time Offer properties sold, total sold value and active Real-Time Offers on the desk.'
               : 'Agents climb from Rising to Pro to Elite by answering fast, keeping listings accurate and closing deals.'}
           </p>
         </div>
@@ -326,7 +326,7 @@ function TeamContent() {
             </p>
             <p className="faint" style={{ margin: '2px 0 0', fontSize: '13px' }}>
               {isRto
-                ? 'Sorted by auctions sold, total sold value and live entries'
+                ? 'Sorted by properties sold, total sold value and live entries'
                 : 'Performance calculated for the previous 30 days'}
               {dataAsOf
                 ? ` · Updated ${new Date(dataAsOf).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`

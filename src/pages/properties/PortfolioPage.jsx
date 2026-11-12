@@ -607,6 +607,11 @@ export default function PortfolioPage() {
     }
   };
 
+  // A bulk action is offered only when at least one selected listing allows it (server sends `can` per row)
+  const selectedListings = displayListings.filter((l) => selectedListingIds.has(l.id));
+  const bulkCan = (action) =>
+    !isBulkLoading && selectedListings.some((l) => (l.can ? Boolean(l.can[action]) : true));
+
   const handleBulkAction = async (action, agentId = null) => {
     if (selectedListingIds.size === 0) return;
     const ids = Array.from(selectedListingIds);
@@ -1090,7 +1095,7 @@ export default function PortfolioPage() {
             {can('listings.publish') && (
               <button
                 type="button"
-                disabled={selectedListingIds.size === 0 || isBulkLoading}
+                disabled={!bulkCan('publish')}
                 className="btn btn-sm"
                 style={{ background: 'var(--cmp-success)', color: '#FFF' }}
                 onClick={() => handleBulkAction('publish')}
@@ -1101,7 +1106,7 @@ export default function PortfolioPage() {
             {can('listings.unpublish') && (
               <button
                 type="button"
-                disabled={selectedListingIds.size === 0 || isBulkLoading}
+                disabled={!bulkCan('unpublish')}
                 className="btn btn-sm btn-outline"
                 style={{ borderColor: 'rgba(255,255,255,0.4)', color: '#FFF' }}
                 onClick={() => handleBulkAction('unpublish')}
@@ -1112,7 +1117,7 @@ export default function PortfolioPage() {
             {can('listings.update') && (
               <button
                 type="button"
-                disabled={selectedListingIds.size === 0 || isBulkLoading}
+                disabled={!bulkCan('refresh')}
                 className="btn btn-sm btn-outline"
                 style={{ borderColor: 'rgba(255,255,255,0.4)', color: '#FFF' }}
                 onClick={() => handleBulkAction('refresh')}
@@ -1123,7 +1128,7 @@ export default function PortfolioPage() {
             {can('listings.assign') && (
               <button
                 type="button"
-                disabled={selectedListingIds.size === 0 || isBulkLoading}
+                disabled={!bulkCan('assign')}
                 className="btn btn-sm btn-outline"
                 style={{ borderColor: 'rgba(255,255,255,0.4)', color: '#FFF' }}
                 onClick={() => setBulkAssignModal({ isOpen: true, agentId: '' })}
@@ -1134,7 +1139,7 @@ export default function PortfolioPage() {
             {can('listings.archive') && (
               <button
                 type="button"
-                disabled={selectedListingIds.size === 0 || isBulkLoading}
+                disabled={!bulkCan('archive')}
                 className="btn btn-sm btn-outline"
                 style={{ borderColor: 'rgba(255,255,255,0.4)', color: '#FFF' }}
                 onClick={() => handleBulkAction('archive')}
@@ -1145,7 +1150,7 @@ export default function PortfolioPage() {
             {can('listings.archive') && (
               <button
                 type="button"
-                disabled={selectedListingIds.size === 0 || isBulkLoading}
+                disabled={!bulkCan('restore')}
                 className="btn btn-sm btn-outline"
                 style={{ borderColor: 'rgba(255,255,255,0.4)', color: '#FFF' }}
                 onClick={() => handleBulkAction('restore')}
@@ -1156,7 +1161,7 @@ export default function PortfolioPage() {
             {can('listings.delete') && (
               <button
                 type="button"
-                disabled={selectedListingIds.size === 0 || isBulkLoading}
+                disabled={!bulkCan('delete')}
                 className="btn btn-sm"
                 style={{ background: 'var(--cmp-danger)', color: '#FFF' }}
                 onClick={() => {

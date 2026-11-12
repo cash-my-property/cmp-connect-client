@@ -1587,7 +1587,7 @@ export default function EnterPropertyPage() {
                 5. Price and timing
               </h2>
               <p className="muted" style={{ margin: '0 0 20px', fontSize: '13.5px' }}>
-                Set the starting auction price and choose when offers open and how long they stay open.
+                Set the starting price and choose when offers open and how long they stay open.
               </p>
 
               <div style={{ marginBottom: '22px' }}>
@@ -1603,7 +1603,7 @@ export default function EnterPropertyPage() {
                   style={{ width: '100%', maxWidth: '360px', fontSize: '14px' }}
                 />
                 <span className="faint" style={{ fontSize: '11.5px', display: 'block', marginTop: '4px' }}>
-                  The auction starts at this exact price. No reserve price, no guide price, no buyer&apos;s fee.
+                  Offers start at this exact price. No reserve price, no guide price, no buyer&apos;s fee.
                 </span>
               </div>
 
@@ -2025,7 +2025,7 @@ export default function EnterPropertyPage() {
                     <p className="muted" style={{ margin: '2px 0 0', fontSize: '12.5px' }}>
                       {can('listings.approve')
                         ? 'As an agency approver, your entry goes straight to CMP review (AWAITING) and starts at the scheduled time once approved.'
-                        : 'Your entry will first be sent to your agency for approval (AGENCY_REVIEW). Once approved by your agency, CMP reviews and runs the auction.'}
+                        : 'Your entry will first be sent to your agency for approval (AGENCY_REVIEW). Once approved by your agency, CMP reviews it and runs the Real-Time Offer.'}
                     </p>
                   </div>
                 </div>

@@ -527,7 +527,8 @@ kbd {
 .assistant-launcher {
   position: fixed;
   right: 20px;
-  bottom: 104px;
+  /* Desktop: sit in the corner, inside the page's 96px bottom padding, so it never covers buttons mid-page */
+  bottom: 24px;
   z-index: 80;
   display: inline-flex;
   align-items: center;

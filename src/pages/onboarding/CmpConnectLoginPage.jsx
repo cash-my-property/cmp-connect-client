@@ -215,7 +215,7 @@ export default function CmpConnectLoginPage() {
       title="CMP Connect"
       subtitle="Sign in with your verified partner credentials."
       points={[
-        "Access real-time listings, auctions, and live desk",
+        "Access listings, Real-Time Offers and the live desk",
         "Direct property developer & brokerage pipeline management",
         "Compliance records, RERA verification, and wallet balances",
         "Official partner integration for UAE real estate"

@@ -58,7 +58,7 @@ export default function AcceptInvitePage() {
 
   // Validate password rules (matches backend change-password and set-password schema)
   const validatePassword = (pwd) => {
-    if (pwd.length < 6) return 'Password must be at least 6 characters.';
+    if (pwd.length < 8) return 'Password must be at least 8 characters.';
     if (!/[A-Z]/.test(pwd)) return 'Password must include at least one uppercase letter.';
     if (!/[!@#$%^&*]/.test(pwd)) return 'Password must include at least one special character (!@#$%^&*).';
     return null;
@@ -283,7 +283,7 @@ export default function AcceptInvitePage() {
                   </button>
                 </div>
                 <p className="faint" style={{ margin: '4px 0 0', fontSize: '11.5px' }}>
-                  At least 6 characters, one capital letter, and one symbol (!@#$%^&*).
+                  At least 8 characters, one capital letter, and one symbol (!@#$%^&*).
                 </p>
               </div>
 
