@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Coins, Star, Clock, X, Check } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import OfferingTabs, { matchesOffering } from '../../components/common/OfferingTabs';
 
 const initialSpotlightLots = [
   {
@@ -82,6 +83,9 @@ export default function CommunitySpotlightPage() {
   useEffect(() => {
     setLots(isLiveData ? [] : initialSpotlightLots);
   }, [isLiveData]);
+
+  const [offering, setOffering] = useState('all');
+  const visibleLots = lots.filter((l) => matchesOffering(offering, l.offering));
 
   const [biddingLot, setBiddingLot] = useState(null);
   const [bidAmount, setBidAmount] = useState('');
@@ -182,6 +186,11 @@ export default function CommunitySpotlightPage() {
         </div>
       </div>
 
+      {/* Offering: All / Sale / Rent */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '12px' }}>
+        <OfferingTabs value={offering} onChange={setOffering} />
+      </div>
+
       {/* Spotlight Lots Table */}
       <div className="card table-scroll">
         <table className="data">
@@ -197,14 +206,16 @@ export default function CommunitySpotlightPage() {
             </tr>
           </thead>
           <tbody>
-            {lots.length === 0 ? (
+            {visibleLots.length === 0 ? (
               <tr>
                 <td colSpan="7" style={{ textAlign: 'center', padding: '36px' }} className="muted">
-                  No community spotlight placements are open right now.
+                  {lots.length === 0
+                    ? 'No community spotlight placements are open right now.'
+                    : `No ${offering} placements are open right now.`}
                 </td>
               </tr>
             ) : (
-              lots.map((lot) => (
+              visibleLots.map((lot) => (
                 <tr key={lot.id}>
                   <td>
                     <strong>{lot.community}</strong>

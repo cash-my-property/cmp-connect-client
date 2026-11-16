@@ -4,6 +4,7 @@ import { useApp } from '../../context/AppContext';
 import cmpConnectApi from '../../services/cmpConnectApi';
 import { buildListingDocuments } from '../../utils/listingDocuments';
 import GooglePlacesLocationInput from '../../components/common/GooglePlacesLocationInput';
+import DescriptionCounter from '../../components/common/DescriptionCounter';
 import {
   Check,
   Building,
@@ -336,7 +337,8 @@ export default function AddPropertyPage() {
     }
     if (fieldName === 'unitNumber') {
       const forbiddenTypes = ['RESIDENTIAL_BUILDING', 'RESIDENTIAL_BULK', 'COMMERCIAL_BULK', 'FARM'];
-      return forbiddenTypes.includes(type) ? 'forbidden' : 'required';
+      // Unit number is optional on CMP Connect (server: CONNECT_OPTIONAL_FIELDS)
+      return forbiddenTypes.includes(type) ? 'forbidden' : 'optional';
     }
     if (fieldName === 'furnishingStatus') {
       const forbiddenTypes = ['COMMERCIAL_PLOT', 'COMMERCIAL_BULK', 'FARM'];
@@ -630,7 +632,8 @@ export default function AddPropertyPage() {
             parkingSpaces: formData.parkingSpaces ? Number(formData.parkingSpaces) : 0,
             furnishingStatus: furnRule !== 'forbidden' ? formData.furnishingStatus : null,
             availability: formData.availability,
-            referenceNumber: formData.referenceNumber || null
+            // No reference input: the listing's own CMP ID (CLID-…) is sent as its reference
+            ...(listingRef ? { referenceNumber: listingRef } : {})
           },
           authToken
         );
@@ -1130,6 +1133,7 @@ export default function AddPropertyPage() {
                   value={formData.propertyDescription}
                   onChange={(e) => setFormData({ ...formData, propertyDescription: e.target.value })}
                 />
+                <DescriptionCounter text={formData.propertyDescription} />
               </div>
             </div>
           )}
@@ -1302,7 +1306,6 @@ export default function AddPropertyPage() {
                   <div>
                     <label>
                       Unit Number (Confidential){' '}
-                      {getFieldRule('unitNumber') === 'required' && <span style={{ color: 'var(--cmp-danger)' }}>*</span>}
                     </label>
                     <input
                       placeholder="e.g. 2104"
@@ -1355,17 +1358,6 @@ export default function AddPropertyPage() {
                     <option value="Owner Occupied">Owner Occupied</option>
                   </select>
                 </div>
-              </div>
-
-              <div>
-                <label>
-                  Internal Reference Number <span style={{ color: 'var(--cmp-danger)' }}>*</span>
-                </label>
-                <input
-                  placeholder="e.g. MG-2104"
-                  value={formData.referenceNumber}
-                  onChange={(e) => setFormData({ ...formData, referenceNumber: e.target.value })}
-                />
               </div>
             </div>
           )}

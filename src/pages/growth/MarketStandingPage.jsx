@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { cmpConnectApi } from '../../services/cmpConnectApi';
+import OfferingTabs from '../../components/common/OfferingTabs';
 
 const MOCK_MARKET_DATA = {
   stats: {
@@ -376,41 +377,8 @@ export default function MarketStandingPage() {
             background: 'var(--cmp-surface-sunken)'
           }}
         >
-          {/* Offering Tabs */}
-          <div
-            style={{
-              display: 'inline-flex',
-              background: 'var(--cmp-surface)',
-              padding: '3px',
-              borderRadius: '8px',
-              border: '1px solid var(--cmp-border)'
-            }}
-          >
-            {[
-              { key: 'all', label: 'Rent and Sale' },
-              { key: 'sale', label: 'Sale' },
-              { key: 'rent', label: 'Rent' }
-            ].map((tab) => (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => setOfferingFilter(tab.key)}
-                style={{
-                  border: 'none',
-                  background: offeringFilter === tab.key ? 'var(--cmp-brand-subtle)' : 'transparent',
-                  color: offeringFilter === tab.key ? 'var(--cmp-brand)' : 'var(--cmp-text-muted)',
-                  fontWeight: offeringFilter === tab.key ? 700 : 500,
-                  fontSize: '12.5px',
-                  padding: '6px 14px',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease'
-                }}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
+          {/* Offering: All / Sale / Rent */}
+          <OfferingTabs value={offeringFilter} onChange={setOfferingFilter} />
 
           {/* Search Box */}
           <div style={{ position: 'relative', width: '260px' }}>

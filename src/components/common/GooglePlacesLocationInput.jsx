@@ -1,6 +1,24 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { MapPin, Loader2, X, AlertCircle } from 'lucide-react';
 
+// Pull the parts agents and buyers need (building › community › area › emirate) out of a geocode result.
+// Google's UAE data uses neighborhood / sublocality for communities and administrative_area_level_1 for the emirate.
+const extractPlaceDetails = (result, prediction) => {
+  const parts = result?.address_components || [];
+  const pick = (...types) => parts.find((p) => types.some((t) => p.types.includes(t)))?.long_name || null;
+  const emirate = pick('administrative_area_level_1') || pick('locality');
+  const community = pick('neighborhood', 'sublocality_level_1', 'sublocality');
+  const subCommunity = pick('sublocality_level_2');
+  const city = pick('locality');
+  // Building / project: a named premise, or the place name the agent picked (when it isn't the community itself)
+  const placeName = prediction?.structured_formatting?.main_text || null;
+  const building =
+    pick('premise', 'establishment', 'point_of_interest') ||
+    (placeName && ![community, subCommunity, city, emirate].includes(placeName) ? placeName : null);
+  const isPrecise = ['ROOFTOP', 'RANGE_INTERPOLATED'].includes(result?.geometry?.location_type);
+  return { building, community, subCommunity, city, emirate, isPrecise };
+};
+
 /**
  * Google Places Location Autocomplete & Geocoding Input
  * Automatically fetches suggestions on change and sets address + latitude/longitude coordinates.
@@ -21,6 +39,8 @@ export default function GooglePlacesLocationInput({
   const [isLoading, setIsLoading] = useState(false);
   const [isScriptLoaded, setIsScriptLoaded] = useState(false);
   const [scriptError, setScriptError] = useState(null);
+  // Building / community / emirate of the last picked suggestion (cleared when the text is edited)
+  const [placeDetails, setPlaceDetails] = useState(null);
 
   const containerRef = useRef(null);
   const inputRef = useRef(null);
@@ -198,6 +218,7 @@ export default function GooglePlacesLocationInput({
   const handleInputChange = (e) => {
     const text = e.target.value;
     setInputValue(text);
+    setPlaceDetails(null);
     onChange?.(text);
   };
 
@@ -222,18 +243,20 @@ export default function GooglePlacesLocationInput({
         const loc = results[0].geometry.location;
         const lat = Number(loc.lat().toFixed(6));
         const lng = Number(loc.lng().toFixed(6));
-
-        console.log('[GooglePlacesLocationInput] Location selected:', { address: fullAddress, lat, lng });
+        const details = extractPlaceDetails(results[0], prediction);
+        setPlaceDetails(details);
 
         onSelectLocation?.({
           address: fullAddress,
           lat,
           lng,
           placeId,
-          formattedAddress: results[0].formatted_address
+          formattedAddress: results[0].formatted_address,
+          ...details
         });
       } else {
         console.warn('[GooglePlacesLocationInput] Geocode failed:', status);
+        setPlaceDetails(null);
         onSelectLocation?.({ address: fullAddress, lat: null, lng: null });
       }
     });
@@ -241,6 +264,7 @@ export default function GooglePlacesLocationInput({
 
   const handleClear = () => {
     setInputValue('');
+    setPlaceDetails(null);
     onChange?.('');
     setSuggestions([]);
     setIsOpen(false);
@@ -323,6 +347,45 @@ export default function GooglePlacesLocationInput({
           <MapPin size={17} style={{ color: 'var(--cmp-text-faint)', pointerEvents: 'none' }} />
         </div>
       </div>
+
+      {/* Picked place: building › community › area › emirate */}
+      {placeDetails && (
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '6px',
+            marginTop: '6px',
+            fontSize: '11.5px'
+          }}
+        >
+          {[
+            ['Building', placeDetails.building],
+            ['Community', placeDetails.community],
+            ['Area', placeDetails.subCommunity],
+            ['Emirate', placeDetails.emirate]
+          ]
+            .filter(([, v]) => v)
+            .map(([label, v]) => (
+              <span
+                key={label}
+                style={{
+                  padding: '2px 8px',
+                  borderRadius: '999px',
+                  background: 'var(--cmp-surface-sunken)',
+                  border: '1px solid var(--cmp-border)'
+                }}
+              >
+                <span className="faint">{label}:</span> <strong>{v}</strong>
+              </span>
+            ))}
+          {!placeDetails.isPrecise && (
+            <span className="faint" style={{ alignSelf: 'center' }}>
+              Approximate pin. Pick the building for an exact location.
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Script error or API Notice */}
       {scriptError && (

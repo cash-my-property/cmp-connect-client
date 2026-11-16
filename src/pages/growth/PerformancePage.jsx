@@ -13,6 +13,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { cmpConnectApi } from '../../services/cmpConnectApi';
+import OfferingTabs from '../../components/common/OfferingTabs';
 
 // Mock Daily data for 30 days (19 Aug to 17 Sep)
 const MOCK_DAILY_DATA = [
@@ -550,17 +551,7 @@ function PerformanceContent() {
           width="100%"
         />
 
-        <Dropdown
-          label={offeringFilter === 'rent' ? 'Rent only' : offeringFilter === 'sale' ? 'Sale only' : 'All offerings'}
-          options={[
-            { label: 'All offerings', value: 'all' },
-            { label: 'Rent only', value: 'rent' },
-            { label: 'Sale only', value: 'sale' }
-          ]}
-          selectedValue={offeringFilter}
-          onSelect={setOfferingFilter}
-          width="100%"
-        />
+        <OfferingTabs value={offeringFilter} onChange={setOfferingFilter} />
 
         <Dropdown
           label={locationDropdownOptions.find((l) => l.value === locationFilter)?.label || 'All locations'}

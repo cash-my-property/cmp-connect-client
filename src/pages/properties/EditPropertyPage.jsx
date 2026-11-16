@@ -4,6 +4,7 @@ import { useApp } from '../../context/AppContext';
 import cmpConnectApi from '../../services/cmpConnectApi';
 import { buildListingDocuments } from '../../utils/listingDocuments';
 import GooglePlacesLocationInput from '../../components/common/GooglePlacesLocationInput';
+import DescriptionCounter from '../../components/common/DescriptionCounter';
 import {
   Check,
   Building,
@@ -181,13 +182,15 @@ export default function EditPropertyPage() {
           propertyArea: d.area ?? '',
           propertyAreaUnit: d.areaUnit || 'sqft',
           propertyBuiltUpArea: d.builtUpArea ?? '',
-          propertyBedrooms: d.bedrooms || '2',
-          propertyBathrooms: d.bathrooms || '2',
+          // ?? not ||: a studio has 0 bedrooms and must not turn into 2
+          propertyBedrooms: d.bedrooms != null ? String(d.bedrooms) : '',
+          propertyBathrooms: d.bathrooms != null ? String(d.bathrooms) : '',
           unitNumber: d.unitNumber || '',
           parkingSpaces: d.parkingSpaces ?? '1',
           furnishingStatus: d.furnishingStatus || 'SEMI',
           availability: d.availability || 'Vacant',
-          referenceNumber: d.referenceNumber || '',
+          // No reference input: keep the saved one, else use the listing's CMP ID (CLID-…)
+          referenceNumber: d.referenceNumber || d.listingRef || '',
 
           propertyAmenities: Array.isArray(d.amenities) ? d.amenities : [],
 
@@ -351,7 +354,8 @@ export default function EditPropertyPage() {
     }
     if (fieldName === 'unitNumber') {
       const forbiddenTypes = ['RESIDENTIAL_BUILDING', 'RESIDENTIAL_BULK', 'COMMERCIAL_BULK', 'FARM'];
-      return forbiddenTypes.includes(type) ? 'forbidden' : 'required';
+      // Unit number is optional on CMP Connect (server: CONNECT_OPTIONAL_FIELDS)
+      return forbiddenTypes.includes(type) ? 'forbidden' : 'optional';
     }
     if (fieldName === 'furnishingStatus') {
       const forbiddenTypes = ['COMMERCIAL_PLOT', 'COMMERCIAL_BULK', 'FARM'];
@@ -565,7 +569,7 @@ export default function EditPropertyPage() {
         parkingSpaces: formData.parkingSpaces ? Number(formData.parkingSpaces) : null,
         furnishingStatus: formData.furnishingStatus,
         availability: formData.availability,
-        referenceNumber: formData.referenceNumber || null,
+        referenceNumber: formData.referenceNumber || listingData?.listingRef || null,
         propertyAmenities: (formData.propertyAmenities || []).filter((a) => availableAmenities.includes(a)),
 
         propertyPrice: formData.propertyPrice ? Number(formData.propertyPrice) : null,
@@ -632,7 +636,7 @@ export default function EditPropertyPage() {
           parkingSpaces: formData.parkingSpaces ? Number(formData.parkingSpaces) : 0,
           furnishingStatus: furnRule !== 'forbidden' ? formData.furnishingStatus : null,
           availability: formData.availability,
-          referenceNumber: formData.referenceNumber || null
+          referenceNumber: formData.referenceNumber || listingData?.listingRef || null
         };
       }
       case 4:
@@ -1057,30 +1061,7 @@ export default function EditPropertyPage() {
               </p>
             </div>
           </div>
-          {canActions.approve && (
-            <div className="row" style={{ gap: '8px', flexShrink: 0 }}>
-              <button
-                type="button"
-                className="btn btn-sm"
-                style={{ background: 'var(--cmp-success)', color: '#FFF' }}
-                disabled={isSaving}
-                onClick={handleApprove}
-              >
-                <CheckCircle2 size={14} />
-                <span>Approve</span>
-              </button>
-              <button
-                type="button"
-                className="btn btn-sm"
-                style={{ background: 'var(--cmp-danger)', color: '#FFF' }}
-                disabled={isSaving}
-                onClick={() => setRejectModal({ isOpen: true, reason: '' })}
-              >
-                <XCircle size={14} />
-                <span>Reject</span>
-              </button>
-            </div>
-          )}
+          {/* Approve / Reject live only in the page header (top) */}
         </div>
       )}
 
@@ -1382,6 +1363,7 @@ export default function EditPropertyPage() {
                   value={formData.propertyDescription}
                   onChange={(e) => setFormData({ ...formData, propertyDescription: e.target.value })}
                 />
+                <DescriptionCounter text={formData.propertyDescription} />
               </div>
             </div>
           )}
@@ -1456,6 +1438,7 @@ export default function EditPropertyPage() {
                         value={formData.propertyBedrooms}
                         onChange={(e) => setFormData({ ...formData, propertyBedrooms: e.target.value })}
                       >
+                        <option value="">Select bedrooms</option>
                         {['0', '1', '2', '3', '4', '5', '6', '7+'].map((b) => (
                           <option key={b} value={b}>
                             {b === '0' ? 'Studio' : `${b} Bedroom`}
@@ -1475,6 +1458,7 @@ export default function EditPropertyPage() {
                         value={formData.propertyBathrooms}
                         onChange={(e) => setFormData({ ...formData, propertyBathrooms: e.target.value })}
                       >
+                        <option value="">Select bathrooms</option>
                         {['1', '2', '3', '4', '5', '6+'].map((b) => (
                           <option key={b} value={b}>
                             {b} Bathroom
@@ -1557,7 +1541,6 @@ export default function EditPropertyPage() {
                   <div>
                     <label>
                       Unit Number (Confidential){' '}
-                      {getFieldRule('unitNumber') === 'required' && <span style={{ color: 'var(--cmp-danger)' }}>*</span>}
                     </label>
                     <input
                       disabled={onHold}
@@ -1611,15 +1594,6 @@ export default function EditPropertyPage() {
                     <option value="Owner Occupied">Owner Occupied</option>
                   </select>
                 </div>
-              </div>
-
-              <div>
-                <label>Internal Reference Number</label>
-                <input
-                  disabled={onHold}
-                  value={formData.referenceNumber}
-                  onChange={(e) => setFormData({ ...formData, referenceNumber: e.target.value })}
-                />
               </div>
             </div>
           )}
@@ -2000,18 +1974,6 @@ export default function EditPropertyPage() {
                   >
                     <Check size={16} />
                     <span>Submit for approval</span>
-                  </button>
-                )}
-                {!onHold && canActions.approve && (
-                  <button
-                    type="button"
-                    className="btn btn-sm"
-                    style={{ background: 'var(--cmp-success)', color: '#FFF' }}
-                    disabled={isSaving}
-                    onClick={handleApprove}
-                  >
-                    <CheckCircle2 size={16} />
-                    <span>Approve &amp; Publish</span>
                   </button>
                 )}
                 {!onHold && listingData?.status === 'PENDING_APPROVAL' && (

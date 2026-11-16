@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { cmpConnectApi } from '../../services/cmpConnectApi';
+import OfferingTabs, { matchesOffering } from '../../components/common/OfferingTabs';
 import QualityScoreCircle from '../../components/ui/QualityScoreCircle';
 
 const mockEligibleListings = [
@@ -49,6 +50,7 @@ const mockEligibleListings = [
 export default function SpotlightedPage() {
   const { isLiveData } = useApp();
   const [copiedId, setCopiedId] = useState(null);
+  const [offering, setOffering] = useState('all');
   const [apiData, setApiData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -75,9 +77,8 @@ export default function SpotlightedPage() {
     fetchSpotlightData();
   }, [fetchSpotlightData]);
 
-  const eligibleListings = isLiveData
-    ? (apiData?.eligible || [])
-    : mockEligibleListings;
+  const eligibleListings = (isLiveData ? (apiData?.eligible || []) : mockEligibleListings)
+    .filter((l) => matchesOffering(offering, l.purpose));
 
   const minQuality = apiData?.minQuality || 80;
   const biddingAvailable = apiData?.biddingAvailable || false;
@@ -226,13 +227,16 @@ export default function SpotlightedPage() {
 
       {/* Eligible Listings Table */}
       <div>
-        <div style={{ marginBottom: '14px' }}>
+        <div style={{ marginBottom: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: '12px', flexWrap: 'wrap' }}>
+          <div>
           <h2 style={{ fontSize: '18px', fontWeight: 700, margin: '0 0 4px' }}>
             Ready for the spotlight ({eligibleListings.length})
           </h2>
           <p className="muted" style={{ margin: 0, fontSize: '13.5px' }}>
             Active, live listings scoring {minQuality} or higher in quality with no holds.
           </p>
+          </div>
+          <OfferingTabs value={offering} onChange={setOffering} />
         </div>
 
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>

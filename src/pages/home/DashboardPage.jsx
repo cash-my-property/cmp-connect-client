@@ -22,6 +22,16 @@ const todayIso = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
+// "Finish setting up" step key (from /home) → page that completes it
+const SETUP_STEP_LINKS = {
+  account: '/account',
+  logo: '/account',
+  watermark: '/properties/brand-kit',
+  team: '/team/members',
+  firstListing: '/properties/new',
+  brn: '/properties/compliance'
+};
+
 const formatPriceCompact = (amount) => {
   if (!amount && amount !== 0) return 'AED —';
   const num = Number(amount);
@@ -227,8 +237,11 @@ export default function DashboardPage() {
   const creditsBalance = homeData?.credits?.balance ?? demo(agency?.credits ?? 850);
   const creditsDaysLeft = homeData?.credits?.daysLeft ?? demo(42);
 
-  // Setup items
-  const setupItems = setupProgress?.steps || [
+  // Setup items. Server steps carry a `key` but no link, so each key is mapped to its page here
+  // (without this every live step opened /account — e.g. "Add brand photo watermark").
+  const setupItems = setupProgress?.steps
+    ? setupProgress.steps.map((s) => ({ ...s, href: s.href || SETUP_STEP_LINKS[s.key] || '/account' }))
+    : [
     { done: true, label: 'Create your agency account', href: '/account' },
     { done: true, label: 'Add your brand watermark', href: '/properties/brand-kit' },
     { done: true, label: 'Turn on two-step verification', href: '/account/security' },
