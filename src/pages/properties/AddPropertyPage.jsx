@@ -889,7 +889,7 @@ export default function AddPropertyPage() {
                 <li>Add at least 8 photos <span className="faint">+20</span></li>
                 <li>Description 300+ chars <span className="faint">+15</span></li>
                 <li>Add valid DLD permit <span className="faint">+20</span></li>
-                <li>Pin location coordinates <span className="faint">+15</span></li>
+                <li>Pick the exact building from the location search <span className="faint">+15</span></li>
               </ul>
             )}
           </div>
@@ -1150,40 +1150,20 @@ export default function AddPropertyPage() {
                 <GooglePlacesLocationInput
                   placeholder="e.g. Marina Gate Tower 1, Dubai Marina, Dubai"
                   value={formData.propertyLocation}
-                  onChange={(val) => setFormData((prev) => ({ ...prev, propertyLocation: val }))}
+                  // Typing by hand clears the old place's coordinates; picking a suggestion sets new ones
+                  onChange={(val) => setFormData((prev) => ({ ...prev, propertyLocation: val, propertyLatitude: '', propertyLongitude: '' }))}
                   onSelectLocation={({ address, lat, lng }) => {
                     setFormData((prev) => ({
                       ...prev,
                       propertyLocation: address,
-                      ...(lat != null ? { propertyLatitude: lat } : {}),
-                      ...(lng != null ? { propertyLongitude: lng } : {})
+                      propertyLatitude: lat ?? '',
+                      propertyLongitude: lng ?? ''
                     }));
                   }}
                 />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-                <div>
-                  <label>Latitude Coordinates</label>
-                  <input
-                    type="number"
-                    step="0.0001"
-                    placeholder="e.g. 25.0805"
-                    value={formData.propertyLatitude}
-                    onChange={(e) => setFormData({ ...formData, propertyLatitude: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label>Longitude Coordinates</label>
-                  <input
-                    type="number"
-                    step="0.0001"
-                    placeholder="e.g. 55.1403"
-                    value={formData.propertyLongitude}
-                    onChange={(e) => setFormData({ ...formData, propertyLongitude: e.target.value })}
-                  />
-                </div>
-              </div>
+              {/* Coordinates come from the location search and are sent to the backend; not shown in the UI */}
             </div>
           )}
 

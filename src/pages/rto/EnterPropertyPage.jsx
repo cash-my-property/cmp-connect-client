@@ -1370,29 +1370,20 @@ export default function EnterPropertyPage() {
                 </label>
                 <GooglePlacesLocationInput
                   value={formData.propertyLocation}
-                  onChange={(val) => setFormData((prev) => ({ ...prev, propertyLocation: val }))}
-                  onSelectPlace={(place) => {
+                  // Typing by hand clears the old place's coordinates; picking a suggestion sets new ones
+                  onChange={(val) => setFormData((prev) => ({ ...prev, propertyLocation: val, propertyLatitude: '', propertyLongitude: '' }))}
+                  onSelectLocation={({ address, lat, lng }) => {
                     setFormData((prev) => ({
                       ...prev,
-                      propertyLocation: place.formattedAddress || place.name || prev.propertyLocation,
-                      propertyLatitude: place.latitude || prev.propertyLatitude,
-                      propertyLongitude: place.longitude || prev.propertyLongitude
+                      propertyLocation: address || prev.propertyLocation,
+                      propertyLatitude: lat ?? '',
+                      propertyLongitude: lng ?? ''
                     }));
                   }}
                 />
               </div>
 
-              <div className="card" style={{ padding: '16px', background: 'var(--cmp-surface-subtle)' }}>
-                <div className="row" style={{ gap: '10px', alignItems: 'center' }}>
-                  <MapPin size={20} color="var(--cmp-brand)" />
-                  <div>
-                    <span style={{ fontSize: '13.5px', fontWeight: 700 }}>Selected Coordinates</span>
-                    <p className="muted" style={{ margin: '2px 0 0', fontSize: '12.5px' }}>
-                      Latitude: {formData.propertyLatitude} · Longitude: {formData.propertyLongitude}
-                    </p>
-                  </div>
-                </div>
-              </div>
+              {/* Coordinates come from the location search and are sent to the backend; not shown in the UI */}
             </div>
           )}
 
