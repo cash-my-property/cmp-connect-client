@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useApp } from '../../context/AppContext';
 import {
   Sparkles,
@@ -10,6 +10,10 @@ import {
   ShieldCheck,
   ArrowRight
 } from 'lucide-react';
+
+const LAUNCHER_POS_KEY = 'cmp_askcmp_launcher_pos';
+const DRAG_THRESHOLD = 5; // px of movement before a press counts as a drag
+const EDGE_GAP = 8; // keep this far from the window edges
 
 export default function AskCmpDrawer() {
   const { isAssistantOpen, setIsAssistantOpen, account, isLiveData } = useApp();
@@ -23,6 +27,98 @@ export default function AskCmpDrawer() {
     text: `Salam${firstName ? ` ${firstName}` : ''}! I am your CMP Connect Assistant. How can I assist your agency today?`
   };
   const thread = [greeting, ...messages];
+
+  // ── Movable launcher ────────────────────────────────────────────────
+  // Position is kept as distance from the right / bottom edges so it stays in place on resize,
+  // and is remembered per browser.
+  const launcherRef = useRef(null);
+  const dragRef = useRef(null); // { startX, startY, right, bottom, moved }
+  const suppressClickRef = useRef(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [launcherPos, setLauncherPos] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(LAUNCHER_POS_KEY) || 'null');
+      return saved && Number.isFinite(saved.right) && Number.isFinite(saved.bottom) ? saved : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const clampPos = useCallback((right, bottom) => {
+    const el = launcherRef.current;
+    const w = el?.offsetWidth || 120;
+    const h = el?.offsetHeight || 44;
+    return {
+      right: Math.min(Math.max(EDGE_GAP, right), window.innerWidth - w - EDGE_GAP),
+      bottom: Math.min(Math.max(EDGE_GAP, bottom), window.innerHeight - h - EDGE_GAP)
+    };
+  }, []);
+
+  // Keep it on screen when the window shrinks
+  useEffect(() => {
+    if (!launcherPos) return undefined;
+    const onResize = () => setLauncherPos((p) => (p ? clampPos(p.right, p.bottom) : p));
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [launcherPos, clampPos]);
+
+  const handleLauncherPointerDown = (e) => {
+    if (e.button !== undefined && e.button !== 0) return;
+    const rect = launcherRef.current.getBoundingClientRect();
+    dragRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      right: window.innerWidth - rect.right,
+      bottom: window.innerHeight - rect.bottom,
+      moved: false
+    };
+    launcherRef.current.setPointerCapture?.(e.pointerId);
+  };
+
+  const handleLauncherPointerMove = (e) => {
+    const d = dragRef.current;
+    if (!d) return;
+    const dx = e.clientX - d.startX;
+    const dy = e.clientY - d.startY;
+    if (!d.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD) return; // a click, not a drag (yet)
+    d.moved = true;
+    setIsDragging(true);
+    setLauncherPos(clampPos(d.right - dx, d.bottom - dy));
+  };
+
+  const handleLauncherPointerUp = (e) => {
+    const d = dragRef.current;
+    dragRef.current = null;
+    launcherRef.current?.releasePointerCapture?.(e.pointerId);
+    if (!d?.moved) return;
+    setIsDragging(false);
+    suppressClickRef.current = true; // the click that follows a drag must not open the chat
+    setLauncherPos((p) => {
+      try {
+        if (p) localStorage.setItem(LAUNCHER_POS_KEY, JSON.stringify(p));
+      } catch {
+        /* storage blocked: position just isn't remembered */
+      }
+      return p;
+    });
+  };
+
+  const handleLauncherClick = () => {
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false;
+      return;
+    }
+    setIsAssistantOpen(true);
+  };
+
+  const resetLauncherPos = () => {
+    setLauncherPos(null);
+    try {
+      localStorage.removeItem(LAUNCHER_POS_KEY);
+    } catch {
+      /* ignore */
+    }
+  };
 
   const quickPrompts = [
     'How do I lift my listing quality score to 90+?',
@@ -64,12 +160,20 @@ export default function AskCmpDrawer() {
 
   return (
     <>
-      {/* Launcher Button */}
+      {/* Launcher Button — drag with mouse / touch to move it off content; a plain click opens the chat */}
       <button
+        ref={launcherRef}
         type="button"
-        className="assistant-launcher"
-        onClick={() => setIsAssistantOpen(true)}
-        aria-label="Ask CMP Assistant"
+        className={`assistant-launcher${isDragging ? ' is-dragging' : ''}`}
+        style={launcherPos ? { right: launcherPos.right, bottom: launcherPos.bottom } : undefined}
+        onPointerDown={handleLauncherPointerDown}
+        onPointerMove={handleLauncherPointerMove}
+        onPointerUp={handleLauncherPointerUp}
+        onPointerCancel={handleLauncherPointerUp}
+        onDoubleClick={resetLauncherPos}
+        onClick={handleLauncherClick}
+        aria-label="Ask CMP Assistant (drag to move, double-click to reset position)"
+        title="Drag to move · Double-click to reset"
       >
         <Sparkles size={17} style={{ color: 'var(--cmp-accent)' }} />
         <span>Ask CMP</span>

@@ -537,18 +537,28 @@ kbd {
   padding: 0 18px 0 14px;
   border-radius: 999px;
   border: 1px solid var(--cmp-brand-border);
-  cursor: pointer;
+  cursor: grab;
   font: inherit;
   font-weight: 700;
   font-size: 14px;
   background: var(--cmp-surface-raised);
   color: var(--cmp-brand);
   box-shadow: var(--cmp-shadow-lg);
+  /* Movable: pointer drag must not scroll the page or select text */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .assistant-launcher:hover {
   background: var(--cmp-brand);
   color: var(--cmp-text-on-brand);
+}
+
+.assistant-launcher.is-dragging {
+  cursor: grabbing;
+  opacity: 0.85;
+  box-shadow: 0 16px 36px -6px rgba(0, 0, 0, 0.35);
 }
 
 /* ------------------------------------------------------------- Command Palette Modal */
