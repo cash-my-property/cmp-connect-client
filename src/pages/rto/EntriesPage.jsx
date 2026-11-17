@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { cmpConnectApi } from '../../services/cmpConnectApi';
+import { publicAuctionUrl } from '../../utils/publicLinks';
 import {
   Plus,
   Search,
@@ -20,7 +21,8 @@ import {
   Trash2,
   Check,
   X,
-  MapPin
+  MapPin,
+  ExternalLink
 } from 'lucide-react';
 
 function formatAed(val) {
@@ -335,12 +337,7 @@ export default function EntriesPage() {
             <span>{isRefreshing ? 'Updating…' : 'Refresh'}</span>
           </button>
 
-          {(!account || can('listings.create')) && (
-            <NavLink to="/rto/new" className="btn btn-primary">
-              <Plus size={16} />
-              <span>Enter a property</span>
-            </NavLink>
-          )}
+          {/* "Enter a property" lives once, in the Real-Time Offer header bar (HubBar) */}
         </div>
       </div>
 
@@ -735,15 +732,31 @@ export default function EntriesPage() {
                         )}
                       </div>
                     ) : (
-                      <NavLink
-                        to={`/rto/${id}`}
-                        className="btn btn-ghost btn-sm"
-                        style={{ padding: '2px 6px', fontSize: '12.5px', color: 'var(--cmp-brand)' }}
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <span>View details</span>
-                        <ChevronRight size={14} />
-                      </NavLink>
+                      <div className="row" style={{ gap: '4px', alignItems: 'center' }}>
+                        {publicAuctionUrl(item.auction?.id) && (
+                          <a
+                            href={publicAuctionUrl(item.auction.id)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn btn-ghost btn-sm"
+                            style={{ padding: '2px 6px', fontSize: '12.5px' }}
+                            title="View on CMP Dubai"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <ExternalLink size={13} />
+                            <span>CMP Dubai</span>
+                          </a>
+                        )}
+                        <NavLink
+                          to={`/rto/${id}`}
+                          className="btn btn-ghost btn-sm"
+                          style={{ padding: '2px 6px', fontSize: '12.5px', color: 'var(--cmp-brand)' }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <span>View details</span>
+                          <ChevronRight size={14} />
+                        </NavLink>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -867,13 +880,27 @@ export default function EntriesPage() {
                           </NavLink>
                         </div>
                       ) : (
-                        <NavLink
-                          to={`/rto/${id}`}
-                          className="btn btn-outline btn-sm"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          Inspect
-                        </NavLink>
+                        <div className="row" style={{ gap: '6px', justifyContent: 'flex-end' }}>
+                          {publicAuctionUrl(item.auction?.id) && (
+                            <a
+                              href={publicAuctionUrl(item.auction.id)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="btn btn-ghost btn-sm"
+                              title="View on CMP Dubai"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <ExternalLink size={13} />
+                            </a>
+                          )}
+                          <NavLink
+                            to={`/rto/${id}`}
+                            className="btn btn-outline btn-sm"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            Inspect
+                          </NavLink>
+                        </div>
                       )}
                     </td>
                   </tr>

@@ -2,8 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { cmpConnectApi } from '../../services/cmpConnectApi';
+import { publicAuctionUrl } from '../../utils/publicLinks';
 import {
-  Plus,
   ArrowUpRight,
   RefreshCw
 } from 'lucide-react';
@@ -89,7 +89,7 @@ function getDeskStatusMeta(deskStatus, fallbackStatus) {
 }
 
 export default function LiveDeskPage() {
-  const { rtoLots, isLiveData, authToken, can } = useApp();
+  const { rtoLots, isLiveData, authToken } = useApp();
   const token = authToken || (typeof localStorage !== 'undefined' ? localStorage.getItem('cmp_connect_auth_token') : null);
   const [deskStats, setDeskStats] = useState(null);
   const [liveLots, setLiveLots] = useState([]);
@@ -291,12 +291,7 @@ export default function LiveDeskPage() {
               <span>{loading ? 'Refreshing…' : 'Refresh'}</span>
             </button>
           )}
-          {can('listings.create') && (
-            <NavLink to="/rto/new" className="btn btn-accent btn-sm">
-              <Plus size={15} />
-              <span>Enter a property</span>
-            </NavLink>
-          )}
+          {/* "Enter a property" lives once, in the Real-Time Offer header bar (HubBar) */}
         </div>
       </div>
 
@@ -577,6 +572,18 @@ export default function LiveDeskPage() {
                 <span>View the full entry</span>
                 <ArrowUpRight size={14} />
               </NavLink>
+              {publicAuctionUrl(selectedLot.auction?.id) && (
+                <a
+                  href={publicAuctionUrl(selectedLot.auction.id)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn btn-ghost btn-sm"
+                  style={{ width: '100%', justifyContent: 'center', marginTop: '6px' }}
+                >
+                  <span>View on CMP Dubai</span>
+                  <ArrowUpRight size={14} />
+                </a>
+              )}
             </div>
           </aside>
         )}

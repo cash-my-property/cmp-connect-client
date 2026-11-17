@@ -16,12 +16,6 @@ import {
 
 // ── Pure helpers (component ke bahar — har render pe dobara nahi bante) ──
 
-// Local date as YYYY-MM-DD (toISOString is UTC and gives yesterday before 04:00 in Dubai)
-const todayIso = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-};
-
 // "Finish setting up" step key (from /home) → page that completes it
 const SETUP_STEP_LINKS = {
   account: '/account',
@@ -84,15 +78,11 @@ export default function DashboardPage() {
     agency,
     listings: mockListings,
     clients: mockClients,
-    followUps: mockFollowUps,
-    toggleFollowUp,
-    addFollowUp,
     needsYou: mockNeedsYou,
     account,
     can
   } = useApp();
 
-  const [newFollowUpText, setNewFollowUpText] = useState('');
   const [setupHidden, setSetupHidden] = useState(false);
 
   // Live Home Dashboard Data from GET /api/cmpConnect/home
@@ -146,77 +136,6 @@ export default function DashboardPage() {
     ? homeData.topListings
     : mockListings.slice(0, 4);
 
-  // Lazy initializer: aaj ki date sirf pehli render pe
-  const [newDue, setNewDue] = useState(todayIso);
-
-  // Live follow-ups: backend /follow-ups se (mock mein context wale hi)
-  const [liveFollowUps, setLiveFollowUps] = useState([]);
-  const [followUpError, setFollowUpError] = useState(null);
-
-  useEffect(() => {
-    if (!isLiveData || !authToken) return undefined;
-    let cancelled = false;
-    cmpConnectApi.listFollowUps({ limit: 50 }, authToken)
-      .then((res) => {
-        if (!cancelled) setLiveFollowUps(Array.isArray(res?.data) ? res.data : []);
-      })
-      .catch((err) => {
-        console.warn('[DashboardPage] Failed to fetch follow-ups:', err);
-        if (!cancelled) setFollowUpError(err?.message || 'Could not load follow-ups.');
-      });
-    return () => { cancelled = true; };
-  }, [isLiveData, authToken]);
-
-  const handleFollowUpSubmit = async (e) => {
-    e.preventDefault();
-    const text = newFollowUpText.trim();
-    if (!text) return;
-    if (newDue && newDue < todayIso()) {
-      setFollowUpError('Choose today or a later date.');
-      return;
-    }
-    if (!isLiveData) {
-      addFollowUp(text, newDue);
-      setNewFollowUpText('');
-      return;
-    }
-    if (text.length < 2) {
-      setFollowUpError('Follow-up needs at least 2 characters.');
-      return;
-    }
-    try {
-      setFollowUpError(null);
-      const payload = { title: text };
-      if (newDue) payload.dueAt = new Date(newDue).toISOString();
-      const res = await cmpConnectApi.createFollowUp(payload, authToken);
-      if (res?.data) setLiveFollowUps((prev) => [res.data, ...prev]);
-      setNewFollowUpText('');
-    } catch (err) {
-      setFollowUpError(err?.message || 'Could not add follow-up.');
-    }
-  };
-
-  // Checkbox: optimistic toggle, error pe wapas
-  const handleToggleFollowUp = async (id) => {
-    if (!isLiveData) {
-      toggleFollowUp(id);
-      return;
-    }
-    const current = liveFollowUps.find((f) => f.id === id);
-    if (!current) return;
-    const prevStatus = current.status;
-    const nextStatus = prevStatus === 'DONE' ? 'PENDING' : 'DONE';
-    setLiveFollowUps((prev) => prev.map((f) => (f.id === id ? { ...f, status: nextStatus } : f)));
-    try {
-      setFollowUpError(null);
-      const res = await cmpConnectApi.updateFollowUp(id, { status: nextStatus }, authToken);
-      if (res?.data) setLiveFollowUps((prev) => prev.map((f) => (f.id === id ? res.data : f)));
-    } catch (err) {
-      setLiveFollowUps((prev) => prev.map((f) => (f.id === id ? { ...f, status: prevStatus } : f)));
-      setFollowUpError(err?.message || 'Could not update follow-up.');
-    }
-  };
-
   // User display name
   const userFullName = account?.fullName || agency?.currentUser?.name || (isLiveData ? '' : 'Layla');
   const userFirstName = userFullName.split(' ')[0];
@@ -249,34 +168,6 @@ export default function DashboardPage() {
     { done: (stats?.live ?? 4) >= 1, label: 'Boost your best property', href: '/properties' }
   ];
 
-  // Live rows ko mock row shape mein map karo (text/status/agent/done)
-  const formatDue = (iso) => {
-    if (!iso) return 'No due date';
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return 'No due date';
-    const label = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const dueDay = new Date(d);
-    dueDay.setHours(0, 0, 0, 0);
-    if (dueDay < today) return `Overdue · ${label}`;
-    if (dueDay.getTime() === today.getTime()) return `Today · ${label}`;
-    return `Due ${label}`;
-  };
-  const followUpRows = isLiveData
-    ? liveFollowUps.map((f) => {
-        const done = f.status === 'DONE';
-        return {
-          id: f.id,
-          text: f.title,
-          status: done ? 'Done' : formatDue(f.dueAt),
-          agent: f.lead?.name || userFullName,
-          done
-        };
-      })
-    : mockFollowUps;
-
-  const activeFollowUps = followUpRows.filter((f) => !f.done);
 
   return (
     <>
@@ -463,8 +354,8 @@ export default function DashboardPage() {
         </NavLink>
       </div>
 
-      {/* Today Grid: Needs You + My Follow-ups */}
-      <div className="today-grid">
+      {/* Needs You (full width) */}
+      <div>
         {/* Needs You Card */}
         <section className="card" style={{ padding: 0 }}>
           <div className="section-head">
@@ -521,93 +412,6 @@ export default function DashboardPage() {
             </p>
           )}
         </section>
-
-        {/* My Follow-ups Card */}
-        <div style={{ display: 'grid', gap: 16, alignContent: 'start' }}>
-          <section className="card" style={{ padding: 0 }}>
-            <div className="section-head">
-              <h2>My follow-ups</h2>
-              <span className="count-badge">{activeFollowUps.length}</span>
-            </div>
-
-            <form
-              className="row"
-              style={{ gap: 6, padding: '0 16px 12px' }}
-              onSubmit={handleFollowUpSubmit}
-            >
-              <label htmlFor="task-title" className="visually-hidden">New follow-up</label>
-              <input
-                id="task-title"
-                value={newFollowUpText}
-                onChange={(e) => setNewFollowUpText(e.target.value)}
-                placeholder="Add a follow-up…"
-                style={{ height: 38 }}
-              />
-              <label htmlFor="task-due" className="visually-hidden">Due date</label>
-              <input
-                id="task-due"
-                type="date"
-                min={todayIso()}
-                value={newDue}
-                onChange={(e) => setNewDue(e.target.value)}
-                style={{ height: 38, width: 140 }}
-              />
-              <button
-                type="submit"
-                className="btn btn-primary btn-sm"
-                aria-label="Add follow-up"
-                disabled={!newFollowUpText.trim()}
-              >
-                <Plus size={16} />
-              </button>
-            </form>
-
-            {isLiveData && followUpError && (
-              <p style={{ margin: '0 16px 8px', fontSize: 12.5, color: 'var(--cmp-danger)' }}>
-                {followUpError}
-              </p>
-            )}
-
-            <ul style={{ listStyle: 'none', margin: 0, padding: '0 8px 10px' }}>
-              {followUpRows.map((t) => (
-                <li key={t.id} className="task-row">
-                  <input
-                    type="checkbox"
-                    checked={t.done}
-                    aria-label={`Mark done: ${t.text}`}
-                    onChange={() => handleToggleFollowUp(t.id)}
-                  />
-                  <span style={{ flex: 1, minWidth: 0 }}>
-                    <span
-                      style={{
-                        display: 'block',
-                        fontSize: 14,
-                        textDecoration: t.done ? 'line-through' : 'none',
-                        color: t.done ? 'var(--cmp-text-faint)' : 'var(--cmp-text)'
-                      }}
-                    >
-                      {t.text}
-                    </span>
-                    <span
-                      style={{
-                        fontSize: 12,
-                        color: t.status?.includes('Overdue') ? 'var(--cmp-danger)' : 'var(--cmp-text-faint)',
-                        fontWeight: t.status?.includes('Overdue') ? 700 : 500
-                      }}
-                    >
-                      {t.status} · {t.agent}
-                    </span>
-                  </span>
-                </li>
-              ))}
-              {followUpRows.length === 0 && (
-                <li className="muted" style={{ padding: 10, fontSize: 14 }}>
-                  No follow-ups. Nice.
-                </li>
-              )}
-            </ul>
-          </section>
-        </div>
       </div>
 
       {/* Best Performing Properties */}

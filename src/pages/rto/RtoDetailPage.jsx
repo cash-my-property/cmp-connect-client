@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, NavLink } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { cmpConnectApi } from '../../services/cmpConnectApi';
+import { publicAuctionUrl } from '../../utils/publicLinks';
 import {
   ArrowLeft,
   Clock,
@@ -427,6 +428,19 @@ export default function RtoDetailPage() {
             <RefreshCw size={14} className={isRefreshing ? 'spin' : ''} />
             <span>{isRefreshing ? 'Updating…' : 'Refresh'}</span>
           </button>
+
+          {/* Same Real-Time Offer on the public CMP website (exists once CMP has scheduled it) */}
+          {publicAuctionUrl(auction.id || property?.currentAuctionId) && (
+            <a
+              href={publicAuctionUrl(auction.id || property?.currentAuctionId)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-outline btn-sm"
+            >
+              <ExternalLink size={14} />
+              <span>View on CMP Dubai</span>
+            </a>
+          )}
 
           {canDelete && (
             <button

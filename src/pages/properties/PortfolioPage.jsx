@@ -9,6 +9,7 @@ import {
 } from '../../components/ui';
 import { useDebounce } from '../../hooks';
 import cmpConnectApi from '../../services/cmpConnectApi';
+import { publicListingUrl } from '../../utils/publicLinks';
 
 import {
   Grid,
@@ -43,7 +44,8 @@ import {
   UserCheck,
   CheckSquare,
   Square,
-  X
+  X,
+  ExternalLink
 } from 'lucide-react';
 
 const STATUS_TABS = [
@@ -825,12 +827,7 @@ export default function PortfolioPage() {
             <span>Select listings</span>
           </button>
 
-          {can('listings.create') && (
-            <NavLink to="/properties/new" className="btn btn-accent btn-sm">
-              <Plus size={16} />
-              <span>List new property</span>
-            </NavLink>
-          )}
+          {/* "Add property" lives once, in the Properties header bar (HubBar) */}
         </div>
       </div>
 
@@ -1246,6 +1243,10 @@ export default function PortfolioPage() {
             const statusDisplay = isClosed ? (isRent ? 'RENTED' : 'SOLD') : (status === 'PENDING_APPROVAL' ? 'IN REVIEW' : status);
 
             const canEdit = listing.can ? Boolean(listing.can.edit) : can('listings.update');
+
+            // Public CMP website page — only exists while the listing is live
+
+            const publicUrl = status === 'LIVE' ? publicListingUrl(listing.listingRef) : null;
             const canSubmit = listing.can ? Boolean(listing.can.submit) : (['DRAFT', 'REJECTED'].includes(status) && can('listings.create'));
             const canApprove = listing.can ? Boolean(listing.can.approve) : (status === 'PENDING_APPROVAL' && can('listings.approve'));
             const canReject = listing.can ? Boolean(listing.can.reject) : (status === 'PENDING_APPROVAL' && can('listings.approve'));
@@ -1481,6 +1482,19 @@ export default function PortfolioPage() {
                             }}
                             onClick={(e) => e.stopPropagation()}
                           >
+                            {publicUrl && (
+                              <a
+                                href={publicUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="btn btn-ghost btn-sm"
+                                style={{ justifyContent: 'flex-start', borderRadius: 0, width: '100%', padding: '8px 14px' }}
+                                onClick={() => setOpenActionMenuId(null)}
+                              >
+                                <ExternalLink size={14} />
+                                <span>View on CMP Dubai</span>
+                              </a>
+                            )}
                             {canEdit && (
                               <NavLink
                                 to={`/properties/${listing.id}/edit`}
@@ -2129,6 +2143,10 @@ export default function PortfolioPage() {
                 const statusDisplay = isClosed ? (isRent ? 'RENTED' : 'SOLD') : (status === 'PENDING_APPROVAL' ? 'IN REVIEW' : status);
 
                 const canEdit = listing.can ? Boolean(listing.can.edit) : can('listings.update');
+
+                // Public CMP website page — only exists while the listing is live
+
+                const publicUrl = status === 'LIVE' ? publicListingUrl(listing.listingRef) : null;
                 const canAssign = listing.can ? Boolean(listing.can.assign) : (can('listings.assign') && status !== 'ARCHIVED');
                 const canSubmit = listing.can ? Boolean(listing.can.submit) : (['DRAFT', 'REJECTED'].includes(status) && can('listings.create'));
                 const canApprove = listing.can ? Boolean(listing.can.approve) : (status === 'PENDING_APPROVAL' && can('listings.approve'));
@@ -2270,6 +2288,19 @@ export default function PortfolioPage() {
                               }}
                               onClick={(e) => e.stopPropagation()}
                             >
+                              {publicUrl && (
+                                <a
+                                  href={publicUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="btn btn-ghost btn-sm"
+                                  style={{ justifyContent: 'flex-start', borderRadius: 0, width: '100%', padding: '8px 14px' }}
+                                  onClick={() => setOpenActionMenuId(null)}
+                                >
+                                  <ExternalLink size={14} />
+                                  <span>View on CMP Dubai</span>
+                                </a>
+                              )}
                               {canEdit && (
                                 <NavLink
                                   to={`/properties/${listing.id}/edit`}
