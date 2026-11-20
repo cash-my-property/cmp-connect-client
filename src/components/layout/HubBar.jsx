@@ -34,7 +34,11 @@ export default function HubBar() {
     can,
     hasAny,
     isLiveData,
-    authToken
+    isMockData,
+    authToken,
+    isDeveloper,
+    workspace,
+    setMockWorkspace
   } = useApp();
 
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -97,6 +101,35 @@ export default function HubBar() {
 
   // Derive active hub information based on current URL path
   const getHubInfo = () => {
+    if (isDeveloper) {
+      if (pathname.startsWith('/developer/projects') || pathname.startsWith('/developer/availability')) {
+        return {
+          title: 'Projects',
+          blurb: 'Every project you sell, its units, payment plan and registration.',
+          tabs: [{ label: 'Portfolio', path: '/developer/projects' }, { label: 'Availability', path: '/developer/availability' }]
+        };
+      }
+      if (pathname.startsWith('/developer/enquiries')) {
+        return { title: 'Buyers', blurb: 'Enquiries on your projects, in one inbox for your sales team.', tabs: [] };
+      }
+      if (pathname.startsWith('/developer/team')) {
+        return { title: 'Team', blurb: 'Who can get into your account, and which of them buyers see on a project.', tabs: [] };
+      }
+      if (pathname.startsWith('/developer/profile') || pathname.startsWith('/account')) {
+        return {
+          title: 'Account',
+          blurb: 'Your developer details, sign-in security and what you get notified about.',
+          tabs: [
+            { label: 'Developer profile', path: '/developer/profile' },
+            { label: 'Sign-in & security', path: '/account/security' },
+            { label: 'Notifications', path: '/account/notifications' }
+          ]
+        };
+      }
+      if (pathname === '/developer') {
+        return { title: 'Home', blurb: 'What needs you today, and how your projects are selling.', tabs: [{ label: 'Today', path: '/developer' }] };
+      }
+    }
     if (pathname.startsWith('/rto')) {
       const isNew = pathname === '/rto/new' || pathname.endsWith('/edit');
       const isTeam = pathname === '/rto/team' || pathname.startsWith('/rto/team/');
@@ -324,8 +357,8 @@ export default function HubBar() {
   return (
     <header className="hub-bar">
       <div className="hub-bar-top">
-        {/* Dual Platform Switcher */}
-        <nav className="platform-switch" aria-label="Platform">
+        {/* Dual Platform Switcher — developer workspace mein Listings / Real Time nahi */}
+        {!isDeveloper && (<nav className="platform-switch" aria-label="Platform">
           <button
             type="button"
             className={!pathname.startsWith('/rto') && platform === 'listings' ? 'active' : ''}
@@ -344,7 +377,7 @@ export default function HubBar() {
               <span>Real Time Offer</span>
             </button>
           )}
-        </nav>
+        </nav>)}
 
         {/* Global Search Button */}
         <button
@@ -504,7 +537,7 @@ export default function HubBar() {
                 </div>
 
                 <NavLink
-                  to="/account"
+                  to={isDeveloper ? "/developer/profile" : "/account"}
                   onClick={() => setIsUserMenuOpen(false)}
                   style={{
                     display: 'flex',
@@ -521,8 +554,38 @@ export default function HubBar() {
                   onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                 >
                   <Settings size={15} style={{ color: 'var(--cmp-text-muted)' }} />
-                  <span>Agency Profile & Settings</span>
+                  <span>{isDeveloper ? "Developer profile & settings" : "Agency Profile & Settings"}</span>
                 </NavLink>
+
+                {/* Workspace — mock mein switch; live mein account type se fixed */}
+                {isMockData ? (
+                  <div style={{ padding: "6px 10px 2px" }}>
+                    <p style={{ margin: "0 0 6px", fontSize: "11.5px", fontWeight: 700, color: "var(--cmp-text-faint)", textTransform: "uppercase", letterSpacing: "0.04em" }}>Workspace</p>
+                    <div className="segmented" role="tablist" style={{ width: "100%" }}>
+                      {[["agency", "Real estate company"], ["developer", "Developer"]].map(([key, label]) => (
+                        <button
+                          key={key}
+                          type="button"
+                          role="tab"
+                          aria-selected={workspace === key}
+                          style={{ flex: 1, fontSize: "12px", padding: "6px 8px" }}
+                          onClick={() => {
+                            setMockWorkspace(key);
+                            setIsUserMenuOpen(false);
+                            setPlatform("listings");
+                            navigate(key === "developer" ? "/developer" : "/");
+                          }}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <p style={{ margin: 0, padding: "4px 10px", fontSize: "12px", color: "var(--cmp-text-faint)" }}>
+                    Workspace: {isDeveloper ? "Developer" : "Real estate company"}
+                  </p>
+                )}
 
                 <button
                   type="button"
@@ -581,9 +644,10 @@ export default function HubBar() {
           <NavLink
             key={tab.path}
             to={tab.path}
-            end={tab.path === '/' || tab.path === '/properties' || tab.path === '/clients' || tab.path === '/growth' || tab.path === '/wallet' || tab.path === '/team' || tab.path === '/rto/team' || tab.path === '/account' || tab.path === '/help' || tab.path === '/rto'}
+            end={tab.path === '/developer' || tab.path === '/developer/profile' || tab.path === '/' || tab.path === '/properties' || tab.path === '/clients' || tab.path === '/growth' || tab.path === '/wallet' || tab.path === '/team' || tab.path === '/rto/team' || tab.path === '/account' || tab.path === '/help' || tab.path === '/rto'}
             className={({ isActive }) =>
               isActive ||
+              (tab.path === '/developer/projects' && pathname.startsWith('/developer/projects/')) ||
               (tab.path === '/rto/offers' &&
                 (pathname.startsWith('/rto/bidders') || pathname.startsWith('/rto/cheques')))
                 ? 'active'

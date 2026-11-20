@@ -272,6 +272,26 @@ export function AppProvider({ children }) {
 
   const isAuthenticated = Boolean(account && !mustChangePassword) || dataMode === 'mock';
 
+  // Workspace: live mein account type se (onboarding pe approve hua), mock mein avatar menu se switch
+  const [mockWorkspace, setMockWorkspaceState] = useState(() => {
+    try {
+      return localStorage.getItem('cmp_connect_mock_workspace') === 'developer' ? 'developer' : 'agency';
+    } catch {
+      return 'agency';
+    }
+  });
+  const setMockWorkspace = (ws) => {
+    const next = ws === 'developer' ? 'developer' : 'agency';
+    setMockWorkspaceState(next);
+    try {
+      localStorage.setItem('cmp_connect_mock_workspace', next);
+    } catch {}
+  };
+  const workspace = dataMode === 'mock'
+    ? mockWorkspace
+    : (account?.accountType === 'DEVELOPER' ? 'developer' : 'agency');
+  const isDeveloper = workspace === 'developer';
+
   // Sync data attributes to HTML root element & persist to localStorage
   useEffect(() => {
     const root = document.documentElement;
@@ -468,6 +488,9 @@ export function AppProvider({ children }) {
         loginUser,
         updateToken,
         logout,
+        workspace,
+        isDeveloper,
+        setMockWorkspace,
         platform,
         setPlatform,
         theme,

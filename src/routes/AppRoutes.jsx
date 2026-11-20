@@ -61,6 +61,16 @@ import ChangePasswordPage from '../pages/onboarding/ChangePasswordPage';
 import AcceptInvitePage from '../pages/onboarding/AcceptInvitePage';
 import ResetPasswordPage from '../pages/onboarding/ResetPasswordPage';
 
+import { DeveloperProvider } from '../context/DeveloperContext';
+import DeveloperHomePage from '../pages/developer/DeveloperHomePage';
+import ProjectsPage from '../pages/developer/ProjectsPage';
+import ProjectDetailPage from '../pages/developer/ProjectDetailPage';
+import ProjectFormPage from '../pages/developer/ProjectFormPage';
+import AvailabilityPage from '../pages/developer/AvailabilityPage';
+import DeveloperEnquiriesPage from '../pages/developer/DeveloperEnquiriesPage';
+import DeveloperTeamPage from '../pages/developer/DeveloperTeamPage';
+import DeveloperProfilePage from '../pages/developer/DeveloperProfilePage';
+
 function ProtectedLayout() {
   const { isAuthenticated, account, mustChangePassword, isAuthLoading, isMockData } = useApp();
   const location = useLocation();
@@ -120,6 +130,14 @@ function AgencyOnlyGuard({ redirectTo = '/' }) {
   return <Outlet />;
 }
 
+// Workspace guard: developer account ko agency hubs (listings / real time) nahi, agency ko /developer nahi
+function WorkspaceGuard({ workspace }) {
+  const { isDeveloper } = useApp();
+  if (workspace === 'agency' && isDeveloper) return <Navigate to="/developer" replace />;
+  if (workspace === 'developer' && !isDeveloper) return <Navigate to="/" replace />;
+  return <Outlet />;
+}
+
 export default function AppRoutes() {
   const { isAuthenticated } = useApp();
 
@@ -165,6 +183,8 @@ export default function AppRoutes() {
 
       {/* Protected Internal Portal Hubs */}
       <Route element={<ProtectedLayout />}>
+        {/* Agency workspace */}
+        <Route element={<WorkspaceGuard workspace="agency" />}>
         {/* Home Hub */}
         <Route path="/" element={<DashboardPage />} />
         <Route path="/activity" element={<ActivityLogPage />} />
@@ -215,21 +235,6 @@ export default function AppRoutes() {
           </Route>
         </Route>
 
-        {/* Wallet Hub */}
-        <Route element={<PermissionGuard requiredAny={['contracts.view', 'credits.calculator', 'credits.history_view']} redirectTo="/" />}>
-          <Route path="/wallet" element={<WalletPage />} />
-          <Route element={<PermissionGuard requiredAny={['credits.history_view', 'contracts.view']} redirectTo="/wallet" />}>
-            <Route path="/wallet/activity" element={<CreditActivityPage />} />
-          </Route>
-          <Route element={<PermissionGuard requiredAny={['credits.return_request', 'contracts.view']} redirectTo="/wallet" />}>
-            <Route path="/wallet/refunds" element={<RefundsPage />} />
-          </Route>
-          <Route element={<PermissionGuard required="contracts.view" redirectTo="/wallet" />}>
-            <Route path="/wallet/contract" element={<ContractPage />} />
-            <Route path="/wallet/invoices" element={<InvoicesPage />} />
-          </Route>
-        </Route>
-
         {/* Members Hub (Standalone) */}
         <Route element={<PermissionGuard required="team.view" redirectTo="/" />}>
           <Route path="/members" element={<MembersPage />} />
@@ -250,8 +255,40 @@ export default function AppRoutes() {
           </Route>
         </Route>
 
-        {/* Account Hub */}
         <Route path="/account" element={<AgencyProfilePage />} />
+        </Route>
+
+        {/* Developer workspace */}
+        <Route element={<WorkspaceGuard workspace="developer" />}>
+          <Route element={<DeveloperProvider />}>
+            <Route path="/developer" element={<DeveloperHomePage />} />
+            <Route path="/developer/projects" element={<ProjectsPage />} />
+            <Route path="/developer/projects/new" element={<ProjectFormPage />} />
+            <Route path="/developer/projects/:id" element={<ProjectDetailPage />} />
+            <Route path="/developer/projects/:id/edit" element={<ProjectFormPage />} />
+            <Route path="/developer/availability" element={<AvailabilityPage />} />
+            <Route path="/developer/enquiries" element={<DeveloperEnquiriesPage />} />
+            <Route path="/developer/team" element={<DeveloperTeamPage />} />
+            <Route path="/developer/profile" element={<DeveloperProfilePage />} />
+          </Route>
+        </Route>
+
+        {/* Wallet Hub */}
+        <Route element={<PermissionGuard requiredAny={['contracts.view', 'credits.calculator', 'credits.history_view']} redirectTo="/" />}>
+          <Route path="/wallet" element={<WalletPage />} />
+          <Route element={<PermissionGuard requiredAny={['credits.history_view', 'contracts.view']} redirectTo="/wallet" />}>
+            <Route path="/wallet/activity" element={<CreditActivityPage />} />
+          </Route>
+          <Route element={<PermissionGuard requiredAny={['credits.return_request', 'contracts.view']} redirectTo="/wallet" />}>
+            <Route path="/wallet/refunds" element={<RefundsPage />} />
+          </Route>
+          <Route element={<PermissionGuard required="contracts.view" redirectTo="/wallet" />}>
+            <Route path="/wallet/contract" element={<ContractPage />} />
+            <Route path="/wallet/invoices" element={<InvoicesPage />} />
+          </Route>
+        </Route>
+
+        {/* Account Hub (shared) */}
         <Route path="/account/security" element={<SecurityPage />} />
         <Route path="/account/notifications" element={<NotificationsPage />} />
 
@@ -260,6 +297,7 @@ export default function AppRoutes() {
         <Route path="/help/whats-new" element={<WhatsNewPage />} />
 
         {/* Real Time Offer Hub (Agencies Only) */}
+        <Route element={<WorkspaceGuard workspace="agency" />}>
         <Route element={<AgencyOnlyGuard redirectTo="/" />}>
           <Route element={<PermissionGuard requiredAny={['listings.view', 'listings.create', 'team.view', 'insights.agents_view', 'roles.view']} redirectTo="/" />}>
             <Route path="/rto" element={<EntriesPage />} />
@@ -286,6 +324,7 @@ export default function AppRoutes() {
             <Route path="/rto/:id/edit" element={<EnterPropertyPage />} />
             <Route path="/rto/:id" element={<RtoDetailPage />} />
           </Route>
+        </Route>
         </Route>
       </Route>
 

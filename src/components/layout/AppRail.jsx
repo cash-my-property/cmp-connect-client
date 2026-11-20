@@ -14,13 +14,16 @@ import {
   DollarSign,
   Sparkles,
   PanelLeftClose,
-  PanelLeftOpen
+  PanelLeftOpen,
+  Building2,
+  MessagesSquare
 } from 'lucide-react';
 
 export default function AppRail({ isExpanded = false, onToggleExpand }) {
-  const { platform, account, can, hasAny } = useApp();
+  const { platform, account, can, hasAny, isDeveloper } = useApp();
   const location = useLocation();
-  const isRto = platform === 'auctions' || location.pathname.startsWith('/rto');
+  const isRto = !isDeveloper && (platform === 'auctions' || location.pathname.startsWith('/rto'));
+  const sideLabel = isDeveloper ? 'Developer' : isRto ? 'Real Time' : 'Listings';
 
   return (
     <nav
@@ -29,7 +32,7 @@ export default function AppRail({ isExpanded = false, onToggleExpand }) {
       data-side={isRto ? 'rto' : 'listings'}
     >
       <div className="rail-top">
-        <NavLink className="rail-logo" aria-label="Home" to={isRto ? '/rto' : '/'}>
+        <NavLink className="rail-logo" aria-label="Home" to={isDeveloper ? '/developer' : isRto ? '/rto' : '/'}>
           <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true" style={{ flexShrink: 0 }}>
             <path
               d="M4 15 L16 5 L28 15 V27 a1 1 0 0 1-1 1 H5 a1 1 0 0 1-1-1 Z"
@@ -43,18 +46,45 @@ export default function AppRail({ isExpanded = false, onToggleExpand }) {
           {isExpanded && (
             <div className="rail-brand-text">
               <span className="rail-brand-title">CMP Connect</span>
-              <span className="rail-side-inline">{isRto ? 'Real Time' : 'Listings'}</span>
+              <span className="rail-side-inline">{sideLabel}</span>
             </div>
           )}
         </NavLink>
       </div>
 
       {!isExpanded && (
-        <span className="rail-side">{isRto ? 'Real Time' : 'Listings'}</span>
+        <span className="rail-side">{sideLabel}</span>
       )}
 
       <div className="rail-group">
-        {!isRto ? (
+        {isDeveloper ? (
+          <>
+            <NavLink to="/developer" end className={({ isActive }) => `rail-link ${isActive ? 'active' : ''}`} title="Home">
+              <Home size={19} />
+              <span>Home</span>
+            </NavLink>
+            <NavLink
+              to="/developer/projects"
+              className={({ isActive }) => `rail-link ${isActive || location.pathname.startsWith('/developer/availability') ? 'active' : ''}`}
+              title="Projects"
+            >
+              <Building2 size={19} />
+              <span>Projects</span>
+            </NavLink>
+            <NavLink to="/developer/enquiries" className={({ isActive }) => `rail-link ${isActive ? 'active' : ''}`} title="Buyers">
+              <MessagesSquare size={19} />
+              <span>Buyers</span>
+            </NavLink>
+            <NavLink to="/developer/team" className={({ isActive }) => `rail-link ${isActive ? 'active' : ''}`} title="Team">
+              <UserCheck size={19} />
+              <span>Team</span>
+            </NavLink>
+            <NavLink to="/wallet" className={({ isActive }) => `rail-link ${isActive ? 'active' : ''}`} title="Wallet">
+              <CreditCard size={19} />
+              <span>Wallet</span>
+            </NavLink>
+          </>
+        ) : !isRto ? (
           <>
             <NavLink to="/" end className={({ isActive }) => `rail-link ${isActive ? 'active' : ''}`} title="Home">
               <Home size={19} />
@@ -182,7 +212,11 @@ export default function AppRail({ isExpanded = false, onToggleExpand }) {
           <HelpCircle size={19} />
           <span>Help</span>
         </NavLink>
-        <NavLink to="/account" className={({ isActive }) => `rail-link ${isActive ? 'active' : ''}`} title="Agency Account">
+        <NavLink
+          to={isDeveloper ? "/developer/profile" : "/account"}
+          className={({ isActive }) => `rail-link ${isActive || (isDeveloper && location.pathname.startsWith('/account')) ? 'active' : ''}`}
+          title={isDeveloper ? "Developer account" : "Agency Account"}
+        >
           <Settings size={19} />
           <span>Account</span>
         </NavLink>
