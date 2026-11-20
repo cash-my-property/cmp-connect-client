@@ -482,7 +482,8 @@ export default function OnboardingSignupPage() {
     const trimmedName = (nameVal || '').trim();
     const trimmedEmail = (emailVal || '').trim().toLowerCase();
 
-    if (!trimmedName || !trimmedEmail) {
+    // 20 Nov: company name (3+) se DLD developers whitelist mein dhoondo — email optional
+    if (trimmedName.length < 3) {
       setDevPrecheck({ loading: false, checkedKey: '', result: null, error: null });
       return;
     }
@@ -494,8 +495,19 @@ export default function OnboardingSignupPage() {
       const res = await cmpConnectApi.checkExistence({
         type: 'DEVELOPER',
         companyName: trimmedName,
-        email: trimmedEmail
+        email: trimmedEmail || undefined
       });
+      // Whitelist match → khaali fields bhar do (user edit kar sakta hai)
+      const found = res?.data?.company;
+      if (found) {
+        setFormData((prev) => ({
+          ...prev,
+          dldDeveloperNumber: prev.dldDeveloperNumber || found.officeNumber || '',
+          officialEmail: prev.officialEmail || found.email || '',
+          officialPhone: prev.officialPhone || found.phone || ''
+        }));
+        setAutofilledFromDld(true);
+      }
 
       setDevPrecheck({
         loading: false,
@@ -521,17 +533,17 @@ export default function OnboardingSignupPage() {
     setDevPrecheck({ loading: false, checkedKey: '', result: null, error: null });
 
     if (devDebounceRef.current) clearTimeout(devDebounceRef.current);
-    if (val.trim() && formData.email.trim()) {
+    if (val.trim().length >= 3) {
       devDebounceRef.current = setTimeout(() => {
         runDeveloperCheck(val, formData.email);
-      }, 400);
+      }, 500);
     }
   };
 
   const handleDevNameBlur = () => {
     setTouched((prev) => ({ ...prev, companyName: true }));
     if (devDebounceRef.current) clearTimeout(devDebounceRef.current);
-    if (formData.companyName.trim() && formData.email.trim()) {
+    if (formData.companyName.trim().length >= 3) {
       runDeveloperCheck(formData.companyName, formData.email);
     }
   };
@@ -1171,6 +1183,28 @@ export default function OnboardingSignupPage() {
                     )}
                     {backendErrors.companyName && (
                       <span className="error-text">{backendErrors.companyName}</span>
+                    )}
+                    {accountType === 'DEVELOPER' && devPrecheck.loading && (
+                      <span className="hint">Looking for your company in the DLD developer list…</span>
+                    )}
+                    {accountType === 'DEVELOPER' && !devPrecheck.loading && devPrecheck.result?.company && (
+                      <span className="hint" style={{ color: 'var(--cmp-brand)', fontWeight: 600 }}>
+                        Found in the DLD developer list: {devPrecheck.result.company.companyName}
+                        {devPrecheck.result.company.officeNumber ? ` · office ${devPrecheck.result.company.officeNumber}` : ''}. We filled in what we could — check it.
+                        {devPrecheck.result.company.companyName && devPrecheck.result.company.companyName.toLowerCase() !== formData.companyName.trim().toLowerCase() && (
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm"
+                            style={{ marginInlineStart: 6 }}
+                            onClick={() => setFormData((prev) => ({ ...prev, companyName: devPrecheck.result.company.companyName }))}
+                          >
+                            Use this name
+                          </button>
+                        )}
+                      </span>
+                    )}
+                    {accountType === 'DEVELOPER' && !devPrecheck.loading && devPrecheck.result?.message && (
+                      <span className={devPrecheck.result.canSubmit === false ? 'error-text' : 'hint'}>{devPrecheck.result.message}</span>
                     )}
                   </div>
 

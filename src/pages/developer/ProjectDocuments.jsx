@@ -5,6 +5,7 @@ import {
   PROJECT_DOCUMENTS, DOC_GROUPS, DOC_STATUS, EXPIRY_WARNING_DAYS,
   emptyDocument, expiryState, daysUntil, isDocumentInHand, documentGaps, documentsSummary
 } from '../../utils/projectDocuments';
+import { useProjectOptions } from '../../context/DeveloperContext';
 import './projectForm.css';
 
 export function DocumentsSummaryBar({ documents }) {
@@ -140,10 +141,12 @@ function DocumentRow({ def, doc, onChange, upload, readOnlyNumbers = false }) {
 
 // Poora documents editor — groups ke hisaab se
 export default function ProjectDocumentsEditor({ documents, onChange, upload }) {
+  // Document ke naam backend options se (live)
+  const { documentLabels } = useProjectOptions();
   return (
     <div style={{ display: 'grid', gap: 22 }}>
       {DOC_GROUPS.map((g) => {
-        const defs = PROJECT_DOCUMENTS.filter((d) => d.group === g.key);
+        const defs = PROJECT_DOCUMENTS.filter((d) => d.group === g.key).map((d) => ({ ...d, label: documentLabels[d.key] || d.label }));
         return (
           <div key={g.key}>
             <h3 style={{ fontSize: 14, margin: '0 0 10px' }}>{g.title}</h3>

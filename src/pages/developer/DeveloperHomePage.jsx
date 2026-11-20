@@ -19,7 +19,7 @@ function needItem(n) {
       return {
         tone: 'warning', Icon: AlertTriangle,
         text: issues.length
-          ? <><strong>{n.projectName || n.title?.split(' needs')[0] || 'A project'}</strong> needs {issues.length} {issues.length === 1 ? 'thing' : 'things'} before it can go live: {issues.join(', ')}.</>
+          ? <><strong>{n.projectName || String(n.title || '').replace(/ (needs|can['’]t).*$/, '') || 'A project'}</strong> needs {issues.length} {issues.length === 1 ? 'thing' : 'things'} before it can go live: {issues.join(', ')}.</>
           : <>{n.title}</>,
         to: n.projectId ? `/developer/projects/${n.projectId}` : '/developer/projects', cta: 'Fix'
       };
@@ -142,7 +142,7 @@ export default function DeveloperHomePage() {
                         <tr key={p.id}>
                           <td>
                             <NavLink to={`/developer/projects/${p.id}`} style={{ fontWeight: 700 }}>{p.name}</NavLink>
-                            <span className="faint" style={{ display: 'block', fontSize: 12 }}>{p.community} · {p.stage}</span>
+                            <span className="faint" style={{ display: 'block', fontSize: 12 }}>{[p.community, p.stage].filter(Boolean).join(' · ')}</span>
                           </td>
                           <td><ProjectStatusBadge status={p.status} /></td>
                           <td style={{ fontVariantNumeric: 'tabular-nums' }}>

@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Plus, Users, Eye, Building2 } from 'lucide-react';
+import { Plus, Users, Eye, Building2, UserPlus } from 'lucide-react';
 import { useDeveloper, useLoad, newId } from '../../context/DeveloperContext';
 import { PageHead, InfoNote, StatTile, Field, fieldStyle, LoadState, Notice } from './DeveloperUi';
 import { Avatar, Badge } from '../../components/ui';
@@ -56,6 +56,9 @@ export default function DeveloperTeamPage() {
   };
   const shownNames = team.filter((m) => m.shownToBuyers).map((m) => m.name.split(' ')[0]).join(', ');
   const inviteRoles = roles.filter((r) => r.key !== 'OWNER');
+  // CMP ki lagayi hui seat limit (limit null = unlimited)
+  const seats = teamSummary.seats || null;
+  const seatsFull = seats ? seats.canInviteMore === false : false;
 
   const openEdit = (m, { needBrn = false } = {}) => {
     setEditing(JSON.parse(JSON.stringify(m)));
@@ -107,6 +110,7 @@ export default function DeveloperTeamPage() {
       setEditing(null);
     } catch (err) {
       if (errorCode(err) === 'BRN_REQUIRED') { setBrnError(errorMessage(err, 'A BRN is required before someone can be shown to buyers.')); brnRef.current?.focus(); }
+      else if (errorCode(err) === 'MEMBER_LIMIT_REACHED') { setFormError(errorMessage(err, 'All your seats are in use. Ask Cash My Property for more.')); loadTeam().catch(() => {}); }
       else setFormError(errorMessage(err));
     } finally {
       setSaving(false);
@@ -136,7 +140,13 @@ export default function DeveloperTeamPage() {
         count={teamSummary.total}
         blurb="Who can get into CMP Connect for your account, what they can do, and which of them buyers see on a project page."
         actions={
-          <button type="button" className="btn btn-primary btn-sm" onClick={() => openEdit(blankMember())}>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={() => openEdit(blankMember())}
+            disabled={seatsFull}
+            title={seatsFull ? 'All your seats are in use. Ask Cash My Property for more.' : undefined}
+          >
             <Plus size={16} /> Add a person
           </button>
         }
@@ -148,7 +158,21 @@ export default function DeveloperTeamPage() {
         <StatTile icon={Users} label="People on the account" value={teamSummary.total} hint={teamSummary.pendingInvites ? `${teamSummary.pendingInvites} still to accept` : 'Everyone has joined'} />
         <StatTile icon={Eye} label="Shown to buyers" value={teamSummary.shownToBuyers} hint={shownNames || 'Nobody'} />
         <StatTile icon={Building2} label="Projects covered" value={teamSummary.projectsCovered} hint={`of ${assignableProjects.length} in your portfolio`} />
+        {seats && (
+          <StatTile
+            icon={UserPlus}
+            label="Seats"
+            value={seats.limit == null ? seats.used : `${seats.used} of ${seats.limit}`}
+            hint={seats.limit == null ? 'No limit on your plan' : seatsFull ? 'All seats in use' : `${Math.max(0, seats.limit - seats.used)} left`}
+          />
+        )}
       </div>
+
+      {seatsFull && (
+        <InfoNote tone="warning">
+          <strong>All {seats.limit} seats are in use.</strong> Deactivate someone or ask Cash My Property for more seats before inviting another person.
+        </InfoNote>
+      )}
 
       <InfoNote>
         By default a developer project shows no people at all: buyers see the project and {companyName || 'your company'}, and the enquiry goes to your shared inbox. Turn <strong>Shown to buyers</strong> on for a sales agent and they appear on the projects they are assigned to, with their BRN.{' '}

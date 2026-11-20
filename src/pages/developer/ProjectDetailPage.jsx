@@ -210,7 +210,11 @@ export default function ProjectDetailPage() {
                 <dt className="muted">Escrow account</dt><dd style={{ margin: 0 }}>{project.escrowAccount ? `${project.escrowAccount}${project.escrowBank ? ` · ${project.escrowBank}` : ''}` : '—'}</dd>
                 <dt className="muted">Service charge</dt><dd style={{ margin: 0 }}>{project.serviceCharge ? `AED ${project.serviceCharge} per sqft` : '—'}</dd>
                 <dt className="muted">DLD fee waiver</dt><dd style={{ margin: 0 }}>{project.dldWaiver ? `${project.dldWaiver}%` : '—'}</dd>
-                <dt className="muted">Media</dt><dd style={{ margin: 0 }}>{project.photos.length} photos{brochureName(project.brochure) ? ' · brochure' : ''}</dd>
+                <dt className="muted">Government fee</dt><dd style={{ margin: 0 }}>{project.governmentFeePct != null && project.governmentFeePct !== '' ? `${project.governmentFeePct}%` : '—'}</dd>
+                <dt className="muted">Ownership</dt><dd style={{ margin: 0 }}>{project.ownershipType || '—'}</dd>
+                <dt className="muted">Buildings</dt><dd style={{ margin: 0 }}>{project.buildingsCount !== '' && project.buildingsCount != null ? project.buildingsCount : '—'}</dd>
+                <dt className="muted">On the map</dt><dd style={{ margin: 0 }}>{project.geo ? 'Pinned' : <NavLink to={`/developer/projects/${project.id}/edit`}>Add the location</NavLink>}</dd>
+                <dt className="muted">Media</dt><dd style={{ margin: 0 }}>{project.photos.length} photos{project.video?.url ? ' · video tour' : ''}{brochureName(project.brochure) ? ' · brochure' : ''}</dd>
                 <dt className="muted">Enquiries go to</dt><dd style={{ margin: 0 }}>Your sales team inbox</dd>
               </dl>
             </section>

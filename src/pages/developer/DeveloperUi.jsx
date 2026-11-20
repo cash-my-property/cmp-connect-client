@@ -1,11 +1,13 @@
 import React from 'react';
 import { Plug, Loader2, X } from 'lucide-react';
 import { Badge } from '../../components/ui';
-import { PROJECT_STATUS } from '../../context/DeveloperContext';
+import { PROJECT_STATUS, useProjectOptions } from '../../context/DeveloperContext';
 
 export function ProjectStatusBadge({ status }) {
-  const s = PROJECT_STATUS[status] || { label: status || '—', variant: 'neutral' };
-  return <Badge variant={s.variant}>{s.label}</Badge>;
+  const { statusLabels } = useProjectOptions();
+  const variant = PROJECT_STATUS[status]?.variant || 'neutral';
+  // Label server ke options se (live), warna local
+  return <Badge variant={variant}>{statusLabels[status] || PROJECT_STATUS[status]?.label || status || '—'}</Badge>;
 }
 
 export function BuildRing({ pct = 0, size = 38 }) {

@@ -29,8 +29,9 @@ function ProfileForm({ company }) {
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState({ tone: 'danger', text: '' });
   const [review, setReview] = useState(false);
-  const [logoBusy, setLogoBusy] = useState(false);
+  const [logoBusy, setLogoBusy] = useState('');
   const logoRef = useRef(null);
+  const coverRef = useRef(null);
 
   const set = (key) => (e) => { setNotice({ tone: 'danger', text: '' }); setForm((f) => ({ ...f, [key]: e.target.value })); };
   const registrationChanged = REGISTRATION_FIELDS.some((k) => String(form[k] || '') !== String(company[k] || ''));
@@ -53,17 +54,18 @@ function ProfileForm({ company }) {
     }
   };
 
-  const onLogo = async (file) => {
+  // which: logo | cover (developer page ka banner)
+  const onLogo = async (file, which = 'logo') => {
     if (!file) return;
     if (!/image\/(jpeg|png|webp|svg\+xml)/.test(file.type)) { setNotice({ tone: 'danger', text: 'The logo has to be a JPG, PNG, WebP or SVG.' }); return; }
-    setLogoBusy(true);
+    setLogoBusy(which);
     try {
-      const up = await uploadFile(file, 'logo');
-      setForm((f) => ({ ...f, logo: { url: up.url, public_id: up.public_id } }));
+      const up = await uploadFile(file, which);
+      setForm((f) => ({ ...f, [which]: { url: up.url, public_id: up.public_id } }));
     } catch (err) {
-      setNotice({ tone: 'danger', text: errorMessage(err, 'Could not upload the logo.') });
+      setNotice({ tone: 'danger', text: errorMessage(err, which === 'cover' ? 'Could not upload the banner.' : 'Could not upload the logo.') });
     } finally {
-      setLogoBusy(false);
+      setLogoBusy('');
     }
   };
 
@@ -102,6 +104,9 @@ function ProfileForm({ company }) {
           <span className="faint" style={{ fontSize: 12 }}>Public page preview</span>
         </div>
         <div style={{ border: '1px solid var(--cmp-border)', borderRadius: 'var(--cmp-radius-lg)', padding: 18, background: 'var(--cmp-surface-sunken)' }}>
+          {form.cover?.url && (
+            <img src={form.cover.url} alt="" style={{ width: 'calc(100% + 36px)', margin: '-18px -18px 16px', height: 160, objectFit: 'cover', display: 'block', borderRadius: 'var(--cmp-radius-lg) var(--cmp-radius-lg) 0 0' }} />
+          )}
           <div className="row" style={{ gap: 14, alignItems: 'flex-start', flexWrap: 'wrap' }}>
             {form.logo?.url
               ? <img src={form.logo.url} alt="" style={{ width: 52, height: 52, borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--cmp-border)' }} />
@@ -140,7 +145,7 @@ function ProfileForm({ company }) {
                         <strong style={{ fontSize: 14 }}>{p.name}</strong>
                         <ProjectStatusBadge status={p.status} />
                       </div>
-                      <span className="faint" style={{ fontSize: 12 }}>{p.community} · {p.stage}</span>
+                      <span className="faint" style={{ fontSize: 12 }}>{[p.community, p.stage].filter(Boolean).join(' · ')}</span>
                       <span style={{ fontSize: 13, fontWeight: 700 }}>From {formatAed(fromPrice(p))}</span>
                       <span className="faint" style={{ fontSize: 12 }}>Handover {formatDate(p.handoverDate)} · {t.available} units available</span>
                     </div>
@@ -202,11 +207,16 @@ function ProfileForm({ company }) {
           </Field>
           <Field label="Head office address" style={{ marginTop: 14 }}><input style={fieldStyle} value={form.address} onChange={set('address')} /></Field>
           <div className="row" style={{ gap: 12, marginTop: 14, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 13, fontWeight: 600 }}>Logo</span>
-            <button type="button" className="btn btn-outline btn-sm" onClick={() => logoRef.current?.click()} disabled={logoBusy}>
-              {logoBusy ? <Loader2 size={14} className="spin" /> : <Upload size={14} />} {form.logo?.url ? 'Replace logo' : 'Upload logo'}
+            <span style={{ fontSize: 13, fontWeight: 600 }}>Logo and banner</span>
+            <button type="button" className="btn btn-outline btn-sm" onClick={() => logoRef.current?.click()} disabled={Boolean(logoBusy)}>
+              {logoBusy === 'logo' ? <Loader2 size={14} className="spin" /> : <Upload size={14} />} {form.logo?.url ? 'Replace logo' : 'Upload logo'}
             </button>
-            <input ref={logoRef} type="file" accept="image/jpeg,image/png,image/webp,image/svg+xml" hidden onChange={(e) => { onLogo(e.target.files?.[0]); e.target.value = ''; }} />
+            <input ref={logoRef} type="file" accept="image/jpeg,image/png,image/webp,image/svg+xml" hidden onChange={(e) => { onLogo(e.target.files?.[0], 'logo'); e.target.value = ''; }} />
+            <button type="button" className="btn btn-outline btn-sm" onClick={() => coverRef.current?.click()} disabled={Boolean(logoBusy)}>
+              {logoBusy === 'cover' ? <Loader2 size={14} className="spin" /> : <ImageIcon size={14} />} {form.cover?.url ? 'Replace banner' : 'Upload a banner'}
+            </button>
+            <input ref={coverRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(e) => { onLogo(e.target.files?.[0], 'cover'); e.target.value = ''; }} />
+            <span className="faint" style={{ fontSize: 12 }}>The banner sits across the top of your developer page. A wide image works best (about 1600 × 400).</span>
           </div>
         </section>
 

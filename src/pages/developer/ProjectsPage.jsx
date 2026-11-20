@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { Plus, Download, Building2, LayoutGrid, Users, Eye } from 'lucide-react';
-import { useDeveloper, useLoad, unitTotals, fromPrice, projectIssues, formatAed, formatDate, PROJECT_STATUS } from '../../context/DeveloperContext';
+import { useDeveloper, useLoad, unitTotals, fromPrice, projectIssues, formatAed, formatDate } from '../../context/DeveloperContext';
 import { ProjectStatusBadge, BuildRing, StatTile, PageHead, InfoNote, LoadState, Notice } from './DeveloperUi';
 import { SearchInput } from '../../components/ui';
 import { useDebounce } from '../../hooks';
@@ -10,7 +10,8 @@ import { errorMessage } from '../../utils/developerMappers';
 const FILTERS = ['ALL', 'LIVE', 'IN_REVIEW', 'DRAFT', 'REJECTED', 'HANDED_OVER', 'SOLD_OUT'];
 
 export default function ProjectsPage() {
-  const { isLive, projects, projectCounts, projectTotals, notPickedUp, loadProjects, exportCsv, companyName } = useDeveloper();
+  const { isLive, projects, projectCounts, projectTotals, notPickedUp, loadProjects, exportCsv, companyName, projectOptions } = useDeveloper();
+  const { statusLabels } = projectOptions;
   const [filter, setFilter] = useState('ALL');
   const [query, setQuery] = useState('');
   const [actionError, setActionError] = useState('');
@@ -41,7 +42,7 @@ export default function ProjectsPage() {
         const header = ['Project', 'Community', 'Stage', 'Status', 'RERA', 'Units', 'Available', 'From (AED)', 'Handover', 'Build %'];
         const lines = projects.map((p) => {
           const t = unitTotals(p);
-          return [p.name, p.community, p.stage, PROJECT_STATUS[p.status]?.label || p.status, p.rera, t.total, t.available, fromPrice(p) || '', p.handoverDate, p.buildPct]
+          return [p.name, p.community, p.stage, statusLabels[p.status] || p.status, p.rera, t.total, t.available, fromPrice(p) || '', p.handoverDate, p.buildPct]
             .map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',');
         });
         return [header.join(','), ...lines].join('\n');
@@ -94,7 +95,7 @@ export default function ProjectsPage() {
         <div className="segmented" role="tablist">
           {visibleFilters.map((f) => (
             <button key={f} type="button" role="tab" aria-selected={filter === f} onClick={() => setFilter(f)}>
-              {f === 'ALL' ? 'All' : PROJECT_STATUS[f].label} ({projectCounts[f] || 0})
+              {f === 'ALL' ? 'All' : statusLabels[f] || f} ({projectCounts[f] || 0})
             </button>
           ))}
         </div>

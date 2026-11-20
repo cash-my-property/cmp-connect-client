@@ -194,6 +194,32 @@ function mockHome(projects, enquiries) {
   };
 }
 
+// Server options (live) ya local defaults (mock / server fail) — ek hi shape
+export function buildProjectOptions(o) {
+  const list = (v, fallback) => (Array.isArray(v) && v.length ? v : fallback);
+  const statusLabels = Object.fromEntries(Object.entries(PROJECT_STATUS).map(([k, v]) => [k, v.label]));
+  (o?.statuses || []).forEach((st) => { if (st?.value) statusLabels[st.value] = st.label || statusLabels[st.value] || st.value; });
+  const documentLabels = {};
+  (o?.documents || []).forEach((d) => { if (d?.key && d.label) documentLabels[d.key] = d.label; });
+  return {
+    fromServer: Boolean(o),
+    stages: list(o?.stages, STAGES),
+    emirates: list(o?.emirates, EMIRATES),
+    unitKinds: list(o?.unitKinds, UNIT_KINDS),
+    amenities: list(o?.amenities, AMENITIES),
+    statusOrder: (o?.statuses || []).map((st) => st.value).filter(Boolean),
+    statusLabels,
+    documentLabels
+  };
+}
+const DEFAULT_OPTIONS = buildProjectOptions(null);
+
+// Provider ke bahar bhi safe (badge / editor kahin bhi render ho)
+export function useProjectOptions() {
+  const ctx = useContext(DeveloperContext);
+  return ctx?.projectOptions || DEFAULT_OPTIONS;
+}
+
 export function DeveloperProvider({ children }) {
   const { isMockData, isLiveData, account } = useApp();
   const live = isLiveData;
@@ -265,11 +291,16 @@ export function DeveloperProvider({ children }) {
   }, []);
 
   const loadOptions = useCallback(async () => {
-    if (!liveRef.current || options) return options;
+    if (!liveRef.current) return null;
     const res = await developerApi.projectOptions().catch(() => null);
     if (res?.data) setOptions(res.data);
     return res?.data || null;
-  }, [options]);
+  }, []);
+
+  // Form options (stages, emirates, unit kinds, labels, amenities) — live mein server se, ek dafa
+  useEffect(() => {
+    if (live && !options) loadOptions();
+  }, [live, options, loadOptions]);
 
   const storeDetail = (p) => {
     setLiveDetails((prev) => ({ ...prev, [p.id]: p }));
@@ -380,7 +411,8 @@ export function DeveloperProvider({ children }) {
   const loadMovements = useCallback(async (projectId) => {
     if (!liveRef.current) return [];
     const res = await developerApi.movements(projectId);
-    return Array.isArray(res?.data) ? res.data : res?.data?.rows || [];
+    const d = res?.data;
+    return Array.isArray(d) ? d : Array.isArray(d?.data) ? d.data : d?.rows || [];
   }, []);
 
   // ── Enquiries ────────────────────────────────────────────
@@ -517,10 +549,10 @@ export function DeveloperProvider({ children }) {
   }, []);
 
   // ── Uploads + exports ────────────────────────────────────
-  // kind: photo | brochure | document | logo
+  // kind: photo | brochure | document | video | logo | cover
   const uploadFile = useCallback(async (file, kind) => {
     if (liveRef.current) {
-      return kind === 'logo' ? developerApi.uploadLogo(file) : developerApi.uploadProjectFile(file, kind);
+      return kind === 'logo' || kind === 'cover' ? developerApi.uploadLogo(file, kind) : developerApi.uploadProjectFile(file, kind);
     }
     return { url: URL.createObjectURL(file), public_id: '', fileName: file.name };
   }, []);
@@ -535,6 +567,8 @@ export function DeveloperProvider({ children }) {
   }, []);
 
   // ── Exposed state (same shape both modes) ────────────────
+  const projectOptions = useMemo(() => buildProjectOptions(live ? options : null), [live, options]);
+
   const value = useMemo(() => {
     const projects = live ? liveProjects : mockProjects;
     const enquiries = live ? liveEnquiries : mockEnquiries;
@@ -582,6 +616,7 @@ export function DeveloperProvider({ children }) {
       companyName,
       company: live ? liveProfile : mockCompany,
       options,
+      projectOptions,
       roles,
 
       projects,
@@ -629,7 +664,7 @@ export function DeveloperProvider({ children }) {
       exportCsv
     };
   }, [
-    live, companyName, options, roles, liveProjects, mockProjects, liveProjectMeta, liveDetails,
+    live, companyName, options, projectOptions, roles, liveProjects, mockProjects, liveProjectMeta, liveDetails,
     liveEnquiries, mockEnquiries, liveEnquiryMeta, liveTeam, mockTeam, liveTeamMeta, liveProfile, mockCompany,
     liveHome, liveAvailability, loadProjects, loadProject, loadOptions, saveProject, updateProject, updateDocument,
     deleteProject, markSoldOut, loadAvailability, moveUnit, loadMovements, loadEnquiries, pickUpEnquiry, updateEnquiry,

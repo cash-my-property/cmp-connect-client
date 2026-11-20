@@ -40,7 +40,7 @@ export const developerApi = {
   markSoldOut: (id) => apiRequest(`${BASE}/projects/${encodeURIComponent(id)}/sold-out`, { method: 'POST' }),
   exportProjects: () => downloadCsv(`${BASE}/projects/export`, null, 'Could not export projects.'),
 
-  /** kind: photo | brochure | document */
+  /** kind: photo | brochure | document | video */
   async uploadProjectFile(file, kind) {
     const res = await apiRequest(`${BASE}/projects/upload-signature${toQuery({ kind })}`);
     return uploadToCloudinary(file, pickSig(res, kind));
@@ -72,9 +72,10 @@ export const developerApi = {
   home: () => apiRequest(`${BASE}/home`),
   getProfile: () => apiRequest(`${BASE}/profile`),
   updateProfile: (payload) => apiRequest(`${BASE}/profile`, json('PATCH', payload)),
-  async uploadLogo(file) {
+  /** which: logo | cover (developer page banner) — ek call mein dono signatures */
+  async uploadLogo(file, which = 'logo') {
     const res = await apiRequest(`${BASE}/profile/logo-signature`);
-    return uploadToCloudinary(file, pickSig(res, 'logo'));
+    return uploadToCloudinary(file, pickSig(res, which));
   }
 };
 

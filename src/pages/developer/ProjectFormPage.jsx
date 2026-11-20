@@ -1,13 +1,14 @@
 import React, { useMemo, useState } from 'react';
 import { NavLink, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, Check } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Check, Video, Upload, Loader2, X } from 'lucide-react';
 import {
-  useDeveloper, useLoad, planTotal, newId, formatAed, STAGES, EMIRATES, UNIT_KINDS, AMENITIES, MIN_PHOTOS
+  useDeveloper, useLoad, planTotal, newId, formatAed, MIN_PHOTOS
 } from '../../context/DeveloperContext';
 import { InfoNote, LoadState, Notice } from './DeveloperUi';
 import { errorMessage } from '../../utils/developerMappers';
 import { PhotoManager } from './ProjectDetailPage';
 import DescriptionCounter from '../../components/common/DescriptionCounter';
+import GooglePlacesLocationInput from '../../components/common/GooglePlacesLocationInput';
 import ProjectDocumentsEditor, { DocumentsSummaryBar } from './ProjectDocuments';
 import { emptyDocuments, normalizeDocuments, documentsSummary } from '../../utils/projectDocuments';
 import './projectForm.css';
@@ -22,6 +23,12 @@ const blankProject = () => ({
   handoverDate: '',
   launchDate: '',
   buildPct: 0,
+  ownershipType: 'Freehold',
+  governmentFeePct: 4,
+  buildingsCount: '',
+  video: null,
+  geo: null,
+  locationLabel: '',
   rera: '',
   escrowAccount: '',
   escrowBank: '',
@@ -71,7 +78,7 @@ const SECTIONS = [
   { id: 'pf-basics', title: 'The project' },
   { id: 'pf-documents', title: 'Documents' },
   { id: 'pf-costs', title: 'Costs for the buyer' },
-  { id: 'pf-photos', title: 'Photos and brochure' },
+  { id: 'pf-photos', title: 'Photos, video and brochure' },
   { id: 'pf-units', title: 'Unit types' },
   { id: 'pf-plan', title: 'Payment plan' }
 ];
@@ -97,6 +104,47 @@ function Affix({ prefix, suffix, ...inputProps }) {
       {prefix && <span>{prefix}</span>}
       <input {...inputProps} />
       {suffix && <span>{suffix}</span>}
+    </div>
+  );
+}
+
+// Project video tour (ek video) — Cloudinary kind=video
+function VideoField({ video, onChange, upload }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const onFile = async (file) => {
+    if (!file) return;
+    if (!String(file.type).startsWith('video/')) { setErr('Choose a video file (MP4, MOV or WebM).'); return; }
+    if (file.size > 100 * 1024 * 1024) { setErr('The video can be up to 100 MB.'); return; }
+    setErr('');
+    setBusy(true);
+    try {
+      const up = await upload(file, 'video');
+      onChange({ url: up.url, public_id: up.public_id || '', fileName: up.fileName || file.name });
+    } catch (e) {
+      setErr(e?.data?.message || e?.message || 'Could not upload the video.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="card" style={{ padding: 16, marginTop: 16 }}>
+      <strong style={{ fontSize: 14 }}>Video tour</strong>
+      <p className="faint" style={{ margin: '2px 0 10px', fontSize: 12.5 }}>Optional. A walkthrough or drone video buyers can play on the project page. MP4, MOV or WebM, up to 100 MB.</p>
+      {video?.url && (
+        <video src={video.url} controls preload="metadata" style={{ width: '100%', maxWidth: 420, borderRadius: 10, display: 'block', marginBottom: 10, background: '#000' }} />
+      )}
+      <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
+        {video?.url && <span className="chip"><Video size={13} /> {video.fileName || 'Video tour'}</span>}
+        <label className="btn btn-outline btn-sm" style={{ margin: 0, cursor: busy ? 'wait' : 'pointer' }}>
+          {busy ? <Loader2 size={14} className="spin" /> : <Upload size={14} />} {busy ? 'Uploading…' : video?.url ? 'Replace video' : 'Upload a video'}
+          <input type="file" accept="video/mp4,video/quicktime,video/webm" hidden disabled={busy} onChange={(e) => { onFile(e.target.files?.[0]); e.target.value = ''; }} />
+        </label>
+        {video?.url && (
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => onChange(null)}><X size={14} /> Remove</button>
+        )}
+      </div>
+      {err && <p className="pf-error" style={{ margin: '10px 0 0' }}>{err}</p>}
     </div>
   );
 }
@@ -137,7 +185,10 @@ export default function ProjectFormPage() {
 
 function ProjectForm({ existing }) {
   const navigate = useNavigate();
-  const { saveProject, uploadFile } = useDeveloper();
+  const { saveProject, uploadFile, projectOptions } = useDeveloper();
+  // Dropdowns / amenities backend ke options se (live); mock / fail pe local defaults
+  const { stages: STAGES, emirates: EMIRATES, unitKinds: UNIT_KINDS, amenities: AMENITY_SUGGESTIONS } = projectOptions;
+  const [customAmenity, setCustomAmenity] = useState('');
   const [saving, setSaving] = useState(false);
   const [serverError, setServerError] = useState('');
   const [form, setForm] = useState(() => (existing ? (() => { const p = JSON.parse(JSON.stringify(existing)); return { ...p, documents: normalizeDocuments(p) }; })() : blankProject()));
@@ -191,6 +242,12 @@ function ProjectForm({ existing }) {
     setForm((f) => ({ ...f, paymentPlan: f.paymentPlan.map((m) => (m.id === mid ? { ...m, [key]: value } : m)) }));
     clearError('plan');
   };
+  const addCustomAmenity = () => {
+    const a = customAmenity.trim().slice(0, 60);
+    if (!a) return;
+    setForm((f) => (f.amenities.some((x) => x.toLowerCase() === a.toLowerCase()) ? f : { ...f, amenities: [...f.amenities, a] }));
+    setCustomAmenity('');
+  };
   const toggleAmenity = (a) => setForm((f) => ({ ...f, amenities: f.amenities.includes(a) ? f.amenities.filter((x) => x !== a) : [...f.amenities, a] }));
   const setDocument = (key, patch) => {
     setForm((f) => ({ ...f, documents: { ...f.documents, [key]: { ...f.documents[key], ...patch } } }));
@@ -205,6 +262,8 @@ function ProjectForm({ existing }) {
     if (!form.community.trim()) errs.community = 'Add the community it is in.';
     const pct = Number(form.buildPct);
     if (form.buildPct !== '' && (pct < 0 || pct > 100)) errs.buildPct = 'Between 0 and 100.';
+    const gov = Number(form.governmentFeePct);
+    if (form.governmentFeePct !== '' && form.governmentFeePct != null && (gov < 0 || gov > 10)) errs.governmentFeePct = 'Between 0 and 10%.';
     form.unitTypes.forEach((u) => {
       const t = Number(u.total) || 0;
       if (!u.label.trim()) errs[`unit-${u.id}`] = 'Add a label, e.g. “2 bedroom”.';
@@ -222,7 +281,7 @@ function ProjectForm({ existing }) {
     setErrors(errs);
     const firstKey = Object.keys(errs)[0];
     if (firstKey) {
-      const section = firstKey.startsWith('unit-') ? 'pf-units' : firstKey === 'plan' ? 'pf-plan' : 'pf-basics';
+      const section = firstKey.startsWith('unit-') ? 'pf-units' : firstKey === 'plan' ? 'pf-plan' : firstKey === 'governmentFeePct' ? 'pf-costs' : 'pf-basics';
       scrollTo(section);
       return;
     }
@@ -310,6 +369,21 @@ function ProjectForm({ existing }) {
                   {EMIRATES.map((e) => <option key={e}>{e}</option>)}
                 </select>
               </FormField>
+              <FormField id="pf-location" label="Location on the map" hint={form.geo ? 'Pinned — buyers will see the project on the map.' : 'Search the building or community so buyers can find the project on the map.'} className="span-all">
+                <GooglePlacesLocationInput
+                  placeholder="e.g. Saffar Rise, Business Bay, Dubai"
+                  value={form.locationLabel || ''}
+                  onChange={(val) => setForm((f) => ({ ...f, locationLabel: val, geo: null }))}
+                  onSelectLocation={({ address, lat, lng, community, subCommunity, emirate }) => setForm((f) => ({
+                    ...f,
+                    locationLabel: address,
+                    // Coordinates backend ko jaate hain, UI pe nahi dikhte
+                    geo: lat != null && lng != null ? { lat, lng } : null,
+                    community: f.community || community || subCommunity || '',
+                    emirate: EMIRATES.includes(emirate) ? emirate : f.emirate
+                  }))}
+                />
+              </FormField>
               <FormField id="pf-stage" label="Stage">
                 <div className="segmented pf-seg" role="radiogroup" id="pf-stage" aria-label="Stage">
                   {STAGES.map((s) => (
@@ -321,6 +395,16 @@ function ProjectForm({ existing }) {
               </FormField>
               <FormField id="pf-handover" label="Handover date" hint="Needed before the project can go live.">
                 <input id="pf-handover" type="date" value={form.handoverDate} onChange={set('handoverDate')} />
+              </FormField>
+              <FormField id="pf-ownership" label="Ownership">
+                <div className="segmented pf-seg" role="radiogroup" id="pf-ownership" aria-label="Ownership">
+                  {['Freehold', 'Leasehold'].map((o) => (
+                    <button key={o} type="button" role="radio" aria-checked={form.ownershipType === o} aria-selected={form.ownershipType === o} onClick={() => set('ownershipType')(o)}>{o}</button>
+                  ))}
+                </div>
+              </FormField>
+              <FormField id="pf-buildings" label="Number of buildings" hint="Leave empty if it does not apply.">
+                <input id="pf-buildings" type="number" min="0" max="1000" step="1" value={form.buildingsCount} onChange={set('buildingsCount')} placeholder="e.g. 1" />
               </FormField>
               <FormField id="pf-build" label="Construction progress" error={errors.buildPct} className="span-all">
                 <div className="pf-range-row">
@@ -344,11 +428,23 @@ function ProjectForm({ existing }) {
               <div className="pf-field span-all">
                 <span style={{ fontSize: 13, fontWeight: 600 }}>Amenities <span className="faint" style={{ fontWeight: 400 }}>· {form.amenities.length} selected</span></span>
                 <div className="pf-chips">
-                  {AMENITIES.map((a) => (
+                  {/* Suggestions + project pe pehle se jo custom amenities hain */}
+                  {[...AMENITY_SUGGESTIONS, ...form.amenities.filter((a) => !AMENITY_SUGGESTIONS.includes(a))].map((a) => (
                     <button key={a} type="button" className="chip" aria-pressed={form.amenities.includes(a)} onClick={() => toggleAmenity(a)}>
                       {form.amenities.includes(a) && <Check size={13} />} {a}
                     </button>
                   ))}
+                </div>
+                <div className="row" style={{ gap: 8, maxWidth: 420 }}>
+                  <input
+                    aria-label="Add your own amenity"
+                    placeholder="Add your own, e.g. Padel court"
+                    value={customAmenity}
+                    maxLength={60}
+                    onChange={(e) => setCustomAmenity(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomAmenity(); } }}
+                  />
+                  <button type="button" className="btn btn-outline btn-sm" onClick={addCustomAmenity} disabled={!customAmenity.trim()}><Plus size={14} /> Add</button>
                 </div>
               </div>
             </div>
@@ -379,12 +475,15 @@ function ProjectForm({ existing }) {
               <FormField id="pf-dld" label="DLD fee waiver" hint="As a percentage, if you are offering one.">
                 <Affix id="pf-dld" type="number" min="0" max="100" suffix="%" value={form.dldWaiver} onChange={set('dldWaiver')} />
               </FormField>
+              <FormField id="pf-govfee" label="Government fee" hint="Shown to buyers as the DLD fee, usually 4%." error={errors.governmentFeePct}>
+                <Affix id="pf-govfee" type="number" min="0" max="10" step="0.5" suffix="%" value={form.governmentFeePct} onChange={set('governmentFeePct')} />
+              </FormField>
             </div>
           </section>
 
           {/* 3. Photos */}
           <section id="pf-photos" className="card pf-section">
-            <SectionHead step={4} done={sectionDone['pf-photos']} title="Photos and brochure" subtitle={`Buyers look at the pictures before they read anything. ${MIN_PHOTOS} is the minimum to go live; the cover shows in search results.`} />
+            <SectionHead step={4} done={sectionDone['pf-photos']} title="Photos, video and brochure" subtitle={`Buyers look at the pictures before they read anything. ${MIN_PHOTOS} is the minimum to go live; the cover shows in search results.`} />
             <PhotoManager
               upload={uploadFile}
               photos={form.photos}
@@ -392,6 +491,7 @@ function ProjectForm({ existing }) {
               brochure={form.brochure}
               onBrochure={(brochure) => setForm((f) => ({ ...f, brochure }))}
             />
+            <VideoField video={form.video} onChange={(video) => setForm((f) => ({ ...f, video }))} upload={uploadFile} />
           </section>
 
           {/* 4. Unit types */}

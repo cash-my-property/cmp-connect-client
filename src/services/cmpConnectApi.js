@@ -245,7 +245,7 @@ export const cmpConnectApi = {
    * 1. Check Existence (Pre-check)
    * GET /api/cmpConnect/check-existence?type=AGENCY&orn=... | ?type=DEVELOPER&companyName=...&email=...
    */
-  async checkExistence({ type, orn, companyName, email }) {
+  async checkExistence({ type, orn, companyName, email, officeNumber }) {
     const params = new URLSearchParams();
     if (type) params.append('type', type);
 
@@ -254,6 +254,8 @@ export const cmpConnectApi = {
     } else if (type === 'DEVELOPER') {
       if (companyName && companyName.trim()) params.append('companyName', companyName.trim());
       if (email && email.trim()) params.append('email', email.trim().toLowerCase());
+      // DLD office number mil jaye to whitelist exact match
+      if (officeNumber && String(officeNumber).trim()) params.append('officeNumber', String(officeNumber).trim());
     }
 
     return apiRequest(`/api/cmpConnect/check-existence?${params.toString()}`, {

@@ -80,12 +80,17 @@ export function mapProject(p) {
     name: str(p.name),
     community: str(p.community),
     emirate: p.emirate || 'Dubai',
-    stage: p.stage || 'Off-plan',
+    stage: str(p.stage),
     status: p.status || 'DRAFT',
     rejectionReason: str(p.rejectionReason),
     handoverDate: dateOnly(p.handoverDate),
     launchDate: dateOnly(p.launchDate),
     buildPct: Number(p.buildPct) || 0,
+    ownershipType: p.ownershipType || 'Freehold',
+    governmentFeePct: p.governmentFeePct ?? 4,
+    buildingsCount: numOrBlank(p.buildingsCount),
+    video: p.video?.url ? { url: str(p.video.url), public_id: str(p.video.public_id), fileName: lastSegment(p.video.url) } : null,
+    geo: p.geo?.lat != null && p.geo?.lng != null ? { lat: Number(p.geo.lat), lng: Number(p.geo.lng) } : null,
     rera: str(p.rera),
     escrowAccount: str(p.escrowAccount),
     escrowBank: str(p.escrowBank),
@@ -157,6 +162,11 @@ export function toProjectPayload(f) {
     stage: f.stage,
     handoverDate: f.handoverDate || null,
     buildPct: Math.max(0, Math.min(100, Number(f.buildPct) || 0)),
+    ownershipType: f.ownershipType || 'Freehold',
+    ...(f.governmentFeePct === '' || f.governmentFeePct == null ? {} : { governmentFeePct: Math.max(0, Math.min(10, Number(f.governmentFeePct) || 0)) }),
+    buildingsCount: f.buildingsCount === '' || f.buildingsCount == null ? null : Math.max(0, Math.round(Number(f.buildingsCount) || 0)),
+    video: f.video?.url && !String(f.video.url).startsWith('blob:') ? { url: f.video.url, public_id: f.video.public_id || null } : null,
+    geo: f.geo && f.geo.lat != null && f.geo.lng != null ? { lat: Number(f.geo.lat), lng: Number(f.geo.lng) } : null,
     rera: str(docs.dldRegistration?.number || f.rera).trim() || null,
     escrowAccount: str(docs.escrowLetter?.number || f.escrowAccount).trim() || null,
     escrowBank: str(f.escrowBank).trim() || null,
@@ -186,6 +196,7 @@ export function toProjectPayload(f) {
 // PATCH ke liye sirf badle hue UI keys ka payload
 const PATCH_KEYS = {
   photos: ['photos'],
+  video: ['video'],
   brochure: ['brochure'],
   documents: ['documents', 'rera', 'escrowAccount'],
   status: []
@@ -200,15 +211,16 @@ export function toPartialPayload(merged, changedKeys) {
 // ── Availability ────────────────────────────────────────────
 export function mapAvailability(data) {
   const d = data?.data ?? data ?? {};
-  const list = Array.isArray(d) ? d : d.projects || d.rows || [];
+  // handle() wrap: { status, data: { data: rows, totals } }
+  const list = Array.isArray(d) ? d : Array.isArray(d.data) ? d.data : d.projects || d.rows || [];
   return {
     projects: list.map((p) => ({
       id: str(p.id || p._id || p.projectId),
       name: str(p.name),
       community: str(p.community),
       status: p.status || 'LIVE',
-      soldPct: p.soldPct,
-      soldValue: p.soldValue,
+      soldPct: p.soldPct ?? p.totals?.soldPct,
+      soldValue: p.soldValue ?? p.totals?.soldValue,
       movesAllowed: p.movesAllowed !== false && p.status !== 'DRAFT',
       unitTypes: (p.units || p.unitTypes || []).map(mapUnit)
     })),
@@ -242,6 +254,7 @@ export function mapEnquiry(e) {
 }
 
 // ── Team ────────────────────────────────────────────────────
+const roleLabel = (k) => String(k || '').toLowerCase().replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
 const MEMBER_STATUS = { ACTIVE: 'Active', INVITED: 'Invited', INACTIVE: 'Inactive' };
 export function mapMember(m) {
   const name = str(m.fullName || [m.firstName, m.lastName].filter(Boolean).join(' '));
@@ -253,9 +266,9 @@ export function mapMember(m) {
     position: str(m.jobTitle || m.position || m.designation || m.profile?.jobTitle),
     email: str(m.email),
     mobile: str(m.mobile),
-    access: str(m.role?.name || m.access),
+    access: str(typeof m.role === 'string' ? roleLabel(m.role) : m.role?.name || m.access),
     roleId: str(m.role?.id),
-    isOwner: Boolean(m.isOwner || m.role?.key === 'OWNER'),
+    isOwner: Boolean(m.isOwner || m.role?.key === 'OWNER' || m.role === 'OWNER'),
     isSelf: Boolean(m.isSelf),
     brn: str(m.brn ?? m.compliance?.brn),
     projectIds: Array.isArray(m.projectIds) ? m.projectIds.map(String) : [],
@@ -279,7 +292,8 @@ export function mapProfile(d) {
     website: str(c.website),
     about: str(c.about),
     address: str(c.officeAddress),
-    logo: c.logo || null,
+    logo: typeof c.logo === 'string' ? { url: c.logo, public_id: '' } : c.logo || null,
+    cover: typeof c.coverImage === 'string' ? { url: c.coverImage, public_id: '' } : c.coverImage || c.cover || null,
     salesEmail: str(e.salesEmail || e.email),
     salesPhone: str(e.salesPhone || e.phone),
     whatsapp: str(e.whatsapp),
@@ -316,9 +330,13 @@ export const REGISTRATION_FIELDS = ['tradeLicence', 'dldNumber', 'trn'];
 export function toProfilePayload(form, original) {
   const out = {};
   Object.entries(PROFILE_FIELDS).forEach(([ui, api]) => {
-    if (str(form[ui]) !== str(original?.[ui])) out[api] = str(form[ui]).trim();
+    if (str(form[ui]) === str(original?.[ui])) return;
+    const v = str(form[ui]).trim();
+    // founded number hai — khaali ho to null
+    out[api] = ui === 'founded' ? (v ? Number(v) : null) : v;
   });
-  if (form.logo && form.logo?.url !== original?.logo?.url) out.logo = { url: form.logo.url, public_id: form.logo.public_id };
+  if (form.logo?.url && form.logo.url !== original?.logo?.url) out.logo = { url: form.logo.url, public_id: form.logo.public_id || null };
+  if (form.cover?.url && form.cover.url !== original?.cover?.url) out.cover = { url: form.cover.url, public_id: form.cover.public_id || null };
   return out;
 }
 
