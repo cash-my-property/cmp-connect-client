@@ -10,6 +10,7 @@ import {
 import { useDebounce } from '../../hooks';
 import cmpConnectApi from '../../services/cmpConnectApi';
 import { publicListingUrl } from '../../utils/publicLinks';
+import CardCarousel from '../../components/common/CardCarousel';
 
 import {
   Grid,
@@ -1224,6 +1225,13 @@ export default function PortfolioPage() {
             const coverImg = isLiveProp
               ? (listing.coverImageWatermarked || listing.coverImage || 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=800&q=70')
               : listing.image;
+            // Card carousel: saari photos (watermarked jahan ho), warna cover
+            const cardImages = (() => {
+              const arr = (Array.isArray(listing.images) ? listing.images : [])
+                .map((im) => (typeof im === 'string' ? im : im?.watermarkedUrl || im?.url))
+                .filter(Boolean);
+              return arr.length ? arr : [coverImg].filter(Boolean);
+            })();
 
             const title = isLiveProp ? (listing.title || 'Untitled Property') : listing.title;
             const location = isLiveProp ? (listing.location || 'Dubai, UAE') : listing.community;
@@ -1288,6 +1296,7 @@ export default function PortfolioPage() {
               >
                 {/* Image Header */}
                 <div
+                  className="cc-host"
                   style={{
                     position: 'relative',
                     aspectRatio: '16 / 9',
@@ -1307,19 +1316,10 @@ export default function PortfolioPage() {
                     }}
                     title="Edit property details"
                   >
-                    <img
-                      src={coverImg}
+                    <CardCarousel
+                      images={cardImages}
                       alt={title}
-                      loading="lazy"
-                      style={{
-                        width: '100%',
-                        height: '100%',
-                        objectFit: 'cover',
-                        display: 'block',
-                        transition: 'transform 0.3s ease'
-                      }}
-                      onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.05)'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+                      bottomOffset={onHold || attentionCount > 0 ? 42 : 10}
                     />
                   </NavLink>
 

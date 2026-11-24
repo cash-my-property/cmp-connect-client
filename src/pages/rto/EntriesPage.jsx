@@ -3,6 +3,8 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { cmpConnectApi } from '../../services/cmpConnectApi';
 import { publicAuctionUrl } from '../../utils/publicLinks';
+import CardCarousel from '../../components/common/CardCarousel';
+import { imageUrls } from '../../utils/imageUrl';
 import {
   Plus,
   Search,
@@ -503,6 +505,12 @@ export default function EntriesPage() {
               item.propertyImages?.[0]?.url ||
               item.thumbnail ||
               (Array.isArray(item.images) ? item.images[0]?.url : null);
+            // Card carousel: saari photos (list API images bheje to), warna cover
+            const cardImages = [
+              ...imageUrls(item.images),
+              ...imageUrls(item.propertyImages),
+              primaryImg
+            ].filter(Boolean);
             const agentName = item.listedBy?.fullName || item.listedBy?.name || 'Assigned Agent';
             const isLive = item.status === 'APPROVED';
 
@@ -522,6 +530,7 @@ export default function EntriesPage() {
               >
                 {/* Photo Thumbnail */}
                 <div
+                  className="cc-host"
                   style={{
                     position: 'relative',
                     width: '100%',
@@ -530,14 +539,8 @@ export default function EntriesPage() {
                     overflow: 'hidden'
                   }}
                 >
-                  {primaryImg ? (
-                    <img
-                      src={primaryImg}
-                      alt={title}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                      // Image load fail (404) → toota icon / alt text nahi, khali dark box
-                      onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }}
-                    />
+                  {cardImages.length ? (
+                    <CardCarousel images={cardImages} alt={title} />
                   ) : (
                     <div style={{ height: '100%', display: 'grid', placeItems: 'center', color: '#666' }}>
                       <Radio size={28} />
@@ -1007,7 +1010,7 @@ function getMockEntries() {
       propertyPlan: 'READY',
       propertyType: 'APARTMENT',
       propertyPrice: 5400000,
-      propertyImages: [{ url: 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=600&auto=format&fit=crop&q=80' }],
+      propertyImages: [{ url: 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=600&auto=format&fit=crop&q=80' }, { url: 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=600&auto=format&fit=crop&q=80' }, { url: 'https://images.unsplash.com/photo-1600607687644-c7171b42498b?w=600&auto=format&fit=crop&q=80' }, { url: 'https://images.unsplash.com/photo-1600047509807-ba8f99d2cdde?w=600&auto=format&fit=crop&q=80' }],
       status: 'AGENCY_REVIEW',
       auction: {},
       approvedBuyers: 0,

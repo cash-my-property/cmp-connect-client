@@ -1,0 +1,102 @@
+/* Property card photo carousel */
+.cc {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  touch-action: pan-y;
+}
+.cc-track {
+  display: flex;
+  height: 100%;
+  transition: transform 0.35s cubic-bezier(0.2, 0, 0, 1);
+  will-change: transform;
+}
+.cc-slide {
+  flex: 0 0 100%;
+  height: 100%;
+  background: var(--cmp-surface-sunken);
+}
+.cc-slide img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.cc-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 6;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.94);
+  color: #18231c;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.cc-arrow:hover { transform: translateY(-50%) scale(1.08); }
+.cc-arrow:focus-visible { opacity: 1; outline: 2px solid var(--cmp-focus-ring); outline-offset: 2px; }
+.cc-arrow.prev { left: 10px; }
+.cc-arrow.next { right: 10px; }
+.cc-arrow[disabled] { display: none; }
+
+/* Card hover pe arrows; touch screens pe hamesha */
+.cc-host:hover .cc-arrow,
+.cc-host:focus-within .cc-arrow { opacity: 1; }
+@media (hover: none) {
+  .cc-arrow { opacity: 0.9; width: 28px; height: 28px; }
+}
+
+.cc-dots {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: rgba(11, 18, 14, 0.38);
+  backdrop-filter: blur(4px);
+  pointer-events: none;
+}
+.cc-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.55);
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+.cc-dot.active { background: #fff; transform: scale(1.25); }
+.cc-dot.small { transform: scale(0.65); }
+
+.cc-count {
+  position: absolute;
+  right: 10px;
+  z-index: 5;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #fff;
+  background: rgba(11, 18, 14, 0.55);
+  pointer-events: none;
+}
+
+.cc-broken {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  color: var(--cmp-text-faint);
+}

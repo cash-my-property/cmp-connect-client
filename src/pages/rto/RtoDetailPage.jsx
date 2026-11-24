@@ -3,6 +3,7 @@ import { useParams, useNavigate, NavLink } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { cmpConnectApi } from '../../services/cmpConnectApi';
 import { publicAuctionUrl } from '../../utils/publicLinks';
+import PropertyGallery from '../../components/common/PropertyGallery';
 import {
   ArrowLeft,
   Clock,
@@ -937,21 +938,35 @@ export default function RtoDetailPage() {
         {status === 'AWAITING' && (
           <div
             className="card"
+            role="status"
             style={{
-              padding: '20px 24px',
-              background: 'var(--cmp-warning-subtle, rgba(234, 179, 8, 0.08))',
-              borderColor: 'var(--cmp-warning-border, rgba(234, 179, 8, 0.3))'
+              padding: '16px 20px',
+              display: 'flex',
+              gap: '14px',
+              alignItems: 'flex-start',
+              background: 'var(--cmp-accent-subtle)',
+              borderColor: 'var(--cmp-accent-border)',
+              borderLeft: '4px solid var(--cmp-warning)'
             }}
           >
-            <div className="row" style={{ gap: '8px', alignItems: 'center' }}>
-              <Clock size={19} color="#D97706" />
-              <span style={{ fontWeight: 800, fontSize: '14px', color: '#B45309' }}>
-                Waiting for CMP review
-              </span>
+            <span
+              aria-hidden="true"
+              style={{ width: 36, height: 36, borderRadius: '50%', display: 'grid', placeItems: 'center', flexShrink: 0, background: 'var(--cmp-surface)', color: 'var(--cmp-warning)', border: '1px solid var(--cmp-accent-border)' }}
+            >
+              <Clock size={18} />
+            </span>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <p style={{ margin: 0, fontWeight: 800, fontSize: '14.5px', color: 'var(--cmp-warning)' }}>Waiting for CMP review</p>
+              <p className="muted" style={{ margin: '3px 0 0', fontSize: '13.5px' }}>
+                Submitted to CMP moderation. Once verified and scheduled, the Real-Time Offer will start automatically.
+              </p>
+              <ol className="row" style={{ listStyle: 'none', margin: '10px 0 0', padding: 0, gap: '6px 14px', flexWrap: 'wrap', fontSize: '12.5px', fontWeight: 600 }}>
+                <li style={{ color: 'var(--cmp-success)' }}>✓ Submitted</li>
+                <li style={{ color: 'var(--cmp-warning)' }}>● CMP review</li>
+                <li className="faint">○ Scheduled</li>
+                <li className="faint">○ Live</li>
+              </ol>
             </div>
-            <p className="muted" style={{ margin: '4px 0 0', fontSize: '13.5px' }}>
-              Submitted to CMP moderation. Once verified and scheduled, the Real-Time Offer will start automatically.
-            </p>
           </div>
         )}
 
@@ -1068,59 +1083,13 @@ export default function RtoDetailPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           
           {/* Photos Gallery */}
-          <div className="card" style={{ padding: '16px', overflow: 'hidden' }}>
-            {propertyImages.length > 0 ? (
-              <div>
-                <div
-                  style={{
-                    width: '100%',
-                    height: '360px',
-                    borderRadius: '8px',
-                    overflow: 'hidden',
-                    background: '#111',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginBottom: '12px'
-                  }}
-                >
-                  <img
-                    src={propertyImages[selectedPhotoIndex]?.url || propertyImages[0]?.url}
-                    alt={propertyTitle}
-                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                  />
-                </div>
-
-                {/* Thumbnails Strip */}
-                {propertyImages.length > 1 && (
-                  <div className="row" style={{ gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
-                    {propertyImages.map((img, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => setSelectedPhotoIndex(idx)}
-                        style={{
-                          width: '64px',
-                          height: '48px',
-                          borderRadius: '6px',
-                          overflow: 'hidden',
-                          border: selectedPhotoIndex === idx ? '2px solid var(--cmp-brand)' : '1px solid var(--cmp-border)',
-                          padding: 0,
-                          cursor: 'pointer',
-                          flexShrink: 0
-                        }}
-                      >
-                        <img src={img.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div style={{ height: '220px', display: 'grid', placeItems: 'center', background: 'var(--cmp-surface-subtle)', borderRadius: '8px' }}>
-                <p className="muted" style={{ fontSize: '13px' }}>No photos available</p>
-              </div>
-            )}
+          <div className="card" style={{ padding: '16px' }}>
+            <PropertyGallery
+              images={propertyImages}
+              title={propertyTitle}
+              index={selectedPhotoIndex}
+              onIndexChange={setSelectedPhotoIndex}
+            />
           </div>
 
           {/* Key Property Specs */}
@@ -1752,7 +1721,12 @@ function getMockRtoProperty(id) {
     propertyImages: [
       { url: 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=1200&auto=format&fit=crop&q=80' },
       { url: 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=1200&auto=format&fit=crop&q=80' },
-      { url: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=1200&auto=format&fit=crop&q=80' }
+      { url: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=1200&auto=format&fit=crop&q=80' },
+      { url: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=1200&auto=format&fit=crop&q=80' },
+      { url: 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=1200&auto=format&fit=crop&q=80' },
+      { url: 'https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?w=1200&auto=format&fit=crop&q=80' },
+      { url: 'https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?w=1200&auto=format&fit=crop&q=80' },
+      { url: 'https://images.unsplash.com/photo-1600573472550-8090b5e0745e?w=1200&auto=format&fit=crop&q=80' }
     ],
     documents: {
       exclusiveContract: { fileName: 'FormA_ExclusiveContract.pdf', url: '#' },

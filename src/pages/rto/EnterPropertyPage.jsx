@@ -696,47 +696,6 @@ export default function EnterPropertyPage() {
     });
   };
 
-  // Auto-fill valid Cloudinary signed documents for testing
-  const handleAutoFillSampleDocs = async () => {
-    setStepError(null);
-    setIsSavingStep(true);
-    try {
-      const sigRes = await cmpConnectApi.getRtoUploadSignature(propertyId || '', token);
-      const sig = sigRes?.data?.docs || sigRes?.data?.images || sigRes?.data;
-      if (!sig || !sig.folder) {
-        throw new Error('Please ensure you are logged into CMP Connect.');
-      }
-      const folder = sig.folder;
-      const cloud = sig.cloudName || 'dxdcohcc3';
-
-      const sampleDocs = {};
-      activeDocumentsList.forEach((d) => {
-        sampleDocs[d.key] = {
-          url: `https://res.cloudinary.com/${cloud}/${folder}/${d.key}.pdf`,
-          public_id: `${folder}/${d.key}`,
-          fileName: `${d.label || d.key}.pdf`
-        };
-      });
-
-      const samplePhotos = Array(8).fill(null).map((_, i) => ({
-        url: `https://res.cloudinary.com/${cloud}/${folder}/photo_${i + 1}.jpg`,
-        public_id: `${folder}/photo_${i + 1}`
-      }));
-
-      setFormData((prev) => ({
-        ...prev,
-        propertyImages: prev.propertyImages.length >= 8 ? prev.propertyImages : samplePhotos,
-        documents: { ...prev.documents, ...sampleDocs }
-      }));
-      setSuccessBanner('Sample legal documents & photos attached!');
-      setTimeout(() => setSuccessBanner(null), 3500);
-    } catch (e) {
-      setStepError(e.message || 'Auto-fill failed.');
-    } finally {
-      setIsSavingStep(false);
-    }
-  };
-
   // Validate Step 1 required fields + anti-contact rules before creating/updating draft
   const validateStepBeforeSave = (stepNum) => {
     if (stepNum === 1) {
@@ -1746,18 +1705,7 @@ export default function EnterPropertyPage() {
 
               {/* Legal Documents Section */}
               <div style={{ borderTop: '1px solid var(--cmp-border)', paddingTop: '20px' }}>
-                <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                  <h3 style={{ fontSize: '15px', fontWeight: 700, margin: 0 }}>Legal & Verification Documents</h3>
-                  <button
-                    type="button"
-                    className="btn btn-xs btn-outline"
-                    onClick={handleAutoFillSampleDocs}
-                    style={{ borderColor: 'var(--cmp-brand)', color: 'var(--cmp-brand)' }}
-                  >
-                    <Sparkles size={12} style={{ marginRight: '4px' }} />
-                    Auto-fill sample documents (testing)
-                  </button>
-                </div>
+                <h3 style={{ fontSize: '15px', fontWeight: 700, margin: '0 0 6px' }}>Legal & Verification Documents</h3>
                 <p className="muted" style={{ margin: '0 0 16px', fontSize: '13px' }}>
                   Required documents depend on the selected property category, plan and type.
                 </p>
