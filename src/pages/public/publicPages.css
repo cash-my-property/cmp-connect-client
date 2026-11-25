@@ -163,12 +163,12 @@
 /* Plans */
 .pub-plans {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr));
   gap: 20px;
   align-items: stretch;
 }
 .pub-plan {
-  --plan: var(--cmp-info);
+  --plan: var(--cmp-brand);
   background: var(--cmp-surface);
   border: 1px solid var(--cmp-border);
   border-radius: 18px;
@@ -178,8 +178,6 @@
   flex-direction: column;
   box-shadow: var(--cmp-shadow-sm);
 }
-.pub-plan.pro { --plan: var(--cmp-brand); }
-.pub-plan.premium { --plan: var(--cmp-accent); }
 .pub-plan.featured {
   border: 2px solid var(--plan);
   box-shadow: 0 16px 40px -20px var(--plan);
@@ -240,6 +238,38 @@
   gap: 2px;
 }
 .pub-plan-eff b { color: var(--cmp-text); font-size: 20px; }
+
+.pub-plan-save {
+  margin: 8px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cmp-brand);
+}
+.pub-plan-highlights {
+  list-style: none;
+  padding: 0;
+  margin: 14px 0 0;
+  display: grid;
+  gap: 6px;
+  font-size: 13.5px;
+}
+.pub-plan-highlights li { position: relative; padding-left: 20px; }
+.pub-plan-highlights li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  color: var(--plan);
+  font-weight: 700;
+}
+.pub-plan-skel {
+  min-height: 460px;
+  background: linear-gradient(100deg, var(--cmp-surface) 30%, var(--cmp-surface-sunken) 50%, var(--cmp-surface) 70%);
+  background-size: 200% 100%;
+  animation: pub-skel 1.3s ease-in-out infinite;
+}
+@keyframes pub-skel { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+.pub-state { text-align: center; padding: 28px 22px; max-width: 520px; margin: 0 auto; }
+.pub-state p:first-child { font-weight: 700; margin: 0 0 6px; }
 
 /* Sections */
 .pub-section h2 { font-size: 22px; margin: 52px 0 6px; letter-spacing: -0.01em; }
@@ -319,7 +349,7 @@
 .pub-foot a:hover { color: var(--cmp-brand); text-decoration: underline; }
 
 @media (max-width: 900px) {
-  .pub-plans { grid-template-columns: 1fr; max-width: 520px; margin: 0 auto; }
+  .pub-plans { --cols: 1 !important; grid-template-columns: 1fr; max-width: 520px; margin: 0 auto; }
   .pub-terms-layout { grid-template-columns: 1fr; }
   .pub-toc { position: static; display: none; }
 }
@@ -331,4 +361,12 @@
   .pub-btn { height: 34px; padding: 0 12px; font-size: 13px; }
   .pub-toggle button { padding: 8px 12px; font-size: 13.5px; }
   .pub-card { padding: 4px 16px; }
+}
+
+/* Logged-in Owner — package badalne ka note */
+.pub-change-note {
+  max-width: 560px;
+  margin: 12px auto 0;
+  font-size: 13.5px;
+  color: var(--cmp-text-muted);
 }

@@ -526,6 +526,12 @@ export const cmpConnectApi = {
     return apiRequest('/api/cmpConnect/free-allowance', { method: 'GET', ...options });
   },
 
+  // Subscription packages (Pricing page) — khula endpoint, login nahi chahiye.
+  // Qeemat server banata hai; page par koi hisaab nahi.
+  async getPublicPackages(options = {}) {
+    return apiRequest('/api/cmpConnect/public/packages', { method: 'GET', _ignoreAuthRedirect: true, ...options });
+  },
+
   // ─────────────────────────────────────────────────────────────
   // TEAM: MEMBERS (users.html)
   // ─────────────────────────────────────────────────────────────

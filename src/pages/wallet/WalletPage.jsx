@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { initialWalletPlan } from '../../data/mockData';
 import { useApp } from '../../context/AppContext';
-import { Check, Send, X } from 'lucide-react';
+import { ArrowUpDown, Check, Send, X } from 'lucide-react';
 
 // Permission redirect alag wrapper mein — andar wale component ke hooks hamesha ek hi order mein chalen
 export default function WalletPage() {
@@ -22,7 +22,7 @@ export default function WalletPage() {
 }
 
 function WalletContent() {
-  const { agency, isLiveData } = useApp();
+  const { agency, isLiveData, canChangePackage } = useApp();
 
   const liveWalletPlan = useMemo(() => ({
     planName: "Standard Account",
@@ -121,6 +121,12 @@ function WalletContent() {
           <p className="muted" style={{ margin: '4px 0 0', fontSize: '13px' }}>
             Renews {planData.renewalDate}
           </p>
+          {/* Upgrade / downgrade — sirf Owner (Agency/Developer). Plans pricing page par. */}
+          {canChangePackage && (
+            <Link to="/pricing" className="btn btn-primary btn-sm" style={{ marginTop: '10px' }}>
+              <ArrowUpDown size={14} /> Change package
+            </Link>
+          )}
         </div>
 
         <div>
@@ -165,13 +171,6 @@ function WalletContent() {
           <p style={{ margin: '6px 0 0', fontSize: '16px', fontWeight: 700 }}>
             {planData.accountManager.name}
           </p>
-          <a
-            href={`mailto:${planData.accountManager.email}?subject=Plan%20change%20for%20${encodeURIComponent(agency.name || 'My Agency')}`}
-            className="btn btn-outline btn-sm"
-            style={{ marginTop: '8px' }}
-          >
-            Change plan
-          </a>
         </div>
       </section>
 

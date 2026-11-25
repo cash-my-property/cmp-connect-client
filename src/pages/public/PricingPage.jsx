@@ -1,108 +1,203 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Gift } from 'lucide-react';
+import { ArrowUpDown, Gift, RefreshCw } from 'lucide-react';
 import PublicPageShell from './PublicPageShell';
+import { useApp } from '../../context/AppContext';
+import { cmpConnectApi } from '../../services/cmpConnectApi';
 
-// AED 1 per credit, billed monthly. Optional yearly prepay 5% off. Prices excl. 5% VAT.
-const PRICE_PER_CREDIT = 1;
-const MONTHS = 12;
-const YEARLY_DISCOUNT = 0.05;
-const VAT = 0.05;
+// Plans, qeemat aur terms sab GET /api/cmpConnect/public/packages se aate hain.
+// Admin plan ka price likhta hai, server VAT / per-credit / yearly muqabla banata hai —
+// is page par koi hisaab ya static plan nahi.
 
-const PACKAGES = [
-  { key: 'starter', name: 'Starter', for: 'Small brokerages & individual agents', credits: 5000, bonus: 0, bonusMonths: 0 },
-  { key: 'pro', name: 'Pro', for: 'Growing agencies', credits: 7500, bonus: 900, bonusMonths: 3, featured: true },
-  { key: 'premium', name: 'Premium', for: 'Large agencies & developers', credits: 10000, bonus: 2000, bonusMonths: 6 }
-].map((p) => {
-  const monthly = p.credits * PRICE_PER_CREDIT;
-  const total = monthly * MONTHS;
-  const totalCredits = p.credits * MONTHS + p.bonus * p.bonusMonths;
-  return { ...p, monthly, total, totalCredits, effective: total / totalCredits };
-});
+const aed = (n) =>
+  `AED ${(Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+const num = (n) => (Number(n) || 0).toLocaleString('en-US');
 
-export const PRICING_TERMS = [
-  'No minimum contract. Plans are billed monthly and you can cancel anytime; cancellation takes effect at the end of the current billing month.',
-  'No undated cheque or security cheque required.',
-  'Optional: pay 12 months in advance and get 5% off.',
-  'Bonus credits (Pro: 900/month for the first 3 months, Premium: 2,000/month for the first 6 months) are added only while the plan is active.',
-  'The client must hold a valid Real Estate Brokerage Trade License, ORN, BRN and Trakheesi permit (DLD) throughout the term.',
-  'Credits are deducted per listing based on community, sale/rent and price band. Unused monthly credits expire at the end of each cycle.',
-  'All prices exclude 5% VAT.'
-];
+// Online payment abhi nahi — tab tak package badalne ki darkhwast CMP ko email se
+const CMP_EMAIL = 'info@cmpdubai.com';
+const switchMailto = (plan, company) => {
+  const type = plan.billingPeriod === 'YEARLY' ? 'Yearly' : 'Monthly';
+  const subject = `Package change: ${plan.name} (${type})${company ? ` for ${company}` : ''}`;
+  const body = [
+    'Hello CMP team,',
+    '',
+    `Please switch our CMP Connect package to ${plan.name} (${type}).`,
+    '',
+    `Company: ${company || ''}`
+  ].join('\r\n');
+  return `mailto:${CMP_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+};
 
-const aed = (n) => `AED ${Math.round(n).toLocaleString('en-US')}`;
-const num = (n) => Math.round(n).toLocaleString('en-US');
+function PlanCard({ plan, cta, company }) {
+  const p = plan.pricing || {};
+  const c = p.credits || {};
+  const yearly = plan.billingPeriod === 'YEARLY';
+  const cmp = plan.comparison;
+
+  return (
+    <article className={`pub-plan${plan.featured ? ' featured' : ''}`}>
+      {plan.badgeText && <span className="pub-plan-badge">{plan.badgeText}</span>}
+      <p className="pub-plan-name">{plan.name}</p>
+      {plan.audience && <p className="pub-plan-for">{plan.audience}</p>}
+      <p className="pub-plan-price">
+        {aed(p.price?.net)}
+        <small>{yearly ? ' / year' : ' / month'}</small>
+      </p>
+      <p className="pub-plan-yr">
+        {yearly
+          ? `${aed(p.perMonth)} a month, paid yearly · excl. VAT`
+          : 'Billed monthly · excl. VAT'}
+      </p>
+      {yearly && cmp && cmp.saving > 0 && (
+        <p className="pub-plan-save">
+          Save {aed(cmp.saving)}{cmp.savingPct ? ` (${cmp.savingPct}%)` : ''} vs {aed(cmp.twelveMonths)} paid monthly
+        </p>
+      )}
+
+      <ul className="pub-plan-rows">
+        <li><span>Monthly credits</span><span>{num(c.perMonth)}</span></li>
+        <li>
+          <span>Bonus credits</span>
+          <span>{c.bonusPerMonth && c.bonusMonths ? `${num(c.bonusPerMonth)} × ${c.bonusMonths} months` : '—'}</span>
+        </li>
+        <li><span>Credits in the first {p.months || 12} months</span><span>{num(c.firstYear)}</span></li>
+        <li>
+          <span>{yearly ? 'Price' : '12 months'} incl. {p.vatPct ?? 0}% VAT</span>
+          <span>{aed(yearly ? p.price?.total : p.year?.total)}</span>
+        </li>
+      </ul>
+
+      {plan.highlights?.length > 0 && (
+        <ul className="pub-plan-highlights">
+          {plan.highlights.map((h) => <li key={h}>{h}</li>)}
+        </ul>
+      )}
+
+      {p.effectivePerCredit != null && (
+        <div className="pub-plan-eff">
+          Effective price per credit
+          <b>AED {Number(p.effectivePerCredit).toFixed(2)}</b>
+        </div>
+      )}
+      {cta === 'signup' && (
+        <Link to="/signup" className={`pub-btn ${plan.featured ? 'solid' : 'outline'} block`}>Get started</Link>
+      )}
+      {cta === 'switch' && (
+        <a href={switchMailto(plan, company)} className={`pub-btn ${plan.featured ? 'solid' : 'outline'} block`}>
+          <ArrowUpDown size={15} /> Switch to {plan.name}
+        </a>
+      )}
+    </article>
+  );
+}
 
 export default function PricingPage() {
-  const [yearly, setYearly] = useState(false);
-  const k = yearly ? 1 - YEARLY_DISCOUNT : 1;
+  const { isAuthenticated, canChangePackage, agency } = useApp();
+  const cta = !isAuthenticated ? 'signup' : (canChangePackage ? 'switch' : null);
+  const [state, setState] = useState({ loading: true, error: '', data: null });
+  const [period, setPeriod] = useState('MONTHLY');
+
+  const load = useCallback(async () => {
+    setState({ loading: true, error: '', data: null });
+    try {
+      const res = await cmpConnectApi.getPublicPackages({ _silent: true });
+      const monthly = Array.isArray(res?.monthly) ? res.monthly : [];
+      const yearly = Array.isArray(res?.yearly) ? res.yearly : [];
+      setState({
+        loading: false,
+        error: '',
+        data: { monthly, yearly, rates: res?.rates || {}, terms: Array.isArray(res?.terms) ? res.terms : [] }
+      });
+      // Sirf ek Type ho to wahi dikhao
+      if (!monthly.length && yearly.length) setPeriod('YEARLY');
+    } catch (err) {
+      setState({ loading: false, error: err?.message || 'Could not load the packages.', data: null });
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const data = state.data;
+  const hasBoth = !!(data?.monthly.length && data?.yearly.length);
+  const plans = data ? (period === 'YEARLY' ? data.yearly : data.monthly) : [];
+  const bestSaving = data
+    ? Math.max(0, ...data.yearly.map((p) => Number(p.comparison?.savingPct) || 0))
+    : 0;
+  const vatPct = data?.rates?.vatPct;
 
   return (
     <PublicPageShell title="Pricing">
       <header className="pub-hero">
-        <span className="pub-tag">CMP Connect · No contract · Cancel anytime</span>
+        <span className="pub-tag">CMP Connect</span>
         <h1>Listing credit packages</h1>
         <p className="pub-sub">
-          AED 1 per credit, billed monthly. No lock-in, cancel anytime. Credits per listing depend on community, sale or rent, and price band.
+          Pick a plan for your monthly listing credits. Credits per listing depend on community, sale or rent, and price band.
+          {vatPct != null && ` Prices exclude ${vatPct}% VAT.`}
         </p>
         <p className="pub-free">
           <Gift size={15} /> Your first five listings are free, so you can be live before you spend anything.
         </p>
-        <div className="pub-toggle" role="tablist" aria-label="Billing">
-          <button type="button" role="tab" aria-selected={!yearly} className={!yearly ? 'on' : ''} onClick={() => setYearly(false)}>
-            Monthly payment
-          </button>
-          <button type="button" role="tab" aria-selected={yearly} className={yearly ? 'on' : ''} onClick={() => setYearly(true)}>
-            Pay yearly <span className="pub-toggle-save">−5%</span>
-          </button>
-        </div>
+        {cta === 'switch' && (
+          <p className="pub-change-note">
+            Upgrading or downgrading? Pick a package below. Until online payment is available, the request goes to the CMP team by email.
+          </p>
+        )}
+        {hasBoth && (
+          <div className="pub-toggle" role="tablist" aria-label="Billing">
+            <button type="button" role="tab" aria-selected={period === 'MONTHLY'} className={period === 'MONTHLY' ? 'on' : ''} onClick={() => setPeriod('MONTHLY')}>
+              Monthly payment
+            </button>
+            <button type="button" role="tab" aria-selected={period === 'YEARLY'} className={period === 'YEARLY' ? 'on' : ''} onClick={() => setPeriod('YEARLY')}>
+              Pay yearly {bestSaving > 0 && <span className="pub-toggle-save">Save up to {bestSaving}%</span>}
+            </button>
+          </div>
+        )}
       </header>
 
-      <section className="pub-plans">
-        {PACKAGES.map((p) => (
-          <article key={p.key} className={`pub-plan ${p.key}${p.featured ? ' featured' : ''}`}>
-            {p.featured && <span className="pub-plan-badge">Most popular</span>}
-            <p className="pub-plan-name">{p.name}</p>
-            <p className="pub-plan-for">{p.for}</p>
-            <p className="pub-plan-price">
-              {yearly ? aed(p.total * k) : aed(p.monthly)}
-              <small>{yearly ? ' / year' : ' / month'}</small>
-            </p>
-            <p className="pub-plan-yr">
-              {yearly
-                ? `Optional yearly prepay, 5% off · ${aed(p.total)} before discount`
-                : 'Billed monthly · cancel anytime · excl. VAT'}
-            </p>
-            <ul className="pub-plan-rows">
-              <li><span>Monthly credits</span><span>{num(p.credits)}</span></li>
-              <li><span>Bonus credits</span><span>{p.bonus ? `${num(p.bonus)} × ${p.bonusMonths} months` : '—'}</span></li>
-              <li><span>Contract</span><span>None · cancel anytime</span></li>
-              <li><span>Total credits (12 months)</span><span>{num(p.totalCredits)}</span></li>
-              <li><span>Price per credit</span><span>AED {PRICE_PER_CREDIT.toFixed(2)}</span></li>
-              <li><span>12 months incl. VAT</span><span>{aed(p.total * k * (1 + VAT))}</span></li>
-            </ul>
-            <div className="pub-plan-eff">
-              Effective price per credit
-              <b>AED {(p.effective * k).toFixed(2)}</b>
-            </div>
-            <Link to="/signup" className={`pub-btn ${p.featured ? 'solid' : 'outline'} block`}>Get started</Link>
-          </article>
-        ))}
-      </section>
+      {state.loading && (
+        <section className="pub-plans" style={{ '--cols': 3 }} aria-busy="true" aria-label="Loading packages">
+          {[0, 1, 2].map((i) => <div key={i} className="pub-plan pub-plan-skel" />)}
+        </section>
+      )}
 
-      <section className="pub-section">
-        <h2>Terms &amp; Conditions</h2>
-        <p className="pub-note">
-          The key terms for credit packages. Read the full <Link to="/terms">Terms &amp; Conditions</Link>.
-        </p>
-        <div className="pub-card">
-          <ol className="pub-terms">
-            {PRICING_TERMS.map((t) => <li key={t}>{t}</li>)}
-          </ol>
+      {!state.loading && state.error && (
+        <div className="pub-card pub-state">
+          <p>We couldn't load the packages right now.</p>
+          <p className="pub-note">{state.error}</p>
+          <button type="button" className="pub-btn outline" onClick={load}>
+            <RefreshCw size={15} /> Try again
+          </button>
         </div>
-      </section>
+      )}
 
-      <p className="pub-tagline">AED 1 per credit · billed monthly · no contract, cancel anytime.</p>
+      {!state.loading && !state.error && plans.length === 0 && (
+        <div className="pub-card pub-state">
+          <p>No packages are available at the moment.</p>
+          <p className="pub-note">
+            Call <a href="tel:+971502402661">+971 50 240 2661</a> or email <a href="mailto:info@cmpdubai.com">info@cmpdubai.com</a> for pricing.
+          </p>
+        </div>
+      )}
+
+      {plans.length > 0 && (
+        <section className="pub-plans" style={{ '--cols': Math.min(plans.length, 3) }}>
+          {plans.map((p) => <PlanCard key={p.id || p.key} plan={p} cta={cta} company={agency?.name} />)}
+        </section>
+      )}
+
+      {data?.terms.length > 0 && (
+        <section className="pub-section">
+          <h2>Terms &amp; Conditions</h2>
+          <p className="pub-note">
+            The key terms for credit packages. Read the full <Link to="/terms">Terms &amp; Conditions</Link>.
+          </p>
+          <div className="pub-card">
+            <ol className="pub-terms">
+              {data.terms.map((t, i) => <li key={i}>{t}</li>)}
+            </ol>
+          </div>
+        </section>
+      )}
     </PublicPageShell>
   );
 }

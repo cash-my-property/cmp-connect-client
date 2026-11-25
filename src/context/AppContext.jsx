@@ -293,6 +293,11 @@ export function AppProvider({ children }) {
     : (account?.accountType === 'DEVELOPER' ? 'developer' : 'agency');
   const isDeveloper = workspace === 'developer';
 
+  // Package badalna (upgrade/downgrade) poori company ka faisla — sirf Agency/Developer account ka Owner
+  const canChangePackage = dataMode === 'mock'
+    ? true
+    : Boolean(account && account.role?.key === 'OWNER' && ['AGENCY', 'DEVELOPER'].includes(account.accountType || 'AGENCY'));
+
   // ── Free allowance ("pehli 5 muft") — header counter + Add screens ──
   // Live: GET /free-allowance (DB se har dafa gina jata hai, cache nahi). Publish / submit /
   // project save ke baad apiRequest QUOTA_EVENT bhejta hai → dobara parh lo.
@@ -522,6 +527,7 @@ export function AppProvider({ children }) {
         logout,
         workspace,
         isDeveloper,
+        canChangePackage,
         setMockWorkspace,
         freeAllowance,
         refreshFreeAllowance,

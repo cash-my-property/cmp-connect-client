@@ -43,7 +43,10 @@ export default function AppShell({ children }) {
     location.pathname === '/login' ||
     location.pathname === '/signup' ||
     location.pathname === '/register' ||
-    location.pathname === '/apply';
+    location.pathname === '/apply' ||
+    // Pricing / Terms ka apna brand bar hai — login ho to bhi poora page
+    location.pathname === '/pricing' ||
+    location.pathname === '/terms';
 
   if (isPublicAuthOrOnboarding) {
     return (
