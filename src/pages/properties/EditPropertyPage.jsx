@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useParams, NavLink } from 'react-router-dom';
+import { FreeAllowanceNote } from '../../components/common/FreeAllowance';
 import { useApp } from '../../context/AppContext';
 import cmpConnectApi from '../../services/cmpConnectApi';
 import { buildListingDocuments } from '../../utils/listingDocuments';
@@ -1089,6 +1090,9 @@ export default function EditPropertyPage() {
           </div>
         </div>
       )}
+
+      {/* Muft listings khatam — sirf tab jab listing abhi live nahi */}
+      {listingData && listingData.status !== 'LIVE' && <FreeAllowanceNote kind="LISTING" onlyWhenOut />}
 
       {/* Error / Success Toast Alerts */}
       {errorBanner && (

@@ -52,6 +52,8 @@ import BiddersPage from '../pages/rto/BiddersPage';
 import ChequesPage from '../pages/rto/ChequesPage';
 
 import OnboardingLandingPage from '../pages/onboarding/OnboardingLandingPage';
+import PricingPage from '../pages/public/PricingPage';
+import TermsPage from '../pages/public/TermsPage';
 import OnboardingSigninPage from '../pages/onboarding/OnboardingSigninPage';
 import OnboardingSignupPage from '../pages/onboarding/OnboardingSignupPage';
 import OnboardingWizardPage from '../pages/onboarding/OnboardingWizardPage';
@@ -160,6 +162,10 @@ export default function AppRoutes() {
         path="/login"
         element={isAuthenticated ? <Navigate to="/" replace /> : <CmpConnectLoginPage />}
       />
+
+      {/* Public: pricing + terms (signup ke left panel se link) */}
+      <Route path="/pricing" element={<PricingPage />} />
+      <Route path="/terms" element={<TermsPage />} />
 
       {/* Public Onboarding & Registration */}
       <Route path="/cmp-connect/register" element={<OnboardingSignupPage />} />

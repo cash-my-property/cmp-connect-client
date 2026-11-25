@@ -5,6 +5,7 @@ import cmpConnectApi from '../../services/cmpConnectApi';
 import { buildListingDocuments } from '../../utils/listingDocuments';
 import GooglePlacesLocationInput from '../../components/common/GooglePlacesLocationInput';
 import DescriptionCounter from '../../components/common/DescriptionCounter';
+import { FreeAllowanceNote } from '../../components/common/FreeAllowance';
 import {
   Check,
   Building,
@@ -765,6 +766,9 @@ export default function AddPropertyPage() {
           7-step compliant listing wizard. Real-time validation against Dubai Land Department compliance rules.
         </p>
       </div>
+
+      {/* Pehli 5 muft — slot pehli dafa LIVE hone par jata hai */}
+      <FreeAllowanceNote kind="LISTING" />
 
       {/* Global Step Error Alert */}
       {stepError && (

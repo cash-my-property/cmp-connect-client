@@ -22,6 +22,9 @@ export default function OnboardingLandingPage() {
         <p className="sub">
           Create an account, tell us about your business, upload your documents, and we take it from there.
         </p>
+        <p className="sub" style={{ color: 'var(--cmp-brand)', fontWeight: 600, fontSize: 13, marginTop: -10 }}>
+          Your first five listings are free, so you can be live before you spend anything.
+        </p>
 
         <div className="type-grid" style={{ marginBottom: 20 }}>
           <div

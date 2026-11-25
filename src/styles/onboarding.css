@@ -873,3 +873,28 @@ button.stage:hover {
   }
 }
 
+
+/* Pricing / Terms links — left panel ke neeche */
+.reg-brand .reg-legal {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  font-size: 13px;
+  font-weight: 600;
+}
+.reg-brand .reg-legal a { color: #EDF3EF; text-decoration: none; }
+.reg-brand .reg-legal a:hover { color: #E3A972; text-decoration: underline; }
+.reg-brand .reg-legal span { color: rgba(255, 255, 255, 0.35); }
+.reg-brand .reg-legal-mobile { display: none; }
+@media (max-width: 900px) {
+  .reg-brand .reg-legal-mobile {
+    display: flex;
+    margin: 2px 0 0;
+    padding: 0;
+    border: 0;
+    font-size: 12px;
+  }
+}

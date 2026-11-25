@@ -6,6 +6,7 @@ import {
 } from '../../context/DeveloperContext';
 import { InfoNote, LoadState, Notice } from './DeveloperUi';
 import { errorMessage } from '../../utils/developerMappers';
+import { FreeAllowanceChip, FreeAllowanceNote, useFreeQuota } from '../../components/common/FreeAllowance';
 import { PhotoManager } from './ProjectDetailPage';
 import DescriptionCounter from '../../components/common/DescriptionCounter';
 import GooglePlacesLocationInput from '../../components/common/GooglePlacesLocationInput';
@@ -343,6 +344,8 @@ function ProjectForm({ existing }) {
       </div>
 
       <Notice onClose={() => setServerError('')}>{serverError}</Notice>
+      {/* Muft projects: naya ya draft hi apna slot lega (review mein ja chuka project nahi) */}
+      {(!existing || existing.status === 'DRAFT') && <FreeAllowanceNote kind="PROJECT" />}
       {existing?.status === 'LIVE' && (
         <InfoNote>
           This project is live. Changing its registration or escrow details sends it back to Cash My Property for review.

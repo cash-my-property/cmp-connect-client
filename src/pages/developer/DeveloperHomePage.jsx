@@ -4,6 +4,7 @@ import { Plus, Building2, LayoutGrid, Users, CalendarDays, AlertTriangle, CheckC
 import { useApp } from '../../context/AppContext';
 import { useDeveloper, useLoad, unitTotals, fromPrice, formatAed, formatDate, timeAgo } from '../../context/DeveloperContext';
 import { ProjectStatusBadge, BuildRing, StatTile, LoadState } from './DeveloperUi';
+import { FreeAllowanceChip } from '../../components/common/FreeAllowance';
 
 // needsYou item → { icon, tone, text, to, cta }
 function needItem(n) {
@@ -59,10 +60,13 @@ export default function DeveloperHomePage() {
             Your projects, what buyers are asking about them and what is holding a project back from going live.
           </p>
         </div>
-        <NavLink to="/developer/projects/new" className="btn btn-primary btn-sm">
-          <Plus size={16} />
-          <span>Add a project</span>
-        </NavLink>
+        <div className="row" style={{ gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <FreeAllowanceChip kind="PROJECT" />
+          <NavLink to="/developer/projects/new" className="btn btn-primary btn-sm">
+            <Plus size={16} />
+            <span>Add a project</span>
+          </NavLink>
+        </div>
       </div>
 
       <LoadState loading={loading && !home} error={!home ? error : ''} onRetry={reload}>

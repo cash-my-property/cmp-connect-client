@@ -12,6 +12,8 @@ import { Avatar, Badge } from '../../components/ui';
 import ProjectDocumentsEditor, { DocumentsSummaryBar } from './ProjectDocuments';
 import { documentsSummary, daysUntil } from '../../utils/projectDocuments';
 import { errorMessage } from '../../utils/developerMappers';
+import { FreeAllowanceNote, useFreeQuota } from '../../components/common/FreeAllowance';
+import { isQuotaOut } from '../../utils/freeAllowance';
 
 const TABS = [
   { key: 'overview', label: 'Overview' },
@@ -38,6 +40,7 @@ export default function ProjectDetailPage() {
   const setTab = (key) => setParams(key === 'overview' ? {} : { tab: key }, { replace: true });
   const [notice, setNotice] = useState({ tone: 'danger', text: '' });
   const [busy, setBusy] = useState('');
+  const projectQuota = useFreeQuota('PROJECT');
 
   // Enquiries tab: live mein is project ke enquiries
   const [enqLoaded, setEnqLoaded] = useState(false);
@@ -137,6 +140,12 @@ export default function ProjectDetailPage() {
           <strong>Sent back by Cash My Property.</strong>{' '}
           {project.rejectionReason || 'Fix the points below and save the project to send it for review again.'}
         </InfoNote>
+      )}
+      {project.status === 'DRAFT' && isQuotaOut(projectQuota) && (
+        <FreeAllowanceNote
+          kind="PROJECT"
+          lead={issues.length === 0 ? 'The checklist is complete, but this project is still a draft and has not gone for review.' : undefined}
+        />
       )}
       {project.status === 'IN_REVIEW' && (
         <InfoNote>

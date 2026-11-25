@@ -3,6 +3,7 @@ import { NavLink, useNavigate, useParams, useSearchParams } from 'react-router-d
 import { useApp } from '../../context/AppContext';
 import cmpConnectApi from '../../services/cmpConnectApi';
 import GooglePlacesLocationInput from '../../components/common/GooglePlacesLocationInput';
+import { FreeAllowanceNote } from '../../components/common/FreeAllowance';
 import {
   MapPin,
   FileText,
@@ -933,6 +934,9 @@ export default function EnterPropertyPage() {
           )}
         </div>
       </div>
+
+      {/* Pehli 5 muft — slot pehli submit par. Sent-back property ka resubmit muft. */}
+      {propertyStatus === 'DRAFT' && <FreeAllowanceNote kind="RTO" />}
 
       {/* Global Alerts */}
       {stepError && (

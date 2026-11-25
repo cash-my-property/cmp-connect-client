@@ -148,6 +148,10 @@ async function executeTokenRefresh() {
 /**
  * Generic request helper with credentials: 'include' (httpOnly cookies) and single in-flight 401 refresh
  */
+// "Pehli 5 muft" — in calls ke baad free-allowance counter badal sakta hai
+export const QUOTA_EVENT = 'cmp_connect_quota_changed';
+const QUOTA_ENDPOINT = /\/api\/cmpConnect\/(listings\/[^/]+\/(publish|approve|submit)|rto\/properties\/[^/]+\/submit|developer\/projects(\/[^/]+)?)$/;
+
 async function apiRequest(endpoint, options = {}) {
   const url = resolveApiUrl(endpoint);
   const headers = { ...options.headers };
@@ -183,6 +187,17 @@ async function apiRequest(endpoint, options = {}) {
       data = await response.json();
     } else {
       data = await response.text();
+    }
+
+    // Muft slot kharch ho sakta hai (publish / RTO submit / project save) → counter dobara parho
+    const method = (options.method || 'GET').toUpperCase();
+    if (
+      (method === 'POST' || method === 'PATCH') &&
+      (response.ok || response.status === 402) &&
+      QUOTA_ENDPOINT.test(endpoint.split('?')[0]) &&
+      typeof window !== 'undefined'
+    ) {
+      window.dispatchEvent(new CustomEvent(QUOTA_EVENT, { detail: { status: response.status } }));
     }
 
     if (!response.ok) {
@@ -501,6 +516,14 @@ export const cmpConnectApi = {
       token,
       ...options
     });
+  },
+
+  /**
+   * Free allowance ("pehli 5 muft") — sirf wahi kismein jo account par lagti hain
+   * GET /api/cmpConnect/free-allowance → { LISTING, RTO } (agency) · { LISTING, PROJECT } (developer)
+   */
+  async getFreeAllowance(options = {}) {
+    return apiRequest('/api/cmpConnect/free-allowance', { method: 'GET', ...options });
   },
 
   // ─────────────────────────────────────────────────────────────

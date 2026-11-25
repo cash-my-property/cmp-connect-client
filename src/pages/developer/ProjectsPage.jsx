@@ -6,6 +6,7 @@ import { ProjectStatusBadge, BuildRing, StatTile, PageHead, InfoNote, LoadState,
 import { SearchInput } from '../../components/ui';
 import { useDebounce } from '../../hooks';
 import { errorMessage } from '../../utils/developerMappers';
+import { FreeAllowanceChip } from '../../components/common/FreeAllowance';
 
 const FILTERS = ['ALL', 'LIVE', 'IN_REVIEW', 'DRAFT', 'REJECTED', 'HANDED_OVER', 'SOLD_OUT'];
 
@@ -67,6 +68,7 @@ export default function ProjectsPage() {
                 <Download size={15} /> Export
               </button>
             )}
+            <FreeAllowanceChip kind="PROJECT" />
             <NavLink to="/developer/projects/new" className="btn btn-primary btn-sm">
               <Plus size={16} /> Add a project
             </NavLink>

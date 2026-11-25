@@ -1,0 +1,149 @@
+/* Free allowance ("pehli 5 muft") — header pill, Add-button chip, Add-screen note */
+
+/* ── Header pill ── */
+.fa-pop-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.fa-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--cmp-brand-border);
+  background: var(--cmp-brand-subtle);
+  color: var(--cmp-text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.fa-pill svg { color: var(--cmp-brand); flex: none; }
+.fa-pill:hover { border-color: var(--cmp-brand); }
+.fa-pill:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--cmp-focus-ring); }
+.fa-pill-text { font-weight: 700; }
+.fa-pill-free { color: var(--cmp-text-faint); font-size: 12px; }
+.fa-pill.out {
+  border-color: color-mix(in srgb, var(--cmp-danger) 40%, transparent);
+  background: color-mix(in srgb, var(--cmp-danger) 8%, var(--cmp-surface));
+}
+.fa-pill.out svg { color: var(--cmp-danger); }
+
+.fa-pop {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 200;
+  width: 320px;
+  max-width: calc(100vw - 24px);
+  padding: 14px 16px 12px;
+  border-radius: var(--cmp-radius-lg);
+  border: 1px solid var(--cmp-border);
+  background: var(--cmp-surface-raised, var(--cmp-surface));
+  box-shadow: var(--cmp-shadow-lg);
+  text-align: left;
+}
+.fa-pop-title { margin: 0; font-size: 14px; font-weight: 700; }
+.fa-pop-sub { margin: 2px 0 10px; font-size: 12.5px; color: var(--cmp-text-muted); }
+.fa-pop-foot {
+  margin: 10px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--cmp-border);
+  font-size: 12.5px;
+  color: var(--cmp-text-muted);
+}
+.fa-pop-foot a, .fa-note a { color: var(--cmp-brand); font-weight: 600; }
+
+.fa-row { padding: 10px 0; border-top: 1px solid var(--cmp-border); }
+.fa-row-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 13px;
+}
+.fa-left { color: var(--cmp-text-muted); font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+.fa-out { color: var(--cmp-danger); font-size: 12.5px; font-weight: 700; white-space: nowrap; }
+.fa-bar {
+  height: 6px;
+  margin: 7px 0 6px;
+  border-radius: 999px;
+  background: var(--cmp-surface-sunken);
+  overflow: hidden;
+}
+.fa-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--cmp-brand);
+  transition: width 0.3s ease;
+}
+.fa-bar span.low { background: var(--cmp-warning); }
+.fa-bar span.out { background: var(--cmp-danger); }
+.fa-row-note { margin: 0; font-size: 12px; line-height: 1.45; color: var(--cmp-text-muted); }
+
+/* ── Chip beside Add buttons ── */
+.fa-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--cmp-border);
+  background: var(--cmp-surface);
+  color: var(--cmp-text-muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.fa-chip:hover { border-color: var(--cmp-border-strong); }
+.fa-chip:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--cmp-focus-ring); }
+.fa-chip svg { color: var(--cmp-brand); }
+.fa-chip.low { border-color: var(--cmp-accent-border); background: var(--cmp-accent-subtle); color: var(--cmp-text); }
+.fa-chip.low svg { color: var(--cmp-warning); }
+.fa-chip.out {
+  border-color: color-mix(in srgb, var(--cmp-danger) 40%, transparent);
+  background: color-mix(in srgb, var(--cmp-danger) 8%, var(--cmp-surface));
+  color: var(--cmp-danger);
+}
+.fa-chip.out svg { color: var(--cmp-danger); }
+
+/* ── Note on Add screens ── */
+.fa-note {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 11px 14px;
+  margin-bottom: 16px;
+  border-radius: var(--cmp-radius-lg);
+  border: 1px solid var(--cmp-brand-border);
+  background: var(--cmp-brand-subtle);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.fa-note-icon { flex: none; margin-top: 2px; color: var(--cmp-brand); }
+.fa-note.low { border-color: var(--cmp-accent-border); background: var(--cmp-accent-subtle); }
+.fa-note.low .fa-note-icon { color: var(--cmp-warning); }
+.fa-note.out {
+  border-color: color-mix(in srgb, var(--cmp-danger) 40%, transparent);
+  background: color-mix(in srgb, var(--cmp-danger) 7%, var(--cmp-surface));
+}
+.fa-note.out .fa-note-icon { color: var(--cmp-danger); }
+
+/* Header tang hai (platform switch + data mode + wallet) — pill sirf chauri screens par.
+   Chhoti screens par Add button ke saath wala chip click karke poora counter khulta hai. */
+@media (max-width: 1499px) {
+  .fa-pill-wrap { display: none; }
+}
+@media (max-width: 1700px) {
+  .fa-pill-free { display: none; }
+  .fa-pill { padding: 0 11px; gap: 5px; }
+}
+/* Phone: chip wrap ho kar bayen ja sakta hai — popover screen ke andar */
+@media (max-width: 640px) {
+  .fa-chip-wrap .fa-pop { position: fixed; left: 12px; right: 12px; top: auto; width: auto; transform: none; margin-top: 8px; }
+}

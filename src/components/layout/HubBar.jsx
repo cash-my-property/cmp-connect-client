@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import cmpConnectApi from '../../services/cmpConnectApi';
+import { FreeAllowancePill, FreeAllowanceChip } from '../common/FreeAllowance';
 import {
   Search,
   Coins,
@@ -415,6 +416,9 @@ export default function HubBar() {
             </button>
           </div>
 
+          {/* Free allowance ("pehli 5 muft") counter */}
+          <FreeAllowancePill />
+
           {/* Wallet Pill */}
           {/* Live mein wallet API abhi nahi → jhoota "0 credits · 0d" nahi, "—" (backend organization.credits bheje to wahi) */}
           {(() => {
@@ -626,16 +630,22 @@ export default function HubBar() {
         </div>
 
         {pathname.startsWith('/properties') && (!account || can('listings.create')) && (
-          <NavLink to="/properties/new" className="btn btn-primary btn-sm">
-            <Plus size={15} />
-            <span>Add property</span>
-          </NavLink>
+          <div className="row" style={{ gap: 10, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <FreeAllowanceChip kind="LISTING" />
+            <NavLink to="/properties/new" className="btn btn-primary btn-sm">
+              <Plus size={15} />
+              <span>Add property</span>
+            </NavLink>
+          </div>
         )}
         {pathname.startsWith('/rto') && (!account || can('listings.create')) && (
-          <NavLink to="/rto/new" className="btn btn-accent btn-sm">
-            <Plus size={15} />
-            <span>Enter a property</span>
-          </NavLink>
+          <div className="row" style={{ gap: 10, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <FreeAllowanceChip kind="RTO" />
+            <NavLink to="/rto/new" className="btn btn-accent btn-sm">
+              <Plus size={15} />
+              <span>Enter a property</span>
+            </NavLink>
+          </div>
         )}
       </div>
 

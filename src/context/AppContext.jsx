@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import {
   initialAgency,
   initialListings,
@@ -10,7 +10,8 @@ import {
   initialTransactions
 } from '../data/mockData';
 
-import { cmpConnectApi, getAuthToken, setAuthToken, clearAuthToken } from '../services/cmpConnectApi';
+import { cmpConnectApi, getAuthToken, setAuthToken, clearAuthToken, QUOTA_EVENT } from '../services/cmpConnectApi';
+import { mockFreeAllowance, normalizeAllowance } from '../utils/freeAllowance';
 import { can as checkPermission, hasAny as checkHasAny } from '../utils/permissions';
 
 const AppContext = createContext();
@@ -292,6 +293,37 @@ export function AppProvider({ children }) {
     : (account?.accountType === 'DEVELOPER' ? 'developer' : 'agency');
   const isDeveloper = workspace === 'developer';
 
+  // ── Free allowance ("pehli 5 muft") — header counter + Add screens ──
+  // Live: GET /free-allowance (DB se har dafa gina jata hai, cache nahi). Publish / submit /
+  // project save ke baad apiRequest QUOTA_EVENT bhejta hai → dobara parh lo.
+  const [liveAllowance, setLiveAllowance] = useState(null);
+  const allowanceSeq = useRef(0);
+  const canLoadAllowance = dataMode === 'live' && Boolean(account?.id) && !mustChangePassword;
+  const refreshFreeAllowance = useCallback(async () => {
+    if (!canLoadAllowance) return;
+    const seq = ++allowanceSeq.current;
+    try {
+      const res = await cmpConnectApi.getFreeAllowance({ _silent: true });
+      if (seq === allowanceSeq.current) setLiveAllowance(normalizeAllowance(res?.data));
+    } catch {
+      // Counter na mile to kuch nahi rokna — bas dikhana band
+      if (seq === allowanceSeq.current) setLiveAllowance(null);
+    }
+  }, [canLoadAllowance]);
+
+  useEffect(() => {
+    if (!canLoadAllowance) {
+      setLiveAllowance(null);
+      return undefined;
+    }
+    refreshFreeAllowance();
+    const onChange = () => refreshFreeAllowance();
+    window.addEventListener(QUOTA_EVENT, onChange);
+    return () => window.removeEventListener(QUOTA_EVENT, onChange);
+  }, [canLoadAllowance, account?.id, refreshFreeAllowance]);
+
+  const freeAllowance = dataMode === 'mock' ? mockFreeAllowance(workspace) : liveAllowance;
+
   // Sync data attributes to HTML root element & persist to localStorage
   useEffect(() => {
     const root = document.documentElement;
@@ -491,6 +523,8 @@ export function AppProvider({ children }) {
         workspace,
         isDeveloper,
         setMockWorkspace,
+        freeAllowance,
+        refreshFreeAllowance,
         platform,
         setPlatform,
         theme,

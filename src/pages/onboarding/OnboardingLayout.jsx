@@ -39,11 +39,22 @@ export default function OnboardingLayout({
         </ul>
 
         <footer>
+          <p className="reg-legal">
+            <Link to="/pricing">Pricing</Link>
+            <span aria-hidden="true">·</span>
+            <Link to="/terms">Terms &amp; Conditions</Link>
+          </p>
           <p>Cash My Property · Dubai, United Arab Emirates</p>
           <p>
             <a href="tel:+971502402661">+971 50 240 2661</a> · <a href="mailto:info@cmpdubai.com">info@cmpdubai.com</a>
           </p>
         </footer>
+        {/* Phone: footer chhupa hota hai — links yahan */}
+        <p className="reg-legal reg-legal-mobile">
+          <Link to="/pricing">Pricing</Link>
+          <span aria-hidden="true">·</span>
+          <Link to="/terms">Terms &amp; Conditions</Link>
+        </p>
       </aside>
 
       {/* Main Panel */}
