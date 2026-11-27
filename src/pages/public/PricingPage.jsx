@@ -170,7 +170,7 @@ export default function PricingPage() {
     setBusyKey(plan.key);
     try {
       // Chalu plan par checkout 409 deta hai — badalna Stripe portal se
-      if (currentSub && relation) await goToPortal();
+      if (currentSub && relation) await goToPortal({ changeTo: plan.key });
       else await goToCheckout(plan.key);
       // Browser Stripe par ja raha hai — button busy hi rehne do
     } catch (err) {

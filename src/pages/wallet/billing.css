@@ -140,3 +140,5 @@
   .pay-overdue-title { display: none; }
   .pay-overdue-text { align-items: flex-start; }
 }
+.bill-cancel { color: var(--cmp-danger); }
+.bill-cancel:hover { color: var(--cmp-danger); background: color-mix(in srgb, var(--cmp-danger) 8%, transparent); }

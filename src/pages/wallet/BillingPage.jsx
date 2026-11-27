@@ -132,18 +132,20 @@ function Row({ label, children }) {
 
 export default function BillingPage() {
   const { subscription, subscriptionLoading, isPaymentOverdue, paymentGrace, canChangePackage, isMockData, allowancePlan } = useApp();
-  const [busy, setBusy] = useState(false);
+  // '' | 'portal' | 'cancel' — kaunsa button Stripe khol raha hai
+  const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const location = useLocation();
 
-  const openPortal = async () => {
+  // Aam portal: card + invoices. { cancel: true } → Stripe ka cancel flow, phir /billing/success?change=cancelled
+  const openPortal = async (body = {}, which = 'portal') => {
     setError('');
-    setBusy(true);
+    setBusy(which);
     try {
-      await goToPortal();
+      await goToPortal(body);
     } catch (err) {
       setError(billingErrorText(err, 'Could not open billing.'));
-      setBusy(false);
+      setBusy('');
     }
   };
 
@@ -187,7 +189,7 @@ export default function BillingPage() {
             <p>{m.text}{!canChangePackage && ' Ask the account owner to update it.'}</p>
           </div>
           {canChangePackage && (
-            <button type="button" className="btn btn-primary btn-sm" onClick={openPortal} disabled={busy}>Update card</button>
+            <button type="button" className="btn btn-primary btn-sm" onClick={() => openPortal()} disabled={!!busy}>Update card</button>
           )}
         </div>
         );
@@ -212,10 +214,15 @@ export default function BillingPage() {
             </div>
             {canChangePackage && (
               <div className="bill-actions">
-                <button type="button" className="btn btn-primary" onClick={openPortal} disabled={busy}>
-                  {busy ? <Loader2 size={16} className="bill-spin" /> : <CreditCard size={16} />} Manage billing
+                <button type="button" className="btn btn-primary" onClick={() => openPortal()} disabled={!!busy}>
+                  {busy === 'portal' ? <Loader2 size={16} className="bill-spin" /> : <CreditCard size={16} />} Manage billing
                 </button>
                 <Link to="/pricing" className="btn btn-outline"><ArrowUpDown size={16} /> Change package</Link>
+                {!cancelsOn && ['ACTIVE', 'TRIALING'].includes(sub.status) && (
+                  <button type="button" className="btn btn-ghost bill-cancel" onClick={() => openPortal({ cancel: true }, 'cancel')} disabled={!!busy}>
+                    {busy === 'cancel' && <Loader2 size={16} className="bill-spin" />} Cancel package
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -253,7 +260,7 @@ export default function BillingPage() {
           )}
           <p className="bill-foot">
             {canChangePackage
-              ? 'Use Manage billing to update your card, download invoices or cancel. Changing to another package also happens there.'
+              ? 'Manage billing is for your card and invoices. Use Change package to upgrade or downgrade, and Cancel package to stop renewing.'
               : 'Only the account owner can change the package or the payment details.'}
           </p>
         </section>

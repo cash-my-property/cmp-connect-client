@@ -91,15 +91,19 @@ export function billingErrorText(err, fallback = 'Something went wrong. Please t
 
 // Plan kharido → Stripe Checkout par bhej do
 export async function goToCheckout(key) {
-  const res = await cmpConnectApi.startCheckout(key, { _silent: true });
+  // Pay ke baad seedha confirmation page; cancel par Billing
+  const res = await cmpConnectApi.startCheckout(key, { _silent: true }, { successPath: '/billing/success', cancelPath: '/billing' });
   const url = res?.data?.url;
   if (!url) throw new Error('Could not open the payment page. Please try again.');
   window.location.assign(url);
 }
 
-// Stripe billing portal — plan badalna, card, cancel, invoices
-export async function goToPortal() {
-  const res = await cmpConnectApi.openBillingPortal({ _silent: true });
+// Stripe billing portal.
+//   goToPortal()                    card, invoices (plan picker ab aam portal mein nahi)
+//   goToPortal({ changeTo: key })   seedha us plan ka confirm page → /billing/success?change=success&key=…
+//   goToPortal({ cancel: true })    cancel flow → /billing/success?change=cancelled
+export async function goToPortal(body = {}) {
+  const res = await cmpConnectApi.openBillingPortal({ _silent: true }, body);
   const url = res?.data?.url;
   if (!url) throw new Error('Could not open billing. Please try again.');
   window.location.assign(url);

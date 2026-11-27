@@ -538,16 +538,19 @@ export const cmpConnectApi = {
     return apiRequest('/api/cmpConnect/billing/subscription', { method: 'GET', ...options });
   },
   // { key: 'pro-yearly' } → { url } Stripe ka hosted checkout page
-  async startCheckout(key, options = {}) {
-    return apiRequest('/api/cmpConnect/billing/checkout', { method: 'POST', body: JSON.stringify({ key }), ...options });
+  // successPath / cancelPath: sirf path — origin backend khud lagata hai
+  async startCheckout(key, options = {}, paths = {}) {
+    return apiRequest('/api/cmpConnect/billing/checkout', { method: 'POST', body: JSON.stringify({ key, ...paths }), ...options });
   },
   // Stripe se wapas aane par (/billing?checkout=success&session_id=…) — webhook ka intezar nahi
   async verifyCheckout(sessionId, options = {}) {
     return apiRequest('/api/cmpConnect/billing/verify', { method: 'POST', body: JSON.stringify({ sessionId }), ...options });
   },
   // Stripe billing portal — card, plan badalna, cancel, invoices → { url }
-  async openBillingPortal(options = {}) {
-    return apiRequest('/api/cmpConnect/billing/portal', { method: 'POST', ...options });
+  // body: { returnPath? } aam portal (card, invoices) · { changeTo: key } plan badlo · { cancel: true } cancel
+  //   changeTo / cancel → Stripe confirm ke baad khud /billing/success?change=success|cancelled par
+  async openBillingPortal(options = {}, body = {}) {
+    return apiRequest('/api/cmpConnect/billing/portal', { method: 'POST', body: JSON.stringify(body), ...options });
   },
 
   // ─────────────────────────────────────────────────────────────

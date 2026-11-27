@@ -1,14 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { AlertTriangle, ArrowRight, Check, Clock, CreditCard, Loader2, RefreshCw } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CalendarX2, Check, Clock, CreditCard, Loader2, RefreshCw } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { cmpConnectApi } from '../../services/cmpConnectApi';
-import { billingErrorText, fmtAed, fmtDate, periodLabel } from '../../utils/billing';
+import { billingErrorText, fmtAed, fmtDate, periodLabel, subEndsAt } from '../../utils/billing';
 import './paymentSuccess.css';
 
 // /billing/success — Stripe pay ke baad yahan aata hai.
 //   ?session_id=cs_…            nayi plan (Checkout) → POST /billing/verify, ACTIVE hone tak dobara
 //   ?change=success[&key=…]     portal se plan badla → subscription dobara parho (key milne tak)
+//   ?change=cancelled           portal se cancel → subscription par cancelAt / khatam hone tak parho
 // Purana success_url (/billing?checkout=success&session_id=…) BillingPage yahin bhej deta hai.
 
 const TRIES = 6;
@@ -29,6 +30,7 @@ export default function PaymentSuccessPage() {
   const params = new URLSearchParams(search);
   const sessionId = params.get('session_id');
   const isChange = params.get('change') === 'success';
+  const isCancel = params.get('change') === 'cancelled';
   const wantKey = params.get('key');
 
   // 'checking' | 'done' | 'pending' | 'error'
@@ -47,6 +49,20 @@ export default function PaymentSuccessPage() {
     (async () => {
       setState('checking');
       setError('');
+
+      // Portal se cancel — period ke aakhir tak chalu (cancelAt) ya foran khatam (null / CANCELED)
+      if (isCancel) {
+        for (let i = 0; i < TRIES && !stop; i += 1) {
+          const s = await refreshSubscription();
+          if (!s || s.status === 'CANCELED' || subEndsAt(s)) {
+            setSub(s); setState('cancelled'); return;
+          }
+          setSub(s);
+          setState('pending');
+          await sleep(GAP_MS);
+        }
+        return;
+      }
 
       // Portal se plan badla — webhook ke baad subscription par naya package aata hai
       if (isChange || !sessionId) {
@@ -90,7 +106,7 @@ export default function PaymentSuccessPage() {
     })();
 
     return () => { stop = true; };
-  }, [isLiveData, isChange, sessionId, wantKey, round, refreshSubscription]);
+  }, [isLiveData, isChange, isCancel, sessionId, wantKey, round, refreshSubscription]);
 
   useEffect(() => {
     const prev = document.title;
@@ -125,8 +141,8 @@ export default function PaymentSuccessPage() {
               <div className="pay-ok-icon wait"><Clock size={34} /></div>
               <h1>Payment is being confirmed</h1>
               <p className="pay-ok-sub">
-                {isChange
-                  ? 'Stripe is still applying your package change. It usually shows within a minute.'
+                {isChange || isCancel
+                  ? 'Stripe is still applying your change. It usually shows within a minute.'
                   : 'If you have paid, your package will be active within a minute.'}
               </p>
               <div className="pay-ok-actions">
@@ -149,6 +165,24 @@ export default function PaymentSuccessPage() {
                 <Link to="/pricing" className="btn btn-primary btn-lg">See packages</Link>
                 <Link to="/billing" className="btn btn-outline btn-lg">View billing</Link>
               </div>
+            </>
+          )}
+
+          {state === 'cancelled' && (
+            <>
+              <div className="pay-ok-icon wait"><CalendarX2 size={34} /></div>
+              <p className="pay-ok-eyebrow muted">Package cancelled</p>
+              <h1>{fmtDate(subEndsAt(sub)) ? 'Your package will not renew' : 'Your package has ended'}</h1>
+              <p className="pay-ok-sub">
+                {fmtDate(subEndsAt(sub))
+                  ? `${sub?.plan?.name || 'Your package'} stays active until ${fmtDate(subEndsAt(sub))}. You will not be charged again.`
+                  : 'Your account is back on its free listings. You can choose a package again at any time.'}
+              </p>
+              <div className="pay-ok-actions">
+                <Link to="/billing" className="btn btn-primary btn-lg"><CreditCard size={17} /> View billing</Link>
+                <Link to={home} className="btn btn-outline btn-lg">Go to dashboard</Link>
+              </div>
+              <p className="pay-ok-note">Changed your mind? You can keep the package from Billing → Manage billing.</p>
             </>
           )}
 

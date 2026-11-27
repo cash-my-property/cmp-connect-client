@@ -110,3 +110,4 @@
   .pay-ok-card { padding: 28px 18px 22px; border-radius: 16px; }
   .pay-ok-actions .btn { width: 100%; min-width: 0; }
 }
+.pay-ok-eyebrow.muted { color: var(--cmp-text-muted); }
