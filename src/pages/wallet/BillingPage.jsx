@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { AlertTriangle, ArrowUpDown, CheckCircle2, CreditCard, Loader2, XCircle } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { cmpConnectApi } from '../../services/cmpConnectApi';
@@ -134,6 +134,7 @@ export default function BillingPage() {
   const { subscription, subscriptionLoading, isPaymentOverdue, paymentGrace, canChangePackage, isMockData, allowancePlan } = useApp();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const location = useLocation();
 
   const openPortal = async () => {
     setError('');
@@ -145,6 +146,13 @@ export default function BillingPage() {
       setBusy(false);
     }
   };
+
+  // Stripe ka success_url abhi /billing?checkout=success&session_id=… hai → confirmation page
+  const q = new URLSearchParams(location.search);
+  if (q.get('checkout') === 'success') {
+    const sid = q.get('session_id');
+    return <Navigate to={`/billing/success${sid ? `?session_id=${encodeURIComponent(sid)}` : ''}`} replace />;
+  }
 
   const sub = isManagedPlan(subscription) ? subscription : null;
   const plan = sub?.plan || {};

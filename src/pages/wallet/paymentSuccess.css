@@ -1,0 +1,112 @@
+/* /billing/success — Stripe ke baad confirmation (CMP brand) */
+.pay-ok {
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--cmp-bg);
+  color: var(--cmp-text);
+  display: flex;
+  flex-direction: column;
+}
+.pay-ok-band {
+  height: 220px;
+  padding: 22px 24px 0;
+  box-sizing: border-box;
+  background: radial-gradient(60% 160% at 100% 100%, rgba(184, 115, 51, 0.4), transparent 60%),
+              linear-gradient(150deg, #04150E 0%, #093A28 55%, #0C6140 100%);
+  display: flex;
+  justify-content: center;
+}
+.pay-ok-band .reg-logo { align-self: flex-start; }
+
+.pay-ok-main {
+  flex: 1;
+  width: 100%;
+  max-width: 560px;
+  margin: -120px auto 0;
+  padding: 0 16px 40px;
+  box-sizing: border-box;
+}
+.pay-ok-card {
+  background: var(--cmp-surface);
+  border: 1px solid var(--cmp-border);
+  border-radius: 20px;
+  box-shadow: 0 24px 60px -28px rgba(4, 21, 14, 0.45);
+  padding: 36px 32px 30px;
+  text-align: center;
+}
+.pay-ok-card h1 {
+  margin: 0;
+  font-size: clamp(24px, 4vw, 30px);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.pay-ok-eyebrow {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cmp-brand);
+}
+.pay-ok-sub { margin: 10px auto 0; max-width: 420px; color: var(--cmp-text-muted); font-size: 15px; line-height: 1.55; }
+
+.pay-ok-icon {
+  width: 76px;
+  height: 76px;
+  margin: 0 auto 18px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+}
+.pay-ok-icon.ok {
+  color: #fff;
+  background: var(--cmp-brand);
+  box-shadow: 0 0 0 10px var(--cmp-brand-subtle);
+  animation: pay-ok-pop 0.45s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+.pay-ok-icon.wait { color: var(--cmp-info); background: color-mix(in srgb, var(--cmp-info) 12%, var(--cmp-surface)); }
+.pay-ok-icon.bad { color: var(--cmp-warning); background: color-mix(in srgb, var(--cmp-warning) 14%, var(--cmp-surface)); }
+@keyframes pay-ok-pop { from { transform: scale(0.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.pay-ok-spin { animation: pay-ok-spin 0.9s linear infinite; }
+@keyframes pay-ok-spin { to { transform: rotate(360deg); } }
+
+.pay-ok-summary {
+  margin: 26px 0 0;
+  padding: 4px 18px;
+  text-align: left;
+  border-radius: 14px;
+  background: var(--cmp-surface-sunken);
+  border: 1px solid var(--cmp-border);
+}
+.pay-ok-summary > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--cmp-border);
+  font-size: 14px;
+}
+.pay-ok-summary > div:last-child { border-bottom: 0; }
+.pay-ok-summary dt { color: var(--cmp-text-muted); }
+.pay-ok-summary dd { margin: 0; font-weight: 700; text-align: right; }
+.pay-ok-summary dd small { display: block; font-weight: 500; color: var(--cmp-text-muted); font-size: 12.5px; }
+.pay-ok-ref { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; letter-spacing: 0.04em; }
+
+.pay-ok-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 26px;
+}
+.pay-ok-actions .btn { min-width: 190px; text-decoration: none; }
+.pay-ok-note { margin: 16px 0 0; font-size: 13px; color: var(--cmp-text-faint); }
+.pay-ok-help { text-align: center; margin: 22px 0 0; font-size: 13px; color: var(--cmp-text-muted); }
+.pay-ok-help a { color: var(--cmp-brand); font-weight: 600; text-decoration: none; }
+
+@media (max-width: 640px) {
+  .pay-ok-band { height: 180px; }
+  .pay-ok-main { margin-top: -96px; }
+  .pay-ok-card { padding: 28px 18px 22px; border-radius: 16px; }
+  .pay-ok-actions .btn { width: 100%; min-width: 0; }
+}

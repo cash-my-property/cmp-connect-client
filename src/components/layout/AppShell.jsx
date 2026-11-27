@@ -48,7 +48,9 @@ export default function AppShell({ children }) {
     location.pathname === '/apply' ||
     // Pricing / Terms ka apna brand bar hai — login ho to bhi poora page
     location.pathname === '/pricing' ||
-    location.pathname === '/terms';
+    location.pathname === '/terms' ||
+    // Stripe ke baad confirmation — apna brand band, sidebar nahi
+    location.pathname === '/billing/success';
 
   if (isPublicAuthOrOnboarding) {
     return (

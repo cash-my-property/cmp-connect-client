@@ -31,6 +31,7 @@ import CreditActivityPage from '../pages/wallet/CreditActivityPage';
 import RefundsPage from '../pages/wallet/RefundsPage';
 import ContractPage from '../pages/wallet/ContractPage';
 import BillingPage from '../pages/wallet/BillingPage';
+import PaymentSuccessPage from '../pages/wallet/PaymentSuccessPage';
 
 import TeamPage from '../pages/team/TeamPage';
 import MembersPage from '../pages/team/MembersPage';
@@ -297,6 +298,8 @@ export default function AppRoutes() {
 
         {/* Billing (Stripe) — sab members plan dekh sakte hain; Stripe yahin wapas bhejta hai */}
         <Route path="/billing" element={<BillingPage />} />
+        {/* Stripe pay ke baad — poora page (AppShell ke bahar), login zaroori */}
+        <Route path="/billing/success" element={<PaymentSuccessPage />} />
 
         {/* Account Hub (shared) */}
         <Route path="/account/security" element={<SecurityPage />} />
