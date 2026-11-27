@@ -62,6 +62,19 @@ export function normalizeAllowance(data) {
   return Object.keys(out).length ? out : null;
 }
 
+// Backend har kism par plan bhi bhejta hai: chalu plan → enforced:false + plan,
+// overdue (PAST_DUE/UNPAID) → overdue:true + plan. Company-level hai, pehli kism se le lo.
+export function allowanceMeta(data) {
+  if (!data || typeof data !== 'object') return { plan: null, overdue: false, grace: null };
+  const list = Object.values(data).filter((q) => q && typeof q === 'object');
+  return {
+    plan: list.find((q) => q.plan)?.plan || null,
+    overdue: list.some((q) => q.overdue === true),
+    // { graceDays, since, until, daysLeft, inGrace } — payment fail ke baad kitne din publish chalega
+    grace: list.find((q) => q.grace)?.grace || null
+  };
+}
+
 // Limit lagi hai aur khatam ho chuki
 export const isQuotaOut = (q) => Boolean(q && q.enforced && q.remaining <= 0);
 

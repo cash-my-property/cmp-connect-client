@@ -370,3 +370,58 @@
   font-size: 13.5px;
   color: var(--cmp-text-muted);
 }
+
+/* Owner — chalu plan, alerts, busy */
+.pub-plan.current { border: 2px solid var(--cmp-brand); }
+.pub-plan.current .pub-plan-badge { background: var(--cmp-brand); }
+.pub-plan-current {
+  margin: 18px 0 0;
+  text-align: center;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--cmp-brand);
+  padding: 9px 0;
+  border-radius: var(--cmp-radius-md, 10px);
+  background: var(--cmp-brand-subtle);
+}
+button.pub-btn { cursor: pointer; font: inherit; font-weight: 700; }
+.pub-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.pub-spin { animation: pub-spin 0.9s linear infinite; }
+@keyframes pub-spin { to { transform: rotate(360deg); } }
+.pub-alert {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 760px;
+  margin: 0 auto 22px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  font-size: 14px;
+  border: 1px solid var(--cmp-border);
+  background: var(--cmp-surface);
+}
+.pub-alert > svg { flex: none; }
+.pub-alert > div { flex: 1; min-width: 0; }
+.pub-alert b { display: block; }
+.pub-alert p { margin: 2px 0 0; color: var(--cmp-text-muted); }
+.pub-alert.danger {
+  background: color-mix(in srgb, var(--cmp-danger) 9%, var(--cmp-surface));
+  border-color: color-mix(in srgb, var(--cmp-danger) 32%, transparent);
+}
+.pub-alert.danger > svg { color: var(--cmp-danger); }
+.pub-alert-x { border: 0; background: transparent; color: var(--cmp-text-muted); font-size: 20px; cursor: pointer; }
+.pub-billing-link { text-align: center; margin-top: 18px; }
+@media (max-width: 640px) {
+  .pub-alert { flex-wrap: wrap; }
+}
+.pub-plan.scheduled { border: 2px dashed var(--cmp-info); }
+.pub-plan.scheduled .pub-plan-badge { background: var(--cmp-info); }
+.pub-plan-current.next {
+  color: var(--cmp-info);
+  background: color-mix(in srgb, var(--cmp-info) 9%, var(--cmp-surface));
+}
+.pub-alert.warning {
+  background: color-mix(in srgb, var(--cmp-warning) 10%, var(--cmp-surface));
+  border-color: color-mix(in srgb, var(--cmp-warning) 32%, transparent);
+}
+.pub-alert.warning > svg { color: var(--cmp-warning); }

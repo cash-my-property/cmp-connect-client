@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
+import { isManagedPlan } from '../../utils/billing';
 import cmpConnectApi from '../../services/cmpConnectApi';
 import { FreeAllowancePill, FreeAllowanceChip } from '../common/FreeAllowance';
 import {
@@ -39,7 +40,8 @@ export default function HubBar() {
     authToken,
     isDeveloper,
     workspace,
-    setMockWorkspace
+    setMockWorkspace,
+    subscription
   } = useApp();
 
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -267,11 +269,13 @@ export default function HubBar() {
         tabs
       };
     }
-    if (pathname.startsWith('/wallet')) {
+    if (pathname.startsWith('/wallet') || pathname === '/billing') {
       const tabs = [];
       if (!account || can('contracts.view') || can('credits.calculator') || can('credits.history_view')) {
         tabs.push({ label: 'Balance & plan', path: '/wallet' });
       }
+      // Package (Stripe) — har member dekh sakta hai
+      tabs.push({ label: 'Billing', path: '/billing' });
       if (!account || can('credits.history_view') || can('contracts.view')) {
         tabs.push({ label: 'Activity', path: '/wallet/activity' });
       }
@@ -420,10 +424,26 @@ export default function HubBar() {
           <FreeAllowancePill />
 
           {/* Wallet Pill */}
-          {/* Live mein wallet API abhi nahi → jhoota "0 credits · 0d" nahi, "—" (backend organization.credits bheje to wahi) */}
+          {/* Live: balance ki API abhi nahi (per-listing kataai backend par baqi). organization.credits aaye to wahi;
+              warna plan ho to plan ke mahana credits (GET /billing/subscription → plan.monthlyCredits); dono na hon to "—" */}
           {(() => {
             const liveCredits = account?.organization?.credits;
             const hasCredits = dataMode === 'mock' || liveCredits != null;
+            const planCredits = dataMode !== 'mock' && liveCredits == null && isManagedPlan(subscription)
+              ? Number(subscription?.plan?.monthlyCredits) || 0 : 0;
+            if (planCredits > 0) {
+              return (
+                <NavLink
+                  to="/wallet"
+                  className="wallet-pill"
+                  title={`${subscription.plan?.name || 'Your'} package: ${planCredits.toLocaleString('en-US')} credits a month`}
+                >
+                  <Coins size={16} style={{ color: 'var(--cmp-accent)' }} />
+                  <strong>{planCredits.toLocaleString('en-US')}</strong>
+                  <span className="faint" style={{ fontSize: '12px' }}>credits/mo</span>
+                </NavLink>
+              );
+            }
             const credits = dataMode === 'mock' ? agency.credits : liveCredits;
             const days = dataMode === 'mock' ? agency.creditsExpiryDays : account?.organization?.creditsExpiryDays;
             return (

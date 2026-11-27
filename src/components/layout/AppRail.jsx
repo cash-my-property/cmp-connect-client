@@ -79,7 +79,7 @@ export default function AppRail({ isExpanded = false, onToggleExpand }) {
               <UserCheck size={19} />
               <span>Team</span>
             </NavLink>
-            <NavLink to="/wallet" className={({ isActive }) => `rail-link ${isActive ? 'active' : ''}`} title="Wallet">
+            <NavLink to="/wallet" className={({ isActive }) => `rail-link ${isActive || location.pathname === '/billing' ? 'active' : ''}`} title="Wallet">
               <CreditCard size={19} />
               <span>Wallet</span>
             </NavLink>
@@ -120,7 +120,7 @@ export default function AppRail({ isExpanded = false, onToggleExpand }) {
             )}
 
             {(!account || hasAny('contracts.view', 'credits.calculator', 'credits.history_view')) && (
-              <NavLink to="/wallet" className={({ isActive }) => `rail-link ${isActive ? 'active' : ''}`} title="Wallet">
+              <NavLink to="/wallet" className={({ isActive }) => `rail-link ${isActive || location.pathname === '/billing' ? 'active' : ''}`} title="Wallet">
                 <CreditCard size={19} />
                 <span>Wallet</span>
               </NavLink>

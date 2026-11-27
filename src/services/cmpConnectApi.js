@@ -197,7 +197,7 @@ async function apiRequest(endpoint, options = {}) {
       QUOTA_ENDPOINT.test(endpoint.split('?')[0]) &&
       typeof window !== 'undefined'
     ) {
-      window.dispatchEvent(new CustomEvent(QUOTA_EVENT, { detail: { status: response.status } }));
+      window.dispatchEvent(new CustomEvent(QUOTA_EVENT, { detail: { status: response.status, code: data?.code || null } }));
     }
 
     if (!response.ok) {
@@ -530,6 +530,24 @@ export const cmpConnectApi = {
   // Qeemat server banata hai; page par koi hisaab nahi.
   async getPublicPackages(options = {}) {
     return apiRequest('/api/cmpConnect/public/packages', { method: 'GET', _ignoreAuthRedirect: true, ...options });
+  },
+
+  // ── Billing (Stripe) — /api/cmpConnect/billing/* ──
+  // Company ka plan (ya null). ACTIVE/TRIALING = chalu, PAST_DUE/UNPAID = payment overdue.
+  async getSubscription(options = {}) {
+    return apiRequest('/api/cmpConnect/billing/subscription', { method: 'GET', ...options });
+  },
+  // { key: 'pro-yearly' } → { url } Stripe ka hosted checkout page
+  async startCheckout(key, options = {}) {
+    return apiRequest('/api/cmpConnect/billing/checkout', { method: 'POST', body: JSON.stringify({ key }), ...options });
+  },
+  // Stripe se wapas aane par (/billing?checkout=success&session_id=…) — webhook ka intezar nahi
+  async verifyCheckout(sessionId, options = {}) {
+    return apiRequest('/api/cmpConnect/billing/verify', { method: 'POST', body: JSON.stringify({ sessionId }), ...options });
+  },
+  // Stripe billing portal — card, plan badalna, cancel, invoices → { url }
+  async openBillingPortal(options = {}) {
+    return apiRequest('/api/cmpConnect/billing/portal', { method: 'POST', ...options });
   },
 
   // ─────────────────────────────────────────────────────────────

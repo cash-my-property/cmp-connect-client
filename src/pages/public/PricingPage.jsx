@@ -1,52 +1,61 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowUpDown, Gift, RefreshCw } from 'lucide-react';
+import { AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, Gift, Loader2, RefreshCw } from 'lucide-react';
 import PublicPageShell from './PublicPageShell';
 import { useApp } from '../../context/AppContext';
 import { cmpConnectApi } from '../../services/cmpConnectApi';
+import {
+  billingErrorText, compareToCurrent, fmtDate, goToCheckout, goToPortal, isManagedPlan, overdueText, periodLabel, subEndsAt
+} from '../../utils/billing';
 
 // Plans, qeemat aur terms sab GET /api/cmpConnect/public/packages se aate hain.
-// Admin plan ka price likhta hai, server VAT / per-credit / yearly muqabla banata hai —
-// is page par koi hisaab ya static plan nahi.
+// Admin plan ka price likhta hai (VAT-inclusive — jo likha wahi gaahak deta hai),
+// server VAT ka hissa / per-credit / yearly muqabla banata hai. Is page par koi hisaab nahi.
+//
+// Owner (Agency/Developer) ke button:
+//   koi plan nahi → "Choose X" → POST /billing/checkout → Stripe ka hosted page
+//   plan hai      → current card par "Current plan", baqi Upgrade/Downgrade → Stripe portal
+//                   (checkout chalu plan par 409 deta hai; badalna portal se hota hai)
 
-const aed = (n) =>
-  `AED ${(Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+// Poore number par decimals nahi; adhoore par hamesha 2 (238.10, 238.1 nahi)
+const aed = (n) => {
+  const v = Number(n) || 0;
+  const d = Number.isInteger(v) ? 0 : 2;
+  return `AED ${v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d })}`;
+};
 const num = (n) => (Number(n) || 0).toLocaleString('en-US');
 
-// Online payment abhi nahi — tab tak package badalne ki darkhwast CMP ko email se
-const CMP_EMAIL = 'info@cmpdubai.com';
-const switchMailto = (plan, company) => {
-  const type = plan.billingPeriod === 'YEARLY' ? 'Yearly' : 'Monthly';
-  const subject = `Package change: ${plan.name} (${type})${company ? ` for ${company}` : ''}`;
-  const body = [
-    'Hello CMP team,',
-    '',
-    `Please switch our CMP Connect package to ${plan.name} (${type}).`,
-    '',
-    `Company: ${company || ''}`
-  ].join('\r\n');
-  return `mailto:${CMP_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+const ACTION = {
+  choose: { icon: null, text: (p) => `Choose ${p.name}` },
+  upgrade: { icon: ArrowUp, text: (p) => `Upgrade to ${p.name}` },
+  downgrade: { icon: ArrowDown, text: (p) => `Downgrade to ${p.name}` },
+  period: { icon: ArrowUpDown, text: (p) => `Switch to ${p.billingPeriod === 'YEARLY' ? 'yearly' : 'monthly'}` }
 };
 
-function PlanCard({ plan, cta, company }) {
+function PlanCard({ plan, cta, relation, startsAt, busy, disabled, onAction }) {
   const p = plan.pricing || {};
   const c = p.credits || {};
   const yearly = plan.billingPeriod === 'YEARLY';
   const cmp = plan.comparison;
+  const isCurrent = relation === 'current';
+  const isScheduled = relation === 'scheduled';
+  const action = cta === 'owner' && !isCurrent ? ACTION[relation || 'choose'] : null;
+  const Icon = action?.icon;
+  const badge = isCurrent ? 'Current plan' : isScheduled ? (startsAt ? `Starts ${startsAt}` : 'Next plan') : plan.badgeText;
 
   return (
-    <article className={`pub-plan${plan.featured ? ' featured' : ''}`}>
-      {plan.badgeText && <span className="pub-plan-badge">{plan.badgeText}</span>}
+    <article className={`pub-plan${plan.featured ? ' featured' : ''}${isCurrent ? ' current' : ''}${isScheduled ? ' scheduled' : ''}`}>
+      {badge && <span className="pub-plan-badge">{badge}</span>}
       <p className="pub-plan-name">{plan.name}</p>
       {plan.audience && <p className="pub-plan-for">{plan.audience}</p>}
       <p className="pub-plan-price">
-        {aed(p.price?.net)}
+        {aed(p.price?.total)}
         <small>{yearly ? ' / year' : ' / month'}</small>
       </p>
       <p className="pub-plan-yr">
         {yearly
-          ? `${aed(p.perMonth)} a month, paid yearly · excl. VAT`
-          : 'Billed monthly · excl. VAT'}
+          ? `${aed(p.perMonth)} a month, paid yearly · incl. VAT`
+          : 'Billed monthly · incl. VAT · cancel anytime'}
       </p>
       {yearly && cmp && cmp.saving > 0 && (
         <p className="pub-plan-save">
@@ -61,10 +70,8 @@ function PlanCard({ plan, cta, company }) {
           <span>{c.bonusPerMonth && c.bonusMonths ? `${num(c.bonusPerMonth)} × ${c.bonusMonths} months` : '—'}</span>
         </li>
         <li><span>Credits in the first {p.months || 12} months</span><span>{num(c.firstYear)}</span></li>
-        <li>
-          <span>{yearly ? 'Price' : '12 months'} incl. {p.vatPct ?? 0}% VAT</span>
-          <span>{aed(yearly ? p.price?.total : p.year?.total)}</span>
-        </li>
+        <li><span>Includes {p.vatPct ?? 0}% VAT</span><span>{aed(p.price?.vat)}</span></li>
+        {!yearly && <li><span>12 months total</span><span>{aed(p.year?.total)}</span></li>}
       </ul>
 
       {plan.highlights?.length > 0 && (
@@ -82,20 +89,40 @@ function PlanCard({ plan, cta, company }) {
       {cta === 'signup' && (
         <Link to="/signup" className={`pub-btn ${plan.featured ? 'solid' : 'outline'} block`}>Get started</Link>
       )}
-      {cta === 'switch' && (
-        <a href={switchMailto(plan, company)} className={`pub-btn ${plan.featured ? 'solid' : 'outline'} block`}>
-          <ArrowUpDown size={15} /> Switch to {plan.name}
-        </a>
+      {cta === 'owner' && isCurrent && (
+        <p className="pub-plan-current">You are on this plan</p>
+      )}
+      {cta === 'owner' && isScheduled && (
+        <p className="pub-plan-current next">Your package changes to this{startsAt ? ` on ${startsAt}` : ' at the next renewal'}</p>
+      )}
+      {action && (
+        <button
+          type="button"
+          className={`pub-btn ${plan.featured || relation === 'upgrade' ? 'solid' : 'outline'} block`}
+          onClick={() => onAction(plan, relation)}
+          disabled={disabled}
+          aria-busy={busy || undefined}
+        >
+          {busy ? <Loader2 size={15} className="pub-spin" /> : Icon && <Icon size={15} />} {action.text(plan)}
+        </button>
       )}
     </article>
   );
 }
 
 export default function PricingPage() {
-  const { isAuthenticated, canChangePackage, agency } = useApp();
-  const cta = !isAuthenticated ? 'signup' : (canChangePackage ? 'switch' : null);
+  const {
+    isAuthenticated, canChangePackage, isMockData,
+    subscription, subscriptionLoading, isPaymentOverdue, paymentGrace, refreshSubscription
+  } = useApp();
+  const cta = !isAuthenticated ? 'signup' : (canChangePackage ? 'owner' : null);
   const [state, setState] = useState({ loading: true, error: '', data: null });
   const [period, setPeriod] = useState('MONTHLY');
+  const [busyKey, setBusyKey] = useState('');
+  const [actionError, setActionError] = useState('');
+  const periodTouched = useRef(false);
+
+  const currentSub = isAuthenticated && isManagedPlan(subscription) ? subscription : null;
 
   const load = useCallback(async () => {
     setState({ loading: true, error: '', data: null });
@@ -119,11 +146,50 @@ export default function PricingPage() {
 
   const data = state.data;
   const hasBoth = !!(data?.monthly.length && data?.yearly.length);
+
+  // Chalu plan yearly ho to pehle yearly tab kholo (jab tak user khud na badle)
+  useEffect(() => {
+    if (periodTouched.current || !hasBoth || !currentSub?.plan?.billingPeriod) return;
+    setPeriod(currentSub.plan.billingPeriod === 'YEARLY' ? 'YEARLY' : 'MONTHLY');
+  }, [hasBoth, currentSub?.plan?.billingPeriod]);
+
+  const pickPeriod = (p) => { periodTouched.current = true; setPeriod(p); };
+
   const plans = data ? (period === 'YEARLY' ? data.yearly : data.monthly) : [];
   const bestSaving = data
     ? Math.max(0, ...data.yearly.map((p) => Number(p.comparison?.savingPct) || 0))
     : 0;
   const vatPct = data?.rates?.vatPct;
+
+  const onAction = async (plan, relation) => {
+    setActionError('');
+    if (isMockData) {
+      setActionError('Payments work in Live Data mode. Switch to Live Data to choose a package.');
+      return;
+    }
+    setBusyKey(plan.key);
+    try {
+      // Chalu plan par checkout 409 deta hai — badalna Stripe portal se
+      if (currentSub && relation) await goToPortal();
+      else await goToCheckout(plan.key);
+      // Browser Stripe par ja raha hai — button busy hi rehne do
+    } catch (err) {
+      setBusyKey('');
+      if (err?.status === 409) refreshSubscription();
+      setActionError(billingErrorText(err, 'Could not open the payment page.'));
+    }
+  };
+
+  const openPortal = async () => {
+    setActionError('');
+    setBusyKey('__portal');
+    try { await goToPortal(); } catch (err) {
+      setBusyKey('');
+      setActionError(billingErrorText(err, 'Could not open billing.'));
+    }
+  };
+
+  const ownerWaiting = cta === 'owner' && subscriptionLoading;
 
   return (
     <PublicPageShell title="Pricing">
@@ -132,27 +198,54 @@ export default function PricingPage() {
         <h1>Listing credit packages</h1>
         <p className="pub-sub">
           Pick a plan for your monthly listing credits. Credits per listing depend on community, sale or rent, and price band.
-          {vatPct != null && ` Prices exclude ${vatPct}% VAT.`}
+          {vatPct != null && ` Prices include ${vatPct}% VAT.`}
         </p>
-        <p className="pub-free">
-          <Gift size={15} /> Your first five listings are free, so you can be live before you spend anything.
-        </p>
-        {cta === 'switch' && (
+        {!currentSub && (
+          <p className="pub-free">
+            <Gift size={15} /> Your first five listings are free, so you can be live before you spend anything.
+          </p>
+        )}
+        {cta === 'owner' && (
           <p className="pub-change-note">
-            Upgrading or downgrading? Pick a package below. Until online payment is available, the request goes to the CMP team by email.
+            {currentSub
+              ? `You are on ${currentSub.plan?.name || 'a package'} (${periodLabel(currentSub.plan?.billingPeriod)})${subEndsAt(currentSub) ? `, which ends on ${fmtDate(subEndsAt(currentSub))}` : ''}. Upgrading or downgrading opens Stripe, where you confirm the change.`
+              : 'Choose a package to pay securely with Stripe. Your card details never reach CMP.'}
           </p>
         )}
         {hasBoth && (
           <div className="pub-toggle" role="tablist" aria-label="Billing">
-            <button type="button" role="tab" aria-selected={period === 'MONTHLY'} className={period === 'MONTHLY' ? 'on' : ''} onClick={() => setPeriod('MONTHLY')}>
+            <button type="button" role="tab" aria-selected={period === 'MONTHLY'} className={period === 'MONTHLY' ? 'on' : ''} onClick={() => pickPeriod('MONTHLY')}>
               Monthly payment
             </button>
-            <button type="button" role="tab" aria-selected={period === 'YEARLY'} className={period === 'YEARLY' ? 'on' : ''} onClick={() => setPeriod('YEARLY')}>
+            <button type="button" role="tab" aria-selected={period === 'YEARLY'} className={period === 'YEARLY' ? 'on' : ''} onClick={() => pickPeriod('YEARLY')}>
               Pay yearly {bestSaving > 0 && <span className="pub-toggle-save">Save up to {bestSaving}%</span>}
             </button>
           </div>
         )}
       </header>
+
+      {isAuthenticated && isPaymentOverdue && (
+        <div className={`pub-alert ${overdueText(paymentGrace).tone}`} role="alert">
+          <AlertTriangle size={18} />
+          <div>
+            <b>{overdueText(paymentGrace).title}</b>
+            <p>{overdueText(paymentGrace, currentSub?.plan?.name).text}{!canChangePackage && ' Ask the account owner to update it.'}</p>
+          </div>
+          {canChangePackage && (
+            <button type="button" className="pub-btn solid" onClick={openPortal} disabled={!!busyKey}>
+              {busyKey === '__portal' && <Loader2 size={15} className="pub-spin" />} Update card
+            </button>
+          )}
+        </div>
+      )}
+
+      {actionError && (
+        <div className="pub-alert danger" role="alert">
+          <AlertTriangle size={18} />
+          <div><p>{actionError}</p></div>
+          <button type="button" className="pub-alert-x" onClick={() => setActionError('')} aria-label="Dismiss">×</button>
+        </div>
+      )}
 
       {state.loading && (
         <section className="pub-plans" style={{ '--cols': 3 }} aria-busy="true" aria-label="Loading packages">
@@ -181,8 +274,25 @@ export default function PricingPage() {
 
       {plans.length > 0 && (
         <section className="pub-plans" style={{ '--cols': Math.min(plans.length, 3) }}>
-          {plans.map((p) => <PlanCard key={p.id || p.key} plan={p} cta={cta} company={agency?.name} />)}
+          {plans.map((p) => (
+            <PlanCard
+              key={p.id || p.key}
+              plan={p}
+              cta={cta}
+              relation={currentSub ? compareToCurrent(p, currentSub) : null}
+              startsAt={fmtDate(currentSub?.scheduledPlan?.startsAt)}
+              busy={busyKey === p.key}
+              disabled={!!busyKey || ownerWaiting}
+              onAction={onAction}
+            />
+          ))}
         </section>
+      )}
+
+      {cta === 'owner' && currentSub && (
+        <p className="pub-note pub-billing-link">
+          Card, invoices and cancellation are in <Link to="/billing">Billing</Link>.
+        </p>
       )}
 
       {data?.terms.length > 0 && (

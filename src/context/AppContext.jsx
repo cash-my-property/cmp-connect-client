@@ -11,7 +11,7 @@ import {
 } from '../data/mockData';
 
 import { cmpConnectApi, getAuthToken, setAuthToken, clearAuthToken, QUOTA_EVENT } from '../services/cmpConnectApi';
-import { mockFreeAllowance, normalizeAllowance } from '../utils/freeAllowance';
+import { allowanceMeta, mockFreeAllowance, normalizeAllowance } from '../utils/freeAllowance';
 import { can as checkPermission, hasAny as checkHasAny } from '../utils/permissions';
 
 const AppContext = createContext();
@@ -302,6 +302,8 @@ export function AppProvider({ children }) {
   // Live: GET /free-allowance (DB se har dafa gina jata hai, cache nahi). Publish / submit /
   // project save ke baad apiRequest QUOTA_EVENT bhejta hai → dobara parh lo.
   const [liveAllowance, setLiveAllowance] = useState(null);
+  // { plan, overdue } — free-allowance ke saath aata hai (UNPAID bhi isi se pata chalta hai)
+  const [liveAllowanceMeta, setLiveAllowanceMeta] = useState({ plan: null, overdue: false, grace: null });
   const allowanceSeq = useRef(0);
   const canLoadAllowance = dataMode === 'live' && Boolean(account?.id) && !mustChangePassword;
   const refreshFreeAllowance = useCallback(async () => {
@@ -309,10 +311,16 @@ export function AppProvider({ children }) {
     const seq = ++allowanceSeq.current;
     try {
       const res = await cmpConnectApi.getFreeAllowance({ _silent: true });
-      if (seq === allowanceSeq.current) setLiveAllowance(normalizeAllowance(res?.data));
+      if (seq === allowanceSeq.current) {
+        setLiveAllowance(normalizeAllowance(res?.data));
+        setLiveAllowanceMeta(allowanceMeta(res?.data));
+      }
     } catch {
       // Counter na mile to kuch nahi rokna — bas dikhana band
-      if (seq === allowanceSeq.current) setLiveAllowance(null);
+      if (seq === allowanceSeq.current) {
+        setLiveAllowance(null);
+        setLiveAllowanceMeta({ plan: null, overdue: false, grace: null });
+      }
     }
   }, [canLoadAllowance]);
 
@@ -327,7 +335,57 @@ export function AppProvider({ children }) {
     return () => window.removeEventListener(QUOTA_EVENT, onChange);
   }, [canLoadAllowance, account?.id, refreshFreeAllowance]);
 
-  const freeAllowance = dataMode === 'mock' ? mockFreeAllowance(workspace) : liveAllowance;
+  // ── Subscription (Stripe) — GET /billing/subscription ──
+  // undefined = abhi load ho raha, null = koi plan nahi, object = plan
+  const [liveSubscription, setLiveSubscription] = useState(undefined);
+  const subscriptionSeq = useRef(0);
+  const refreshSubscription = useCallback(async () => {
+    if (!canLoadAllowance) return null;
+    const seq = ++subscriptionSeq.current;
+    try {
+      const res = await cmpConnectApi.getSubscription({ _silent: true });
+      const sub = res?.data || null;
+      if (seq === subscriptionSeq.current) setLiveSubscription(sub);
+      return sub;
+    } catch {
+      if (seq === subscriptionSeq.current) setLiveSubscription(null);
+      return null;
+    }
+  }, [canLoadAllowance]);
+
+  useEffect(() => {
+    if (!canLoadAllowance) {
+      setLiveSubscription(undefined);
+      return;
+    }
+    refreshSubscription();
+  }, [canLoadAllowance, account?.id, refreshSubscription]);
+
+  // 402 (muft khatam / payment overdue) ya publish ke baad plan bhi dobara parho
+  useEffect(() => {
+    if (!canLoadAllowance) return undefined;
+    const onQuota = (e) => { if (e?.detail?.status === 402) refreshSubscription(); };
+    window.addEventListener(QUOTA_EVENT, onQuota);
+    return () => window.removeEventListener(QUOTA_EVENT, onQuota);
+  }, [canLoadAllowance, refreshSubscription]);
+
+  const subscription = dataMode === 'mock' ? null : (liveSubscription ?? null);
+  const allowancePlan = dataMode === 'mock' ? null : liveAllowanceMeta.plan;
+  const subscriptionLoading = dataMode === 'live' && canLoadAllowance && liveSubscription === undefined;
+  // Do jagah se: /billing/subscription aur /free-allowance ka plan. Subscription endpoint
+  // UNPAID nahi lautata, free-allowance lautata hai — is liye dono dekho.
+  const hasActivePlan = ['ACTIVE', 'TRIALING'].includes(subscription?.status)
+    || ['ACTIVE', 'TRIALING'].includes(allowancePlan?.status);
+  const isPaymentOverdue = ['PAST_DUE', 'UNPAID'].includes(subscription?.status)
+    || (dataMode !== 'mock' && liveAllowanceMeta.overdue);
+  // Grace (admin ke graceDays, default 3): payment fail ke baad itne din publish chalta hai.
+  // inGrace = abhi chal raha hai (sirf warning); khatam = 402, publish ruka hua.
+  const paymentGrace = isPaymentOverdue ? (subscription?.grace || (dataMode !== 'mock' ? liveAllowanceMeta.grace : null) || null) : null;
+  const isPublishingBlocked = isPaymentOverdue && !paymentGrace?.inGrace;
+
+  // Plan wali company par '5 muft' ki had nahi lagti (backend) → counter, chips, notes sab chhupa do.
+  // Overdue par bhi: wahan sab kuch payment ki wajah se rukta hai, muft ginti se nahi.
+  const freeAllowance = (hasActivePlan || isPaymentOverdue) ? null : (dataMode === 'mock' ? mockFreeAllowance(workspace) : liveAllowance);
 
   // Sync data attributes to HTML root element & persist to localStorage
   useEffect(() => {
@@ -530,6 +588,14 @@ export function AppProvider({ children }) {
         canChangePackage,
         setMockWorkspace,
         freeAllowance,
+        subscription,
+        subscriptionLoading,
+        hasActivePlan,
+        isPaymentOverdue,
+        allowancePlan,
+        paymentGrace,
+        isPublishingBlocked,
+        refreshSubscription,
         refreshFreeAllowance,
         platform,
         setPlatform,

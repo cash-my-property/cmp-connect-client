@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { initialWalletPlan } from '../../data/mockData';
 import { useApp } from '../../context/AppContext';
+import { fmtDate, isManagedPlan, periodLabel, subEndsAt } from '../../utils/billing';
 import { ArrowUpDown, Check, Send, X } from 'lucide-react';
 
 // Permission redirect alag wrapper mein — andar wale component ke hooks hamesha ek hi order mein chalen
@@ -22,11 +23,19 @@ export default function WalletPage() {
 }
 
 function WalletContent() {
-  const { agency, isLiveData, canChangePackage } = useApp();
+  const { agency, isLiveData, canChangePackage, subscription } = useApp();
+  // Live: asal package Stripe subscription se (GET /billing/subscription)
+  const sub = isManagedPlan(subscription) ? subscription : null;
+  const subCancels = fmtDate(subEndsAt(sub));
+  const subEnds = subCancels || fmtDate(sub?.currentPeriodEnd);
+  // Credits: balance ki API abhi nahi — plan ke mahana credits dikhao (GET /billing/subscription)
+  const planMonthly = Number(sub?.plan?.monthlyCredits) || 0;
+  const planBonus = Number(sub?.plan?.bonusCredits) || 0;
+  const planBonusMonths = Number(sub?.plan?.bonusMonths) || 0;
 
   const liveWalletPlan = useMemo(() => ({
-    planName: "Standard Account",
-    renewalDate: "—",
+    planName: sub?.plan?.name ? `${sub.plan.name} · ${periodLabel(sub.plan.billingPeriod)}` : 'No package yet',
+    renewalDate: subEnds || '—',
     balance: agency.credits || 0,
     monthlyAllowance: 0,
     accountManager: {
@@ -65,7 +74,7 @@ function WalletContent() {
     pricingCatalog: initialWalletPlan.pricingCatalog,
     topUpPackages: initialWalletPlan.topUpPackages,
     creditHistory: []
-  }), [agency.credits]);
+  }), [agency.credits, sub, subEnds]);
 
   const planData = isLiveData ? liveWalletPlan : initialWalletPlan;
   const [requestModal, setRequestModal] = useState(null); // package object when opened
@@ -119,14 +128,19 @@ function WalletContent() {
             {planData.planName}
           </p>
           <p className="muted" style={{ margin: '4px 0 0', fontSize: '13px' }}>
-            Renews {planData.renewalDate}
+            {isLiveData && !sub
+              ? 'Using free listings'
+              : `${subCancels ? 'Ends' : 'Renews'} ${planData.renewalDate}`}
           </p>
           {/* Upgrade / downgrade — sirf Owner (Agency/Developer). Plans pricing page par. */}
           {canChangePackage && (
             <Link to="/pricing" className="btn btn-primary btn-sm" style={{ marginTop: '10px' }}>
-              <ArrowUpDown size={14} /> Change package
+              <ArrowUpDown size={14} /> {isLiveData && !sub ? 'Choose a package' : 'Change package'}
             </Link>
           )}
+          <Link to="/billing" className="btn btn-ghost btn-sm" style={{ marginTop: '10px', marginLeft: canChangePackage ? 6 : 0 }}>
+            Billing details
+          </Link>
         </div>
 
         <div>
@@ -139,7 +153,7 @@ function WalletContent() {
               letterSpacing: '0.05em'
             }}
           >
-            Credit balance
+            {isLiveData ? 'Monthly credits' : 'Credit balance'}
           </p>
           <p
             style={{
@@ -149,10 +163,16 @@ function WalletContent() {
               color: 'var(--cmp-brand)'
             }}
           >
-            {planData.balance.toLocaleString()}
+            {isLiveData ? (planMonthly ? planMonthly.toLocaleString('en-US') : '—') : planData.balance.toLocaleString()}
           </p>
           <p className="muted" style={{ margin: '4px 0 0', fontSize: '13px' }}>
-            {planData.monthlyAllowance.toLocaleString()} added on the 1st of each month
+            {!isLiveData
+              ? `${planData.monthlyAllowance.toLocaleString()} added on the 1st of each month`
+              : !sub
+                ? 'Choose a package to get monthly credits'
+                : planBonus && planBonusMonths
+                  ? `Included in ${sub.plan?.name || 'your package'} · +${planBonus.toLocaleString('en-US')} bonus a month for the first ${planBonusMonths} months`
+                  : `Included in ${sub.plan?.name || 'your package'} every month`}
           </p>
         </div>
 

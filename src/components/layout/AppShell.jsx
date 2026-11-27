@@ -8,6 +8,8 @@ import AskCmpDrawer from './AskCmpDrawer';
 import NotificationsDrawer from './NotificationsDrawer';
 
 import BrnComplianceBanner from './BrnComplianceBanner';
+import PaymentOverdueBanner from './PaymentOverdueBanner';
+import '../../pages/wallet/billing.css';
 
 export default function AppShell({ children }) {
   const { isAuthenticated } = useApp();
@@ -64,6 +66,7 @@ export default function AppShell({ children }) {
         onToggleExpand={() => setIsRailExpanded((prev) => !prev)}
       />
       <div className="portal-column">
+        <PaymentOverdueBanner />
         <BrnComplianceBanner />
         <HubBar />
         <main className="portal-main">

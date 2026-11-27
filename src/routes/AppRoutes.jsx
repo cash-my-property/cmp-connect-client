@@ -30,6 +30,7 @@ import InvoicesPage from '../pages/wallet/InvoicesPage';
 import CreditActivityPage from '../pages/wallet/CreditActivityPage';
 import RefundsPage from '../pages/wallet/RefundsPage';
 import ContractPage from '../pages/wallet/ContractPage';
+import BillingPage from '../pages/wallet/BillingPage';
 
 import TeamPage from '../pages/team/TeamPage';
 import MembersPage from '../pages/team/MembersPage';
@@ -293,6 +294,9 @@ export default function AppRoutes() {
             <Route path="/wallet/invoices" element={<InvoicesPage />} />
           </Route>
         </Route>
+
+        {/* Billing (Stripe) — sab members plan dekh sakte hain; Stripe yahin wapas bhejta hai */}
+        <Route path="/billing" element={<BillingPage />} />
 
         {/* Account Hub (shared) */}
         <Route path="/account/security" element={<SecurityPage />} />

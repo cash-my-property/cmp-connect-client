@@ -1,0 +1,142 @@
+/* Billing page (/billing) — Stripe package */
+.bill { max-width: 880px; }
+
+.bill-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 16px 0 0;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--cmp-border);
+  background: var(--cmp-surface);
+  font-size: 14px;
+}
+.bill-banner > svg { flex: none; margin-top: 2px; }
+.bill-banner > div { flex: 1; min-width: 0; }
+.bill-banner b { display: block; }
+.bill-banner p { margin: 2px 0 0; color: var(--cmp-text-muted); }
+.bill-banner .btn { flex: none; align-self: center; }
+.bill-banner.success { background: color-mix(in srgb, var(--cmp-success) 9%, var(--cmp-surface)); border-color: color-mix(in srgb, var(--cmp-success) 32%, transparent); }
+.bill-banner.success > svg { color: var(--cmp-success); }
+.bill-banner.warning { background: color-mix(in srgb, var(--cmp-warning) 9%, var(--cmp-surface)); border-color: color-mix(in srgb, var(--cmp-warning) 32%, transparent); }
+.bill-banner.warning > svg { color: var(--cmp-warning); }
+.bill-banner.danger { background: color-mix(in srgb, var(--cmp-danger) 9%, var(--cmp-surface)); border-color: color-mix(in srgb, var(--cmp-danger) 32%, transparent); }
+.bill-banner.danger > svg { color: var(--cmp-danger); }
+.bill-banner.info { background: color-mix(in srgb, var(--cmp-info) 8%, var(--cmp-surface)); border-color: color-mix(in srgb, var(--cmp-info) 28%, transparent); }
+.bill-banner.info > svg { color: var(--cmp-info); }
+.bill-banner.neutral > svg { color: var(--cmp-text-faint); }
+.bill-x {
+  flex: none;
+  border: 0;
+  background: transparent;
+  color: var(--cmp-text-muted);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.bill-card { margin-top: 20px; padding: 22px; }
+.bill-skel {
+  min-height: 220px;
+  background: linear-gradient(100deg, var(--cmp-surface) 30%, var(--cmp-surface-sunken) 50%, var(--cmp-surface) 70%);
+  background-size: 200% 100%;
+  animation: bill-skel 1.3s ease-in-out infinite;
+}
+@keyframes bill-skel { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+
+.bill-head { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; align-items: flex-start; }
+.bill-eyebrow {
+  margin: 0;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--cmp-text-faint);
+}
+.bill-plan {
+  margin: 6px 0 0;
+  font-size: 22px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.bill-price { margin: 6px 0 0; font-size: 18px; font-weight: 700; }
+.bill-price small { font-size: 13px; font-weight: 500; color: var(--cmp-text-muted); }
+.bill-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.bill-empty .bill-actions { margin-top: 14px; }
+
+.bill-rows {
+  margin: 20px 0 0;
+  border-top: 1px solid var(--cmp-border);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 24px;
+}
+.bill-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--cmp-border);
+  font-size: 14px;
+}
+.bill-row dt { color: var(--cmp-text-muted); }
+.bill-row dd { margin: 0; font-weight: 600; text-align: right; }
+.bill-bad { color: var(--cmp-danger); }
+.bill-foot { margin: 14px 0 0; font-size: 13px; color: var(--cmp-text-muted); }
+
+.bill-spin { animation: bill-spin 0.9s linear infinite; }
+@keyframes bill-spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 640px) {
+  .bill-rows { grid-template-columns: 1fr; }
+  .bill-actions { width: 100%; }
+  .bill-actions .btn { flex: 1; }
+  .bill-banner { flex-wrap: wrap; }
+}
+
+/* App-wide overdue banner (portal ke upar) */
+.pay-overdue-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 28px;
+  width: 100%;
+  box-sizing: border-box;
+  position: relative;
+  z-index: 20;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--cmp-danger);
+  background: color-mix(in srgb, var(--cmp-danger) 10%, var(--cmp-surface));
+  border-bottom: 1px solid color-mix(in srgb, var(--cmp-danger) 30%, transparent);
+}
+.pay-overdue-banner.warning {
+  color: var(--cmp-warning);
+  background: color-mix(in srgb, var(--cmp-warning) 12%, var(--cmp-surface));
+  border-bottom-color: color-mix(in srgb, var(--cmp-warning) 32%, transparent);
+}
+.pay-overdue-text { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.pay-overdue-text svg { flex: none; }
+.pay-overdue-title { font-weight: 700; flex: none; }
+.pay-overdue-msg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pay-overdue-actions { display: flex; align-items: center; gap: 12px; flex: none; }
+.pay-overdue-actions a { color: inherit; font-weight: 700; text-decoration: underline; font-size: 12px; }
+.pay-overdue-actions button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  opacity: 0.75;
+  cursor: pointer;
+  display: inline-flex;
+  padding: 2px;
+}
+@media (max-width: 640px) {
+  .pay-overdue-msg { white-space: normal; }
+  .pay-overdue-title { display: none; }
+  .pay-overdue-text { align-items: flex-start; }
+}
